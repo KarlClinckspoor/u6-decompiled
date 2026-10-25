@@ -17,9 +17,6 @@ struct t14 {
 	int bottom;/*_0C*/
 };
 
-extern int D_40C4[];/*where the hands come to rest: x0,y0, x1,y1 (-8,0x4d, 0xb6,0x4f)*/
-extern int D_40CC;/*twinkle: toggles every tick (MCGA palette cycling every other tick)*/
-extern unsigned D_40CE;/*twinkle: tick counter*/
 extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
 extern struct t14 D_5710;/*the screen*/
 extern struct t14 D_5732;/*the page the introduction draws on*/
@@ -74,6 +71,10 @@ extern C_1482_001F();
 extern C_1482_0055();
 extern C_1482_009C();
 extern C_1482_00BE();
+
+/*40C4*/int D_40C4[4] = {-8, 0x4d, 0xb6, 0x4f};/*where the hands come to rest: x0,y0, x1,y1*/
+/*40CC*/int D_40CC = 0;/*twinkle: toggles every tick (MCGA palette cycling every other tick)*/
+/*40CE*/unsigned D_40CE = 0;/*twinkle: tick counter*/
 
 KeyPressed();
 
