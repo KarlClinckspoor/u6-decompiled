@@ -89,3 +89,11 @@ It also compares the assembly files against the map. It then checks that no two 
 (TLINK is case-insensitive and `-p` uppercases names) and that no name is longer than 31 characters.
 Codegen only depends on the token stream, so passing this check means the compiled output is the same.
 Still, a real rebuild with `doit.bat` plus `mydiff.bat` is the final word.
+
+---
+
+## Native port for Windows and Linux (branch `portable`)
+
+The same sources also build a native Windows/Linux version on SDL2, with a settings screen
+over the game (F11), character creation, and a recording of every session that replays
+exactly. The DOS build stays byte-identical. See [docs/port/PORT.md](docs/port/PORT.md).

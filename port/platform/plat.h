@@ -41,6 +41,10 @@ int plat_init(const PlatConfig *cfg);
 void plat_shutdown(void);
 /* Applies display settings (scale, fullscreen, aspect, integer scaling) at once. */
 void plat_apply_config(const PlatConfig *cfg);
+/* Shows a message (a message box unless hidden), and goes on. */
+void plat_message(const char *message);
+/* plat_log also writes to this file (0: stop) */
+void plat_log_to(const char *path);
 /* Shows the message (a message box when there is a window) and ends the process. */
 void plat_fatal(const char *message);
 void plat_log(const char *fmt, ...);

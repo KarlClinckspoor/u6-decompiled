@@ -45,6 +45,15 @@ static volatile uint32_t speaker_hz;
 static double speaker_phase;
 static int audio_rate = 44100;
 
+static FILE *log_file;
+
+void plat_log_to(const char *path)
+{
+	if (log_file)
+		fclose(log_file);
+	log_file = path ? fopen(path, "w") : 0;
+}
+
 void plat_log(const char *fmt, ...)
 {
 	va_list ap;
@@ -52,6 +61,20 @@ void plat_log(const char *fmt, ...)
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
 	fputc('\n', stderr);
+	if (log_file) {
+		va_start(ap, fmt);
+		vfprintf(log_file, fmt, ap);
+		va_end(ap);
+		fputc('\n', log_file);
+		fflush(log_file);
+	}
+}
+
+void plat_message(const char *message)
+{
+	fprintf(stderr, "%s\n", message);
+	if (!headless)
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, cfg.title ? cfg.title : "Ultima VI", message, win);
 }
 
 void plat_fatal(const char *message)
@@ -526,11 +549,36 @@ const char *plat_base_dir(void)
 	return path;
 }
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shlobj.h>
+const char *plat_choose_folder(const char *title)
+{
+	static char path[MAX_PATH];
+	BROWSEINFOA bi;
+	LPITEMIDLIST id;
+	if (headless)
+		return 0;
+	CoInitialize(NULL);
+	memset(&bi, 0, sizeof bi);
+	bi.lpszTitle = title;
+	bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+	id = SHBrowseForFolderA(&bi);
+	if (!id)
+		return 0;
+	if (!SHGetPathFromIDListA(id, path))
+		path[0] = 0;
+	CoTaskMemFree(id);
+	return path[0] ? path : 0;
+}
+#else
 const char *plat_choose_folder(const char *title)
 {
 	(void)title;
 	return 0;	/* SDL2 has no folder picker: the port asks for --data instead */
 }
+#endif
 
 /* ---- init ---- */
 int plat_init(const PlatConfig *c)

@@ -23,7 +23,7 @@
 
 	/*set strings $*/
 	VarStr['G' - 0x37] = AvatarFemale?/*0920*/"milady":/*0927*/"milord";/*[g]reetings*/
-	VarStr['N' - 0x37] = /*092E*/"lots of space for any possible NPC name";/*[n]ame of NPC*/
+	VarStr['N' - 0x37] = WRITABLE_STR(/*092E*/"lots of space for any possible NPC name");/*[n]ame of NPC*/
 	VarStr['P' - 0x37] = Names[partyId];/*name of PC*/
 	VarStr['T' - 0x37] =
 		(Time_H < 12)?/*0956*/"morning":

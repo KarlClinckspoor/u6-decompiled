@@ -28,10 +28,10 @@ endif()
 
 # ---- the game's C, compiled as Turbo C saw it ----
 file(GLOB GAME_C ${GAME_SRC}/*.c)
-# gamestat.c's variables are one block in the saved game: the port defines them as a
-# packed block of its own (port/tools/gen_gamestat.py)
-list(REMOVE_ITEM GAME_C ${GAME_SRC}/gamestat.c)
-add_library(u6game OBJECT ${GAME_C} game/digest.c game/gamestat_port.c)
+# gamestat.c's and monsdata.c's variables keep DOS's layout: the port defines each file's
+# as a packed block of its own (port/tools/gen_block.py)
+list(REMOVE_ITEM GAME_C ${GAME_SRC}/gamestat.c ${GAME_SRC}/monsdata.c)
+add_library(u6game OBJECT ${GAME_C} game/digest.c game/gamestat_port.c game/monsdata_port.c)
 target_include_directories(u6game PRIVATE ${GAME_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 foreach(f ${GAME_C})
 	get_filename_component(n ${f} NAME_WE)
@@ -61,6 +61,7 @@ target_compile_options(u6 PRIVATE -fsigned-char -fwrapv -fno-strict-aliasing)
 target_link_libraries(u6 PRIVATE ${SDL2_TARGET} m)
 if(WIN32)
 	target_link_options(u6 PRIVATE -mwindows)
+	target_link_libraries(u6 PRIVATE ole32 shell32)
 endif()
 if(NOT WIN32)
 	target_compile_definitions(u6 PRIVATE _POSIX_C_SOURCE=200809L _DEFAULT_SOURCE)

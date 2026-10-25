@@ -74,4 +74,12 @@ typedef int64_t NEARLONG;
 #define MUS_DRV(o) MUSDRV_##o
 #endif
 
+/*a string literal the game writes into (DOS has no read-only data; a host keeps
+  literals read-only): the port gives it a writable copy of its own*/
+#ifdef __TURBOC__
+#define WRITABLE_STR(s) s
+#else
+#define WRITABLE_STR(s) ({ static char writable_[] = s; writable_; })
+#endif
+
 #endif

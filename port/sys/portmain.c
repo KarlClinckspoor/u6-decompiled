@@ -53,7 +53,7 @@ static int is_game_folder(const char *dir)
 static const char *find_game(const char *given)
 {
 	static const char *const guesses[] = {
-		".", "gamedata", "ULTIMA6", "Ultima 6",
+		".", "gamedata", "ULTIMA6", "Ultima 6", "..", "../gamedata",
 #ifdef _WIN32
 		"C:\\GOG Games\\Ultima 6", "C:\\Program Files (x86)\\GOG Galaxy\\Games\\Ultima 6",
 		"C:\\Program Files (x86)\\GOG.com\\Ultima 6", "C:\\GOG Games\\Ultima VI",
@@ -145,7 +145,7 @@ static void test_options(void);
 
 /* --keys "MS:KEY MS:KEY ...": keys typed at those times (tests; the recording has them as
  * the game read them). KEY: a character, or up down left right enter esc space bksp tab,
- * f1..f12. */
+ * f1..f12, ^x for Ctrl+x. */
 static const char *key_script;
 static const char scan_row[] = "1234567890-=\0\0qwertyuiop[]\0\0asdfghjkl;'`\0\\zxcvbnm,./";
 
@@ -166,6 +166,10 @@ static uint16_t bios_word(const char *k, size_t n)
 	for (i = 0; named[i].name; i++)
 		if (strlen(named[i].name) == n && !strncmp(named[i].name, k, n))
 			return named[i].w;
+	if (n == 2 && k[0] == '^') {	/* ^s: Ctrl+S */
+		uint16_t w = bios_word(k + 1, 1);
+		return (uint16_t)((w & 0xff00) | ((w & 0x1f)));
+	}
 	if (n >= 2 && (k[0] == 'f' || k[0] == 'F')) {
 		int f = atoi(k + 1);
 		if (f >= 1 && f <= 10)
@@ -268,15 +272,10 @@ int main(int argc, char **argv)
 	hostfs_mkdirs(home);
 	first_run = !settings_load(home);
 	session_set_home(home);
-	game = find_game(data);
-	if (!game) {
-		fprintf(stderr, "Ultima VI's files were not found. Start the port with --data <the game folder> "
-			"(the folder with MAPTILES.VGA, U6PAL, ...).\n");
-		return 1;
-	}
-	if (data || !settings.data[0]) {
-		snprintf(settings.data, sizeof settings.data, "%s", game);
-		settings_save();
+	{
+		char logp[1100];
+		hostfs_join(logp, sizeof logp, home, "u6port.log");
+		plat_log_to(logp);
 	}
 	memset(&cfg, 0, sizeof cfg);
 	cfg.scale = scale ? scale : settings.scale;
@@ -289,6 +288,29 @@ int main(int argc, char **argv)
 	cfg.title = "Ultima VI";
 	if (plat_init(&cfg) != 0)
 		return 1;
+
+	game = find_game(data);
+	if (!game && !hidden) {
+		const char *pick;
+		plat_message(data ? "Ultima VI's files are not in the folder given with --data. "
+			"Choose the folder of your Ultima VI (the one with MAPTILES.VGA, U6PAL, ...)."
+			: "Choose the folder of your Ultima VI (the one with MAPTILES.VGA, U6PAL, ...).");
+		pick = plat_choose_folder("The folder of Ultima VI");
+		if (pick && is_game_folder(pick)) {
+			game = pick;
+			data = pick;
+		}
+	}
+	if (!game) {
+		plat_message("Ultima VI's files were not found. Start the port with --data <the game folder> "
+			"(the folder with MAPTILES.VGA, U6PAL, ...).");
+		plat_shutdown();
+		return 1;
+	}
+	if (data || !settings.data[0] || strcmp(settings.data, game)) {
+		snprintf(settings.data, sizeof settings.data, "%s", game);
+		settings_save();
+	}
 
 	/* the overlay draws with the game's own 8x8 font; until the game sets its video mode
 	 * the screen is black, with the game's palette for the overlay to pick colours from */
