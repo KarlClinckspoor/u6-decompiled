@@ -172,10 +172,10 @@ def main():
             if tgt not in bases:
                 bases[tgt] = c.most_common(1)[0][0]
 
-    def check_fixups(seg, at):
-        """at: image address of seg's byte 0"""
+    def check_fixups(seg, seg_addr):
+        """seg_addr: image address of seg's byte 0"""
         for f in seg.fixups:
-            addr = at + f.offset
+            addr = seg_addr + f.offset
             where = (seg.name, f.offset)
             # Turbo C keeps the displacement in the record's data, not in the fixup
             if f.loc in (1, 2, 5, 3) and f.offset + 2 <= len(seg.data) and f.loc != 2:
