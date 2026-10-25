@@ -135,6 +135,9 @@ def main():
     ap.add_argument('--at', default='0', help='offset of the module code in that segment (hex): for _TEXT pieces')
     ap.add_argument('--data', help='DS offset of the module _DATA (hex)')
     ap.add_argument('--bss', help='DS offset of the module _BSS (hex)')
+    ap.add_argument('--data-range', nargs=2, metavar=('START', 'END'),
+                    help='the module _DATA must be exactly DS START..END (hex; END exclusive, a one-byte '
+                         'alignment gap before END allowed)')
     ap.add_argument('--flags', default='-mm -c -O -G', help='tcc flags when given a .c file (MASM: /Mx)')
     ap.add_argument('--include', action='append', default=[])
     ap.add_argument('--learn', action='store_true', help='add unknown external names to usyms.txt')
@@ -170,6 +173,8 @@ def main():
     bases = {}
     if a.data:
         bases['_DATA'] = int(a.data, 16)
+    if a.data_range:
+        bases['_DATA'] = int(a.data_range[0], 16)
     if a.bss:
         bases['_BSS'] = int(a.bss, 16)
     learned = []
@@ -323,6 +328,12 @@ def main():
         ', learned %d names' % len(learned) if learned else ''))
     if '_BSS' in bases:
         print('  _BSS at DS:%04x' % bases['_BSS'])
+    if a.data_range:
+        dlen = dseg[0].length if dseg else 0
+        span = int(a.data_range[1], 16) - int(a.data_range[0], 16)
+        if dlen not in (span, span - 1):
+            print('  DATA RANGE: module _DATA is %x bytes, the range is %x' % (dlen, span))
+            ok = False
     if a.length:
         want = int(a.length, 16)
         if want != cs.length:

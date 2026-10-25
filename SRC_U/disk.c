@@ -6,20 +6,23 @@
 #include <alloc.h>
 #include <conio.h>
 
-extern char D_404E[];/*drive of each game disk (1 = A:)*/
-extern char D_4057[];/*kind of each drive: 0 none, 1 fixed, 2 removable*/
-extern int D_404A;
-extern int D_404C;
 extern int D_5044;/*video mode: 0x0d EGA, 0x13 MCGA*/
 extern char D_5046, D_5047;
-extern char D_4076, D_4077;
 extern int D_575A;
 extern int D_58F0;
 extern char D_6094, D_6095;/*DOS version: major, minor*/
 struct t14 { char b[14]; };
 extern struct t14 D_5710, D_5732;
 
-extern char D_4071[];/*"u6.1": name of a disk's marker file; [3] is the disk number*/
+/*names of the disks, as the disk prompt says them*/
+/*4038*/char *D_4038[] = {"", "Program", "Intro.", "Endgame", "Game", "Map", "Conversation", "Portrait", "Player"};
+/*404A*/int D_404A = 1;/*the disk in the current drive*/
+/*404C*/int D_404C = 0;/*the disk asked for*/
+/*404E*/char D_404E[9] = {0};/*drive of each game disk (1 = A:)*/
+/*4057*/char D_4057[26] = {0};/*kind of each drive: 0 none, 1 fixed, 2 removable*/
+/*4071*/char D_4071[] = "u6.1";/*name of a disk's marker file; [3] is the disk number*/
+/*4076*/char D_4076 = 0;/*a mouse button was down: wait for it to be released*/
+/*4077*/char D_4077 = 0;
 
 /*C_0BC1_0000*/int IsDiskIn(int n) {
 	int fd;
