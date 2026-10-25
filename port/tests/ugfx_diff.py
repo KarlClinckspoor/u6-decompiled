@@ -761,6 +761,22 @@ def scenario_synthetic(ses, w, rnd):
         ses.d3(w.screen, x, 50, 0)
         for _ in range(5):
             text_op(ses, w, rnd, w.screen)
+    # every clipping offset at both ends of a window: one RLE run and one literal run of
+    # each length 1..24 (shape 2L-2: RLE, 2L-1: literal), their first pixel at the hot spot
+    shapes = []
+    for n in range(1, 25):
+        shapes.append(((n - 1, 0, 0, 0), rle_run(0, 0, chunks(n)) + b'\0\0'))
+        shapes.append(((n - 1, 0, 0, 0), raw_run(0, 0, bytes(rnd.getrandbits(8) for _ in range(n))) + b'\0\0'))
+    ses.load_shapes(synth_file(shapes), SHAPE_LIN + 9)
+    for s in (w.screen, w.screen.win(200, 100, 20, 30), w.work):
+        for i in range(len(shapes)):
+            n = i // 2 + 1
+            for k in range(-2, 3):
+                ses.d3(s, s.left + k - n + 1, s.top, i)      # the end at left + k
+                ses.d3(s, s.left + k, s.bottom, i)           # the start at left + k
+                ses.d3(s, s.right + k - n + 1, s.top, i)     # the end at right + k
+                ses.d3(s, s.right + k, s.bottom, i)          # the start at right + k
+                ses.d3(s, s.left + k, s.top - 1 + (k & 1) * (s.bottom - s.top + 2), i)   # a row outside
 
 
 def coverage(emu, image_len):
