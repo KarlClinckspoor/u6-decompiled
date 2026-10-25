@@ -594,9 +594,13 @@ until "journey onward" or quit*/
 		case 4: videoMode = 7; gfxDrv.f = (void (far *)())LoadZFile("cgadrv.bin"); break;
 	}
 	/*some of its entries, for the OSI library (i = the driver's segment)*/
+#ifdef __TURBOC__
 	asm mov bx,offset DGROUP:gfxDrv
 	asm mov ax,[bx+2]
 	asm mov i,ax
+#else
+	i = 0;/*the port's OSI library calls the driver's C directly*/
+#endif
 	drvDrawPointer[0] = 3; drvDrawPointer[1] = i;
 	drvDrawPointer[2] = 6; drvDrawPointer[3] = i;
 	drvDrawPointer[4] = 9; drvDrawPointer[5] = i;
@@ -722,6 +726,7 @@ until "journey onward" or quit*/
 /*Hercules graphics: 720x348, 4 interleaved banks of 90 bytes per line;
 the 200 lines are drawn on 300 (x1.5)*/
 /*C_00E1_15A8*/InitHercules() {
+#ifdef __TURBOC__
 	asm mov dx,3bfh
 	asm mov al,1
 	asm out dx,al
@@ -775,6 +780,7 @@ line:
 next:
 	asm cmp si,0c8h
 	asm jnz line
+#endif
 }
 
 /*the music drivers (index 1..6 = musicCard)*/

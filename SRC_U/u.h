@@ -73,7 +73,6 @@ union tDrv {
 	struct { uint16 ofs, seg; } p;
 };
 extern union tDrv gfxDrv;
-#define DRV(o) gfxDrv.p.ofs = (o); (*gfxDrv.f)
 
 /*the music driver (U6xxx.DRV): a far pointer whose offset selects the entry (0 init(port),
   6 play(song), 9 stop, 0x0c channel(ch, a, b)); its entries clean the stack themselves*/
@@ -82,6 +81,15 @@ union tMus {
 	struct { uint16 ofs, seg; } p;
 };
 extern union tMus musDrv;
+
+#ifdef __TURBOC__
+#define DRV(o) gfxDrv.p.ofs = (o); (*gfxDrv.f)
 #define MUS(o) musDrv.p.ofs = (o); (*musDrv.f)
+#else
+/*the port has the drivers' entries as C functions: MCGADRV.BIN's in port/u/ugfx.c,
+  U6ADLIB.DRV's in port/sys/adlib.c (shared with GAME.EXE's music)*/
+#define DRV(o) UDRV_##o
+#define MUS(o) MUSDRV_##o
+#endif
 
 #endif

@@ -11,7 +11,7 @@ _BSS	SEGMENT WORD PUBLIC 'BSS'
 PUBLIC	_menuColors,_gfxDrv,_vgaPalette,_videoMode,_mouseInfo,_savedPalette,_textArea,_console
 PUBLIC	_songData,_gameArgs,_spareSurface,_textAreaCopy,_screen,_songPos,_musicPort,_conSurface
 PUBLIC	_backBuffer,_farMemLeft,_musicCard,_egaSaved,_menuDrawn,_scanlineOfs,_mouseOn,_adapter
-PUBLIC	_escaped,_blockShapes,_blockShapesSeg,_cursorShapes,_musDrv,_buttonAreas,_oldName,_oldStr
+PUBLIC	_escaped,_blockShapes,_cursorShapes,_musDrv,_buttonAreas,_oldName,_oldStr
 PUBLIC	_oldDex,_oldInt,_oldSex,_oldClass,_oldGood,_oldAvatar,_oldExp,_oldLevel
 PUBLIC	_oldHp,_oldHpMax,_oldMp,_dialogArea,_nameWindow,_titleArea,_transferFrom,_sheet
 PUBLIC	_portraitIdx,_newName,_newStr,_newDex,_newInt,_newSex,_newClass,_newGood
@@ -76,10 +76,8 @@ _adapter	LABEL	WORD	;D_58EE graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Her
 	ORG	$+2
 _escaped	LABEL	WORD	;D_58F0 1: Escape was pressed: leave the introduction
 	ORG	$+2
-_blockShapes	LABEL	BYTE	;D_58F2 blocks.xxx
-	ORG	$+2
-_blockShapesSeg	LABEL	WORD	;D_58F4
-	ORG	$+2
+_blockShapes	LABEL	DWORD	;D_58F2 blocks.xxx
+	ORG	$+4
 _cursorShapes	LABEL	DWORD	;D_58F6 mouse pointer shapes (cursors.xxx)
 	ORG	$+4
 _musDrv	LABEL	BYTE	;D_58FA the music driver

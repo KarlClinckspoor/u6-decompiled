@@ -15,7 +15,7 @@ extern struct tSurface workArea;/*the text area of a passage*/
 extern int16 frameShape;
 extern int16 frameX, frameY;/*where the text area is on the screen: x (in 8-pixel columns?), y*/
 extern struct tSurface passageArea;/*copy of backBuffer the text area is shown in*/
-extern int16 blockShapes, blockShapesSeg;
+extern void far *blockShapes;/*blocks.xxx: the frames of the text area*/
 extern int16 wantDisk;/*the disk asked for (disk.c)*/
 extern char *diskNames[];/*names of the disks*/
 extern char newName[];/*the player's name*/
@@ -1070,6 +1070,6 @@ screen; DisplayPassage puts it there*/
 /*C_09A0_21C5*/DisplayPassage() {
 	if(videoMode == 0xd)
 		backBuffer.segment = passageArea.segment = screen.segment;
-	DRV(3)(&backBuffer, frameX, frameY, blockShapes, blockShapesSeg, frameShape);
+	DRV(3)(&backBuffer, frameX, frameY, blockShapes, frameShape);
 	DRV(0xf)(&workArea, &passageArea);
 }
