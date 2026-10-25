@@ -24,8 +24,8 @@ union tHandler {
 #include "gr.h"
 #include "mouse.h"
 #include "osi_file.h"
-#include "seg_3522.h"
-#include "seg_356A.h"
+#include "monsdata.h"
+#include "msgs.h"
 
 #include "ai.h"
 #include "tile.h"
@@ -438,7 +438,7 @@ extern int D_2A50;
 extern int D_2A54;
 extern int D_2A56;
 extern int D_2A58;
-#include "D_2C4A.h"
+#include "gamestat.h"
 extern int D_2E9E;
 extern int D_2FFC;
 extern int D_2FFE;

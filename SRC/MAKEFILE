@@ -8,27 +8,27 @@ AS = $(TLS)\masm300
 #AS = $(TLS)\masm400
 
 OBJS = \
-seg_0903.obj \
-seg_0A33.obj \
-seg_0C9C.obj \
-seg_101C.obj \
-seg_1100.obj \
-seg_1184.obj \
+main.obj \
+gameloop.obj \
+console.obj \
+map.obj \
+visible.obj \
+object.obj \
 seg_155X.obj \
-seg_155D.obj \
-seg_16E1.obj \
-seg_1703.obj \
-seg_1944.obj \
-seg_1E0F.obj \
-seg_2337.obj \
-seg_27A1.obj \
-seg_2E2D.obj \
-seg_2F1A.obj \
-seg_2FC1.obj \
-seg_3200.obj \
-seg_32C3.obj \
-padding.obj seg_3522.obj seg_356A.obj \
-D_2C4A.obj \
+status.obj \
+talk.obj \
+talkdr.obj \
+spell.obj \
+npctrack.obj \
+combat.obj \
+objcmd.obj \
+egg.obj \
+music.obj \
+gfx.obj \
+rest.obj \
+disk.obj \
+padding.obj monsdata.obj msgs.obj \
+gamestat.obj \
 bss.obj
 
 #osi_file.obj
@@ -53,7 +53,7 @@ all: game.exe
 #	del *.obj
 
 game.exe: $(OBJS)
-	-tlink padding seg_3522 seg_356A $(LIB)\c0m @u6.lnk,game.exe,,$(LIB)\CM;
+	-tlink padding monsdata msgs $(LIB)\c0m @u6.lnk,game.exe,,$(LIB)\CM;
 
 .c.obj:
 	tcc -I$(INCLUDE) -d -mm -p -c -Z -O $<
@@ -61,11 +61,11 @@ game.exe: $(OBJS)
 padding.obj: padding.c
 	tcc -I$(INCLUDE) -d -mh -p -c -Z -O padding.c
 
-seg_3522.obj: seg_3522.c
-	tcc -I$(INCLUDE) -d -mh -p -c -Z -O seg_3522.c
+monsdata.obj: monsdata.c
+	tcc -I$(INCLUDE) -d -mh -p -c -Z -O monsdata.c
 
-seg_356A.obj: seg_356A.c
-	tcc -I$(INCLUDE) -d -mh -p -c -Z -O seg_356A.c
+msgs.obj: msgs.c
+	tcc -I$(INCLUDE) -d -mh -p -c -Z -O msgs.c
 
 #osi_file.obj: osi_file.asm
 #	$(TLS)\tasm200 /Mx osi_file,,;

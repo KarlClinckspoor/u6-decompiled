@@ -5,7 +5,7 @@
  */
 /*#include "u6.h"*/
 
-#include "seg_3522.h"
+#include "monsdata.h"
 
 #include "obj.h"
 #include "spells.h"

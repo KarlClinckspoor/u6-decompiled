@@ -3,7 +3,7 @@
  * Copyright (c) 1990 Origin Systems, Inc. and Richard Gariott
  * reverse-coded by Ergonomy Joe in 2013
  */
-#include "seg_356A.h"
+#include "msgs.h"
 
 /*
 GuardianMsg

@@ -3,7 +3,7 @@
  * Copyright (c) 1990 Origin Systems, Inc. and Richard Gariott
  * reverse-coded by Ergonomy Joe in 2013
  */
-#include "D_2C4A.h"
+#include "gamestat.h"
 
 /*2C4A*/unsigned char IsOnQuest = 0;
 /*2C4B*/unsigned char NextSleep = 0;
