@@ -9,8 +9,8 @@
 
 extern struct tText *D_45B2;/*the current text window*/
 extern C_128D_000C(char far *s);/*TXT_puts: print a string, word-wrapped and justified*/
-extern C_135A_0008(int c);/*TXT_putc: print a character*/
-extern C_135A_001B(int c);/*TXT_bufc: add a character to the window's string buffer*/
+extern void C_135A_0008(int c);/*TXT_putc: print a character*/
+extern void C_135A_001B(int c);/*TXT_bufc: add a character to the window's string buffer*/
 
 /*output a string, a character at a time*/
 /*C_12EE_0002*/static outstr(void (*out)(int), register char *s) {
@@ -29,25 +29,28 @@ extern C_135A_001B(int c);/*TXT_bufc: add a character to the window's string buf
 	register int c;
 
 	while((c = *fmt++) != 0) {
-		if(c == '%') {
-			c2 = *fmt++;
-			switch(c2) {
-				case 'd': outstr(out, itoa(va_arg(ap, int), buf, 10)); break;
-				case 'u': outstr(out, ultoa(va_arg(ap, unsigned), buf, 10)); break;
-				case 'D': outstr(out, ltoa(va_arg(ap, long), buf, 10)); break;
-				case 'U': outstr(out, ultoa(va_arg(ap, unsigned long), buf, 10)); break;
-				case 'x': outstr(out, strupr(ultoa(va_arg(ap, unsigned), buf, 16))); break;
-				case 'c': (*out)(va_arg(ap, int)); break;
-				case 's': outstr(out, va_arg(ap, char *)); break;
-				case 'X': D_45B2->curX = va_arg(ap, int); break;
-				case 'Y': D_45B2->curY = va_arg(ap, int); break;
-				case 'B': D_45B2->bgColor = va_arg(ap, int); break;
-				case 'F': D_45B2->fgColor = va_arg(ap, int); break;
-				case 'P': C_128D_000C(D_45B2->buffer); break;
-				default: (*out)(c2); break;
-			}
-		} else {
-			(*out)(c);
+		switch(c) {
+			case '%':
+				c2 = *fmt++;
+				switch(c2) {
+					case 'd': outstr(out, itoa(va_arg(ap, int), buf, 10)); break;
+					case 'u': outstr(out, ultoa(va_arg(ap, unsigned), buf, 10)); break;
+					case 'D': outstr(out, ltoa(va_arg(ap, long), buf, 10)); break;
+					case 'U': outstr(out, ultoa(va_arg(ap, unsigned long), buf, 10)); break;
+					case 'x': outstr(out, strupr(ultoa(va_arg(ap, unsigned), buf, 16))); break;
+					case 'c': (*out)(va_arg(ap, int)); break;
+					case 's': outstr(out, va_arg(ap, char *)); break;
+					case 'X': D_45B2->curX = va_arg(ap, int); break;
+					case 'Y': D_45B2->curY = va_arg(ap, int); break;
+					case 'B': D_45B2->bgColor = va_arg(ap, int); break;
+					case 'F': D_45B2->fgColor = va_arg(ap, int); break;
+					case 'P': C_128D_000C(D_45B2->buffer); break;
+					default: (*out)(c2); break;
+				}
+				break;
+			default:
+				(*out)(c);
+				break;
 		}
 	}
 }

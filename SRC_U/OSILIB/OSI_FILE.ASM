@@ -1,24 +1,22 @@
+;----------------------------------------
+;OSI library (U.EXE): file routines (pascal), in _TEXT at 0000:09F0
+;(the same as GAME.EXE's OSI_FILE.ASM; the labels are U.EXE's offsets in _TEXT)
+;----------------------------------------
 INCLUDE OSI.INC
-
-;emulate a far call
-MY_CALL	MACRO s,o
-	db 9Ah
-	dw o,s
-ENDM
 
 DSegStart
 
 PUBLIC OSI_ErrorHandler,OSI_ErrorCode,OSI_ErrorFunc,OSI_ErrorFile
 
-OSI_ErrorHandler	dw OSI_callback,SEG OSI_callback	;D_032E
-OSI_ErrorCode	dw 0	;D_0332 error code
-OSI_ErrorFunc	dw 0	;D_0334 error origin
-OSI_ErrorFile	dw 0	;D_0336 last filename
+OSI_ErrorHandler	dw OSI_callback,SEG OSI_callback	;D_45D8
+OSI_ErrorCode	dw 0	;D_45DC error code
+OSI_ErrorFunc	dw 0	;D_45DE error origin
+OSI_ErrorFile	dw 0	;D_45E0 last filename
 
 DSegEnd
 
 OSIERR_CB	MACRO fctNum,errNum
-	MOV	DS,CS:C_0207
+	MOV	DS,CS:C_09F0
 	MOV	OSI_ErrorCode,errNum
 	MOV	OSI_ErrorFunc,fctNum
 	CALL	DWORD PTR OSI_ErrorHandler
@@ -57,7 +55,7 @@ ENDM
 _TEXT	SEGMENT PUBLIC BYTE 'CODE'
 	ASSUME CS:_TEXT,DS:DGROUP
 
-C_0207	dw DGROUP	;35BD
+C_09F0	dw DGROUP
 
 PUBLIC OSI_callback
 OSI_callback	PROC FAR
@@ -72,15 +70,15 @@ OSI_open	PROC FAR
 	PUSH	SI
 	PUSH	DI
 	;--
-	MOV	ES,CS:C_0207
-C_0214:
+	MOV	ES,CS:C_09F0
+C_09FD:
 	MOV	DX,[BP+06]
 	MOV	ES:OSI_ErrorFile,DX
 	;--
 	MOV	AX,(3Dh SHL 8) OR 2	;open file
 	INT	21h
 	;--
-	OSIERR_1	1,C_0214
+	OSIERR_1	1,C_09FD
 	;--
 	POP	DI
 	POP	SI
@@ -95,12 +93,12 @@ OSI_close	PROC FAR
 	MOV	BP,SP
 	PUSH	SI
 	PUSH	DI
-C_024E:	;--
+C_0A37:	;--
 	MOV	BX,[BP+06]
 	MOV	AH,3Eh	;close file
 	INT	21h
 	;--
-	OSIERR_1	2,C_024E
+	OSIERR_1	2,C_0A37
 	;--
 	POP	DI
 	POP	SI
@@ -118,14 +116,14 @@ OSI_create	PROC FAR
 	;--
 	MOV	DX,DGROUP
 	MOV	ES,DX
-C_0287:
+C_0A70:
 	MOV	AH,3Ch	;create file
 	XOR	CX,CX
 	MOV	DX,[BP+06]
 	MOV	ES:OSI_ErrorFile,DX
 	INT	21h
 	;--
-	OSIERR_1	3,C_0287
+	OSIERR_1	3,C_0A70
 	;--
 	POP	DI
 	POP	SI
@@ -143,13 +141,13 @@ OSI_delete	PROC FAR
 	;--
 	MOV	DX,DGROUP
 	MOV	ES,DX
-C_02C7:
+C_0AB0:
 	MOV	AH,41h	;delete file
 	MOV	DX,[BP+06]
 	MOV	ES:OSI_ErrorFile,DX
 	INT	21h
 	;--
-	OSIERR_1	4,C_02C7
+	OSIERR_1	4,C_0AB0
 	;--
 	POP	DI
 	POP	SI
@@ -172,51 +170,51 @@ OSI_read	PROC FAR
 	MOV	BX,[BP+12h]
 	MOV	CX,[BP+10h]
 	OR	CX,CX
-	JL	C_0337
+	JL	C_0B20
 	MOV	DX,[BP+0Eh]
 	MOV	AX,(42h SHL 8) OR 0	;move file pointer
 	INT	21h
-	JNB	C_0337
+	JNB	C_0B20
 	OSIERR_CB	5,AX
-	JMPN	C_03D2
-C_0337:	;--
+	JMPN	C_0BBB
+C_0B20:	;--
 	TEST	WORD PTR [BP+0Ch],0FFFFh
-	JNZ	C_0344
+	JNZ	C_0B2D
 	CMP	WORD PTR [BP+0Ah],0FFF0h
-	JBE	C_0388
-C_0344:	;--
+	JBE	C_0B71
+C_0B2D:	;--
 	MOV	AH,3Fh	;read file
 	MOV	BX,[BP+12h]
 	MOV	CX,0FFF0h
 	LDS	DX,[BP+06]
 	INT	21h
 	;--
-	OSIERR_2	5,C_0344
+	OSIERR_2	5,C_0B2D
 	;--
 	ADD	[BP-04],AX
 	ADC	WORD PTR [BP-02],0
 	CMP	AX,0FFF0h
-	JNZ	C_03BD
+	JNZ	C_0BA6
 	SUB	WORD PTR [BP+0Ah],0FFF0h
 	SBB	WORD PTR [BP+0Ch],0
 	ADD	WORD PTR [BP+08],0FFFh
-	JMP	C_0337
-C_0388:	;--
+	JMP	C_0B20
+C_0B71:	;--
 	MOV	AH,3Fh	;read file
 	MOV	BX,[BP+12h]
 	MOV	CX,[BP+0Ah]
 	LDS	DX,[BP+06]
 	INT	21h
 	;--
-	OSIERR_2	5,C_0388
+	OSIERR_2	5,C_0B71
 	;--
 	ADD	[BP-04],AX
 	ADC	WORD PTR [BP-02],0
 	CMP	AX,[BP+0Ah]
-	JZ	C_03D2
-C_03BD:
+	JZ	C_0BBB
+C_0BA6:
 	OSIERR_CB	5,-1
-C_03D2:	;--
+C_0BBB:	;--
 	MOV	AX,[BP-04]
 	MOV	DX,[BP-02]
 	;--
@@ -240,47 +238,47 @@ OSI_write	PROC FAR
 	MOV	BX,[BP+12h]
 	MOV	CX,[BP+10h]
 	OR	CX,CX
-	JL	C_0410
+	JL	C_0BF9
 	MOV	DX,[BP+0Eh]
 	MOV	AX,(42h SHL 8) OR 0	;move file pointer
 	INT	21h
-	JNB	C_0410
+	JNB	C_0BF9
 	OSIERR_CB	6,AX
-	JMPN	C_049D
-C_0410:	;--
+	JMPN	C_0C86
+C_0BF9:	;--
 	TEST	WORD PTR [BP+0Ch],0FFFFh
-	JNZ	C_041D
+	JNZ	C_0C06
 	CMP	WORD PTR [BP+0Ah],0FFF0h
-	JBE	C_045A
-C_041D:
+	JBE	C_0C43
+C_0C06:
 	MOV	AH,40h	;write file
 	MOV	BX,[BP+12h]
 	MOV	CX,0FFF0h
 	LDS	DX,[BP+06]
 	INT	21h
 	;--
-	OSIERR_2	6,C_041D
+	OSIERR_2	6,C_0C06
 	;--
 	CMP	AX,0FFF0h
-	JNZ	C_0488
+	JNZ	C_0C71
 	SUB	WORD PTR [BP+0Ah],0FFF0h
 	SBB	WORD PTR [BP+0Ch],0
 	ADD	WORD PTR [BP+08],0FFFh
-	JMP	C_0410
-C_045A:	;--
+	JMP	C_0BF9
+C_0C43:	;--
 	MOV	AH,40h	;write file
 	MOV	BX,[BP+12h]
 	MOV	CX,[BP+0Ah]
 	LDS	DX,[BP+06]
 	INT	21h
 	;--
-	OSIERR_2	6,C_045A
+	OSIERR_2	6,C_0C43
 	;--
 	CMP	AX,[BP+0Ah]
-	JZ	C_049D
-C_0488:
+	JZ	C_0C86
+C_0C71:
 	OSIERR_CB	6,-1
-C_049D:	;--
+C_0C86:	;--
 	POP	DS
 	POP	DI
 	POP	SI
@@ -296,9 +294,9 @@ OSI_rename	PROC FAR
 	MOV	BP,SP
 	PUSH	SI
 	PUSH	DI
-C_04AB:	;--
+C_0C94:	;--
 	MOV	AH,56h
-	MOV	ES,CS:C_0207
+	MOV	ES,CS:C_09F0
 	MOV	DX,[BP+08]
 	MOV	ES:OSI_ErrorFile,DX
 	MOV	DI,DS
@@ -306,7 +304,7 @@ C_04AB:	;--
 	MOV	DI,[BP+06]
 	INT	21h
 	;--
-	OSIERR_1	7,C_04AB
+	OSIERR_1	7,C_0C94
 	;--
 	POP	DI
 	POP	SI
@@ -326,14 +324,14 @@ OSI_copy	PROC FAR
 	MOV	AH,48h	;allocate memory
 	MOV	BX,0FFFFh
 	INT	21h
-	JNB	C_0540
+	JNB	C_0D29
 	CMP	AX,8
-	JNZ	C_0540
+	JNZ	C_0D29
 	MOV	[BP-06],BX
 	;--
 	MOV	AH,48h	;allocate memory
 	INT	21h
-	JB	C_0540
+	JB	C_0D29
 	MOV	[BP-02],AX
 	;--
 	MOV	AX,[BP-06]
@@ -347,26 +345,26 @@ OSI_copy	PROC FAR
 	;--
 	MOV	AX,[BP+08]                         
 	PUSH	AX
-	MY_CALL	_TEXT,OSI_open
-	JB	C_0540
+	CALL	OSI_open
+	JB	C_0D29
 	MOV	[BP-0Ch],AX
 	;--
 	MOV	AH,3Ch	;create file
 	XOR	CX,CX
 	MOV	DX,[BP+06]
 	INT	21h
-	JB	C_0540
+	JB	C_0D29
 	MOV	[BP-0Eh],AX
 	;--
-	JMP	SHORT C_055B
-C_0540:
+	JMP	SHORT C_0D44
+C_0D29:
 	OSIERR_CB	8,AX
 	MOV	AH,49h	;free memory
 	MOV	ES,[BP-02]
 	INT	21h
 	;--
-	JMP	SHORT C_05D8
-C_055B:	;--
+	JMP	SHORT C_0DC1
+C_0D44:	;--
 	MOV	AX,[BP-0Ch]
 	PUSH	AX
 	MOV	AX,0FFFFh
@@ -380,7 +378,7 @@ C_055B:	;--
 	PUSH	AX
 	XOR	AX,AX
 	PUSH	AX
-	MY_CALL	_TEXT,OSI_read
+	CALL	OSI_read
 	MOV	[BP-0Ah],AX
 	MOV	[BP-08],DX
 	;--
@@ -397,30 +395,30 @@ C_055B:	;--
 	PUSH	AX
 	XOR	AX,AX
 	PUSH	AX
-	MY_CALL	_TEXT,OSI_write
+	CALL	OSI_write
 	;--
 	MOV	AX,[BP-08]
 	CMP	AX,[BP-04]
-	JB	C_05AB
+	JB	C_0D94
 	;--
 	MOV	AX,[BP-0Ah]
 	CMP	AX,[BP-06]
-	JNB	C_055B
-C_05AB:	;--
+	JNB	C_0D44
+C_0D94:	;--
 	MOV	AX,[BP-0Ch]
 	PUSH	AX
-	MY_CALL	_TEXT,OSI_close
+	CALL	OSI_close
 	;--
 	MOV	AX,[BP-0Eh]
 	PUSH	AX
-	MY_CALL	_TEXT,OSI_close
+	CALL	OSI_close
 	;--
 	MOV	AH,49h	;free memory
 	MOV	ES,[BP-02]
 	INT	21h
-	JNB	C_05D8
+	JNB	C_0DC1
 	OSIERR_CB	8,AX
-C_05D8:	;--
+C_0DC1:	;--
 	POP	DS
 	POP	DI
 	POP	SI
@@ -442,11 +440,11 @@ OSI_fileSize	PROC FAR
 	XOR	CX,CX
 	MOV	DX,CX
 	INT	21h
-	JNB	C_05F8
+	JNB	C_0DE1
 	;--
 	XOR	AX,AX
 	MOV	DX,AX
-C_05F8:	;--
+C_0DE1:	;--
 	POP	DI
 	POP	SI
 	POP	BP
@@ -464,9 +462,9 @@ OSI_memory	PROC FAR
 	MOV	AH,48h	;allocate memory
 	MOV	BX,0FFFFh
 	INT	21h
-	JNB	C_0624
+	JNB	C_0E0D
 	CMP	AX,8
-	JNZ	C_0624
+	JNZ	C_0E0D
 	MOV	AX,BX
 	ROL	AX,1
 	ROL	AX,1
@@ -475,11 +473,11 @@ OSI_memory	PROC FAR
 	MOV	DX,AX
 	AND	AX,NOT 0Fh
 	db 83h,0E2h,0Fh	;AND DX,0Fh
-	JMP	SHORT C_0628
-C_0624:	;--
+	JMP	SHORT C_0E11
+C_0E0D:	;--
 	XOR	AX,AX
 	XOR	DX,DX
-C_0628:	;--
+C_0E11:	;--
 	POP	DS
 	POP	DI
 	POP	SI
