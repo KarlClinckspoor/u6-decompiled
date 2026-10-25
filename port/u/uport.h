@@ -22,4 +22,10 @@ uint16_t u_code_segment(uint16_t frame);
 #define _CS u_code_segment(PORT_U_FRAME)
 #endif
 
+/* Turbo C's putchar writes to the DOS console, whose BEL beeps (transfer.c's error
+ * sound): the port beeps on the speaker */
+int u_putchar(int c);
+#undef putchar
+#define putchar u_putchar
+
 #endif

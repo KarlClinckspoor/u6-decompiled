@@ -13,6 +13,7 @@
 #include "../gfx/vgadac.h"
 #include "ugfx.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -131,4 +132,20 @@ int u_run(int argc, char **argv)
 	ugfx_set_mode_hook(mode_set);
 	load_image();
 	return U_main(argc, argv);
+}
+
+/* Turbo C's putchar: the console; BEL beeps (uport.h) */
+int u_putchar(int c)
+{
+	if (c == 7) {
+		uint32_t end = plat_real_ms() + 120;
+		plat_speaker(800);
+		while ((int32_t)(end - plat_real_ms()) > 0) {
+			plat_pump();
+			plat_sleep_ms(10);
+		}
+		plat_speaker(0);
+		return c;
+	}
+	return putchar(c);
 }

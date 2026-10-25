@@ -1,10 +1,11 @@
 # Ultima VI, native port (branch `portable`)
 
-The game's own C (`SRC/`, the same files that still build a byte-identical `GAME.EXE` for
-DOS) compiled for Windows and Linux on SDL2, with the DOS pieces it needs rewritten in C
-under `port/`: the OSI assembly library, the MCGA graphics driver, DOS files and memory.
-On top: a settings screen over the game (F11), character creation, and a recording of
-every session that replays exactly.
+The game's own C compiled for Windows and Linux on SDL2: `GAME.EXE`'s (`SRC/`) and `U.EXE`'s
+(`SRC_U/`: the title, the main menu, the introduction, the gypsy's character creation, the
+transfer of a character), the same files that still build byte-identical programs for DOS,
+with the DOS pieces they need rewritten in C under `port/`: the OSI assembly libraries,
+the MCGA graphics drivers, the AdLib music driver, DOS files and memory. On top: a settings
+screen over the game (F11) and a recording of every session that replays exactly.
 
 You need your own copy of Ultima VI (the GOG version works): the port reads the game's data
 files from its folder and never writes there.
@@ -60,16 +61,20 @@ usual GOG folders.
   backups. `%APPDATA%\u6port` on Windows, `~/.local/share/u6port` on Linux; `--home DIR`
   chooses another. The game's writes go here; files it has not written are read from the
   game folder.
-- **New character**: in DOS, `ULTIMA6.EXE` runs `U.EXE` (menu, intro, the gypsy) before
-  `GAME.EXE`. The port runs `GAME.EXE`'s code only, so when the saved game has no
-  character yet, it asks for the name, sex and portrait and lets you choose between the
-  virtues in the gypsy's tournament (her cards, without her questions). It writes the
-  result exactly as `U.EXE` does (`port/ui/newchar.c` has the details), so the stats come
-  out as in DOS: 15 each plus the virtues' bonuses, level 3, 90 hit points.
+- **The main menu**: as `ULTIMA6.EXE` does in DOS, the port starts with `U.EXE`: Lord
+  British's title and the bedroom, then the main menu (Introduction, Create a Character,
+  Transfer a Character from Ultima IV or V, Acknowledgements, Journey Onward). A new
+  character goes on with the introduction, the moongate and the game; Journey Onward
+  goes to the game. With the setting "Main menu at start" off (or `--game`), the port goes
+  straight to the game when the saved game has a character. A saved game without one
+  always starts with the menu, as `GAME.EXE` sends you back there in DOS.
+- **Music**: the AdLib music, in the menu and the introduction and in the game
+  (`port/sys/adlib.c`: the U6ADLIB.DRV driver in C on an emulated OPL2, Nuked OPL3).
 - **F11**: the settings screen; the game is paused while it is open.
   - Display: fullscreen (also Alt+Enter), window scale, 4:3 aspect, whole-number scaling.
-  - Sound: the PC speaker effects and their volume. Music is not ported yet.
-  - Game: the game folder, recording on/off, show the screen at start, New game (your
+  - Sound: the PC speaker effects and their volume; the music and its volume.
+  - Game: the game folder, recording on/off, the main menu at start, show the screen at
+    start, New game (your
     saved game moves to `backups/` and the game folder's own, as installed, comes back).
   - Replay: the recordings, to watch; while one plays, its speed and "take over".
 - Saving and loading are the game's own: Ctrl+S saves (it asks first), Ctrl+R goes back to
@@ -107,7 +112,8 @@ recording made on Windows replays identically on Linux and the other way round.
     --hidden            no window (replays, tests)
     --settings          open the settings screen before the game
     --scale N, --fullscreen, --no-aspect, --no-integer, --no-audio
-    --new-avatar SPEC   make the character without the screen: NAME[,M|F[,PORTRAIT[,VIRTUE]]]
+    --menu, --game      start with the main menu (U.EXE), or with the game
+    --new-avatar SPEC   make the character without the gypsy (tests): NAME[,M|F[,PORTRAIT[,VIRTUE]]]
     --screenshot FILE   write the screen as a BMP when the session ends (tests)
     --run-ms N          end the session after N ms (tests)
     --keys SCRIPT       type keys at given times (tests): "1500:up 2000:a 2500:^s"
@@ -130,15 +136,30 @@ recording made on Windows replays identically on Linux and the other way round.
   the DOS file system and interrupts, in C (`docs/port/OSILIB.md`); `portmain.c` (start-up)
   and `session.c` (home folder, recordings, replays).
 - `port/gfx/mcga.c`: the MCGA driver U6MCGA.DRV in C (`docs/port/MCGA_DRIVER.md`).
-- `port/replay/`: the recording format; `port/ui/`: the settings screen, character
-  creation, the settings file; `port/platform/`: `plat.h` and its SDL2 backend.
-- Not ported: the music drivers (AdLib and the others are silent; the PC speaker effects
-  play), `U.EXE` (menu and intro; character creation is the port's own), `END.EXE`.
+- `port/u/`: `U.EXE` in the port. Its C (`SRC_U/`, with `SRC_U/portable.h` as `SRC/` has)
+  is compiled with its public names renamed `U_*` (`uport.h`, `urename.h`), so that both
+  programs live in one executable; `uprot.h` (prototypes) and `ubss.c` (its uninitialised
+  data in DOS's order) come from `port/tools/gen_u.py`. `ugfx.c` is its graphics driver
+  MCGADRV.BIN in C (`docs/port/U_DRIVER.md`), `osilib/` its OSI library in C
+  (`docs/port/U_OSILIB.md`), `urun.c` the rest (LoadZFile, the DOS handlers, the code its
+  noise effects read). `U.EXE`'s exec of `GAME.EXE` goes on with the game in the same
+  process; `GAME.EXE`'s exec of `ULTIMA6.EXE` restarts the port with the menu.
+- `port/sys/adlib.c`: the AdLib driver U6ADLIB.DRV in C, run at 60 Hz in the audio
+  callback, through Nuked OPL3 (`port/third_party/nuked-opl3`, LGPL 2.1).
+- `port/replay/`: the recording format; `port/ui/`: the settings screen, the settings
+  file; `port/platform/`: `plat.h` and its SDL2 backend.
+- Not ported: the other music drivers (Roland, CMS, Tandy, ...: the port plays AdLib), the
+  graphics modes other than VGA, `END.EXE` (the endgame). The part of the session in
+  `U.EXE` is not recorded; the recording starts with the game.
 
 ## Tests
 
 - `port/tests/run_osilib_tests.sh`: the C OSI library against the original routines of
   `GAME.EXE` run in unicorn (`pip install unicorn`), and unit tests.
 - `python3 port/tests/mcga_diff.py`: the C MCGA driver against U6MCGA.DRV in unicorn.
+- `python3 port/tests/ugfx_diff.py`, `python3 port/tests/uosi_diff.py`: `U.EXE`'s graphics
+  driver and OSI library against MCGADRV.BIN and `U.EXE`'s own routines in unicorn.
+- `python3 port/tests/adlib_diff.py`: the AdLib driver's OPL writes against U6ADLIB.DRV's,
+  every song.
 - Replays: a recording made with `--keys` and replayed with `--hidden --speed 0` must report
   "all identical".
