@@ -7,7 +7,8 @@
 ;
 
 _DATA	SEGMENT PUBLIC WORD 'DATA'
-	EXTRN	D_410E:WORD	;set to 1 by the critical error handler
+PUBLIC	D_410E
+D_410E	dw 0	;410E: set to 1 by the critical error handler
 _DATA	ENDS
 
 DGROUP	GROUP	_DATA

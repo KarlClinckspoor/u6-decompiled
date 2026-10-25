@@ -35,9 +35,6 @@ union tMus {
 };
 #define MUS(o) D_58FA.p.ofs = (o); (*D_58FA.f)
 
-extern int D_0194;/*the introduction has been seen*/
-extern int D_0196[];/*Hercules CRTC registers (low byte: index, high byte: value)*/
-extern int D_01A8;/*song playing (1-based), -2: song 2 loaded but not started*/
 extern int D_4A14[][3];/*the 5 main menu highlight colors (r, g, b)*/
 extern int D_4A40[][3];/*VGA palette (r, g, b)*/
 extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
@@ -115,6 +112,11 @@ extern C_1475_00B8(int, int *);/*read a VGA palette entry*/
 InitHercules();
 LoadMusicDriver(int, int);
 PlayMusic(int);
+
+/*0194*/int D_0194 = 0;/*the introduction has been seen (main menu choice 0)*/
+/*Hercules 720x348 graphics: the CRTC registers (low byte: index, high byte: value)*/
+/*0196*/int D_0196[9] = {0x3500, 0x2d01, 0x2e02, 0x0703, 0x5b04, 0x0205, 0x5706, 0x5707, 0x0309};
+/*01A8*/int D_01A8 = 0;/*song playing (1-based in D_01C0), 0 none, -2: song 2 loaded but not started*/
 
 /*parse an hexadecimal music i/o port (e.g. "388") into D_5720;
 returns the pointer to the first non hex digit*/
@@ -801,8 +803,8 @@ next:
 	asm jnz line
 }
 
-/*the music drivers*/
-char *D_01B4[] = {
+/*the music drivers (index 1..6 = D_5746)*/
+/*01B4*/char *D_01B4[] = {
 	"U6ADLIB.DRV",
 	"U6CMS.DRV",
 	"U6TMUS.DRV",
@@ -876,8 +878,8 @@ holds a "( a b a b ...)" group per song; without it all 16 channels get
 	farfree(D_5692);
 }
 
-/*the songs*/
-char *D_01C0[] = {
+/*the songs (index 1..12 for PlayMusic)*/
+/*01C0*/char *D_01C0[] = {
 	"ultima.m",
 	"bootup.m",
 	"intro.m",

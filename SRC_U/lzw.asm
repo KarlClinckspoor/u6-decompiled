@@ -13,27 +13,27 @@ EOF        EQU 257	;code: end of the data
 FIRST_FREE EQU 258
 
 _DATA	SEGMENT PUBLIC WORD 'DATA'
-	EXTRN	D_4110:WORD	;masks: dw 1FFh,3FFh,7FFh,0FFFh (a code of 9..12 bits)
-	EXTRN	D_4118:WORD	;input_handle
-	EXTRN	D_411A:WORD	;hash_seg: the string table (3 bytes a code)
-	EXTRN	D_411C:WORD	;output_offset
-	EXTRN	D_411E:WORD	;bit_offset: in the input buffer
-	EXTRN	D_4120:WORD	;cur_code
-	EXTRN	D_4122:WORD	;old_code
-	EXTRN	D_4124:WORD	;in_code
-	EXTRN	D_4126:WORD	;free_code
-	EXTRN	D_4128:WORD	;stack_count
-	EXTRN	D_412A:WORD	;max_code
-	EXTRN	D_412C:WORD	;nbits: the size of a code
-	EXTRN	D_412E:BYTE	;fin_char
-	EXTRN	D_412F:BYTE	;k
-	EXTRN	D_4130:WORD	;segment_0: a 3010h bytes buffer (the string table)
-	EXTRN	D_4132:WORD	;lDestSz: dd, the decompressed size from the file header
-	EXTRN	D_4134:WORD	;its high word
-	EXTRN	D_4136:WORD	;output_segment
-	EXTRN	D_4138:WORD	;lpDest: dw segment, offset of the result
-	EXTRN	D_413A:WORD
-	EXTRN	D_413C:WORD	;input_segment: a 1010h bytes buffer (1 KB of input)
+PUBLIC	D_4110,D_4118,D_411A,D_411C,D_411E,D_4120,D_4122,D_4124,D_4126,D_4128
+PUBLIC	D_412A,D_412C,D_412E,D_412F,D_4130,D_4132,D_4136,D_4138,D_413C
+D_4110	dw 1FFh,3FFh,7FFh,0FFFh	;4110: masks: a code of 9..12 bits
+D_4118	dw 0	;4118: input_handle
+D_411A	dw 0	;411A: hash_seg: the string table (3 bytes a code)
+D_411C	dw 0	;411C: output_offset
+D_411E	dw 0	;411E: bit_offset: in the input buffer
+D_4120	dw 0	;4120: cur_code
+D_4122	dw 0	;4122: old_code
+D_4124	dw 0	;4124: in_code
+D_4126	dw 0	;4126: free_code
+D_4128	dw 0	;4128: stack_count
+D_412A	dw 0	;412A: max_code
+D_412C	dw 0	;412C: nbits: the size of a code
+D_412E	db 0	;412E: fin_char
+D_412F	db 0	;412F: k
+D_4130	dw 0	;4130: segment_0: a 3010h bytes buffer (the string table)
+D_4132	dd 0	;4132: lDestSz: the decompressed size, from the file header
+D_4136	dw 0	;4136: output_segment
+D_4138	dw 0,0	;4138: lpDest: segment, offset of the result
+D_413C	dw 0	;413C: input_segment: a 1010h bytes buffer (1 KB of input)
 _DATA	ENDS
 
 DGROUP	GROUP	_DATA
@@ -195,7 +195,7 @@ _LoadZFile	PROC FAR
 	CALL	_free
 	ADD	SP,2
 	MOV	DX,D_4138
-	MOV	AX,D_413A
+	MOV	AX,D_4138+2
 	POP	DS
 	POP	SI
 	POP	DI
@@ -352,8 +352,8 @@ LoadZ	PROC FAR
 	MOV	AH,3Fh	;read file
 	INT	21h
 	JC	lz1
-	MOV	BX,D_4132
-	MOV	DX,D_4134
+	MOV	BX,WORD PTR D_4132
+	MOV	DX,WORD PTR D_4132+2
 	MOV	CL,4
 lz0:	SHR	DX,1
 	RCR	BX,1
@@ -364,12 +364,12 @@ lz0:	SHR	DX,1
 	MOV	D_4136,-1
 	JMP	SHORT lz1
 lz2:	MOV	D_411C,AX
-	MOV	D_413A,AX
+	MOV	D_4138+2,AX
 	MOV	D_4136,DX
 	MOV	D_4138,DX
 	CALL	decompress
 	CLC
-	MOV	AX,D_4132
+	MOV	AX,WORD PTR D_4132
 	OR	AX,AX
 	JNZ	lz1
 	DEC	AX
