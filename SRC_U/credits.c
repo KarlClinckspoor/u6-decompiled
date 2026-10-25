@@ -18,8 +18,8 @@ extern struct tSurface workArea;
 extern char gameArgs[];/*GAME.EXE's command line argument*/
 
 extern SetPalette();
-extern PollInput();/*nonzero when the player wants to go on (key or time)*/
-extern AskForDisk(int16);/*AskForDisk*/
+extern int16 PollInput();/*nonzero when the player wants to go on (key or time)*/
+extern AskForDisk(int16 n);/*AskForDisk*/
 extern SURF_alloc(struct tSurface *);/*allocates an off-screen buffer (and row table) of a surface's size*/
 extern SURF_free(struct tSurface *);/*frees them*/
 extern TXT_clear();

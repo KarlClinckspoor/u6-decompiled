@@ -16,11 +16,11 @@
 extern SetPalette();
 extern RestorePalette();
 extern SavePalette();
-extern PlayMusic();
-extern ShowPassage();/*start the music/sound piece n*/
+extern PlayMusic(int16 song);
+extern ShowPassage(int16 n);/*start the music/sound piece n*/
 extern DisplayPassage();/*called every frame while a piece plays*/
-extern AskForDisk();/*AskForDisk(n)*/
-extern LoadPalette();/*LoadPalette(n)*/
+extern AskForDisk(int16 n);/*AskForDisk(n)*/
+extern LoadPalette(int16 n);/*LoadPalette(n)*/
 extern SURF_alloc();/*(struct tSurface *): give the surface its own pixel buffer*/
 extern SURF_free();/*(struct tSurface *): free it*/
 extern SURF_share();/*(dst, src, 0): copy a surface*/

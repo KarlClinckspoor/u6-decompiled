@@ -16,14 +16,17 @@ int32 pascal OSI_write(int16 fd, int32 offset, int32 length, void far *buf);/*OS
 
 /*a surface the graphics driver draws on: the screen, a page or an off-screen buffer
   (GAME.EXE's struct tSurface)*/
+#ifndef U_STRUCTS_DEFINED/*the port's port/u/ugfx.h has the same*/
 struct tSurface {
 	uint16 segment;/*_00 segment of the pixels*/
 	uint16 far *pScanlines;/*_02 offset of each scan line*/
 	int16 right, left, top, bottom;/*_06,_08,_0a,_0c clipping rectangle*/
 };
+#endif
 
 /*a text window of the OSI library: where and how the text routines print (OSI.INC's
   tText); TXT_select makes one current*/
+#ifndef U_STRUCTS_DEFINED
 struct tText {
 	struct tSurface *surface;/*+00 the surface it prints on*/
 	int16 curX, curY;/*+02,+04 the cursor*/
@@ -34,6 +37,8 @@ struct tText {
 	char *bufPtr;/*+0E where its next character goes*/
 	char justify;/*+10 alignment (0 left, 1 right, 2 centred, 3 ...)*/
 };
+#define U_STRUCTS_DEFINED
+#endif
 extern struct tText console;/*the console's text window*/
 #define textWin console.surface/*the console: the surface it writes on*/
 #define textX console.curX/*the console: text cursor x*/
@@ -90,6 +95,10 @@ extern union tMus musDrv;
   U6ADLIB.DRV's in port/sys/adlib.c (shared with GAME.EXE's music)*/
 #define DRV(o) UDRV_##o
 #define MUS(o) MUSDRV_##o
+#endif
+
+#ifndef __TURBOC__
+#include "uprot.h"/*the port: a prototype for every function (port/tools/gen_u.py)*/
 #endif
 
 #endif

@@ -53,10 +53,38 @@ else()
 	target_compile_options(u6game PRIVATE -w -fpermissive)
 endif()
 
+# ---- U.EXE's C (menu, introduction, character creation), compiled the same way; its
+# names are renamed U_* (port/u/uport.h) so that they do not collide with GAME.EXE's ----
+set(U_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../SRC_U)
+file(GLOB U_C ${U_SRC}/*.c)
+file(GLOB U_OSILIB_C ${CMAKE_CURRENT_SOURCE_DIR}/u/osilib/*.c)
+add_library(u6u OBJECT ${U_C} ${U_OSILIB_C})
+target_include_directories(u6u PRIVATE ${U_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/u ${CMAKE_CURRENT_SOURCE_DIR}/include
+	${CMAKE_CURRENT_SOURCE_DIR}/sys ${CMAKE_CURRENT_SOURCE_DIR}/platform)
+foreach(f ${U_C})
+	get_filename_component(n ${f} NAME_WE)
+	set_source_files_properties(${f} PROPERTIES COMPILE_DEFINITIONS PORT_UTU_${n})
+endforeach()
+# the modules whose noise reads their own code (_CS)
+set_property(SOURCE ${U_SRC}/chargen.c APPEND PROPERTY COMPILE_DEFINITIONS PORT_U_FRAME=0x0406)
+set_property(SOURCE ${U_SRC}/intro.c APPEND PROPERTY COMPILE_DEFINITIONS PORT_U_FRAME=0x06E9)
+target_compile_options(u6u PRIVATE
+	-std=gnu89 -fsigned-char -fwrapv -fno-strict-aliasing
+	"SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/include/compat.h"
+	"SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/u/uport.h"
+	-Wno-everything)
+if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+	target_compile_options(u6u PRIVATE
+		-Wno-error=int-conversion -Wno-error=return-type -Wno-error=implicit-function-declaration
+		-Wno-error=implicit-int -Wno-error=incompatible-function-pointer-types)
+else()
+	target_compile_options(u6u PRIVATE -w -fpermissive)
+endif()
+
 # ---- the port ----
 file(GLOB PORT_C
-	sys/*.c gfx/*.c replay/*.c ui/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c)
-add_executable(u6 ${PORT_C} $<TARGET_OBJECTS:u6game>)
+	sys/*.c gfx/*.c replay/*.c ui/*.c u/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c)
+add_executable(u6 ${PORT_C} $<TARGET_OBJECTS:u6game> $<TARGET_OBJECTS:u6u>)
 target_include_directories(u6 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/platform)
 target_compile_options(u6 PRIVATE -fsigned-char -fwrapv -fno-strict-aliasing)
 target_link_libraries(u6 PRIVATE ${SDL2_TARGET} m)

@@ -52,15 +52,15 @@ extern void far *LoadZFile(char *);/*load a driver file*/
 extern void far *LZW_load(char *);/*load a (compressed) file*/
 extern SetDosHandlers();
 extern FindDrives();/*FindDrives*/
-extern LoadPalette(int16);/*LoadPalette*/
+extern LoadPalette(int16 n);/*LoadPalette*/
 extern Intro();
 extern TransferCharacter();
-extern CreateCharacter();
+extern int16 CreateCharacter();
 extern Credits();
 extern StartGame();
-extern ScaleSpeed(int16, int16);
+extern int16 ScaleSpeed(int16 a, int16 b);
 extern Introduction();
-extern Delay(int16);
+extern Delay(int16 n);
 extern SURF_alloc(struct tSurface *);
 extern SURF_free(struct tSurface *);
 extern MOUSE_INIT(void *);/*mouse init*/

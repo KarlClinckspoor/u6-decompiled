@@ -37,14 +37,14 @@ extern int16 shapePos[];/*the moving shapes: x,y each*/
 extern SetPalette();
 extern RestorePalette();
 extern SavePalette();
-extern PlayMusic(int16);
-extern CheckInput();/*nonzero when a key (or the mouse) was pressed*/
-extern ScaleSpeed(int16, int16);/*a random number between the two*/
+extern PlayMusic(int16 song);
+extern int16 CheckInput();/*nonzero when a key (or the mouse) was pressed*/
+extern int16 ScaleSpeed(int16 a, int16 b);/*a random number between the two*/
 extern ShowFrame();/*waits for the next frame*/
-extern Delay(int16);/*waits n ticks*/
-extern ShowPassage(int16);/*writes text n*/
+extern Delay(int16 n);/*waits n ticks*/
+extern ShowPassage(int16 n);/*writes text n*/
 extern DisplayPassage();
-extern LoadPalette(int16);
+extern LoadPalette(int16 n);
 extern SURF_alloc(struct tSurface *);/*gives a surface an off-screen buffer*/
 extern SURF_free(struct tSurface *);/*frees it*/
 extern VID_waitRetrace();

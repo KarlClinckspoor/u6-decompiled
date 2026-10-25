@@ -7,11 +7,14 @@ struct WORDREGS { uint16_t ax, bx, cx, dx, si, di, cflag, flags; };
 struct BYTEREGS { uint8_t al, ah, bl, bh, cl, ch, dl, dh; };
 union REGS { struct WORDREGS x; struct BYTEREGS h; };
 struct SREGS { uint16_t es, cs, ss, ds; };
+struct time { unsigned char ti_min, ti_hour, ti_hund, ti_sec; };
 #pragma pack(pop)
 int int86(int intno, union REGS *in, union REGS *out);
 int int86x(int intno, union REGS *in, union REGS *out, struct SREGS *seg);
 int intdos(union REGS *in, union REGS *out);
 void segread(struct SREGS *seg);
+void gettime(struct time *t);
+int bdos(int dosfun, unsigned dosdx, unsigned dosal);
 void outportb(int port, unsigned char value);
 unsigned char inportb(int port);
 #endif

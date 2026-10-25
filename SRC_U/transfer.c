@@ -96,15 +96,17 @@ extern struct tSurface nameWindow;
 extern struct tSurface titleArea;/*the title*/
 extern struct tSurface sheet;/*the character sheet*/
 
-extern InputString(char *, int16);/*text input*/
-extern MenuSelect(struct tSurface *, char *);/*waits for a button or key: index in the keys*/
+extern InputString(char *dest, int16 max);/*text input*/
+#ifdef __TURBOC__
+extern MenuSelect(struct tSurface *, char *);/*waits for a button or key: index in the keys (declared int here: this module reads all of AX; the port has the prototype)*/
+#endif
 extern SetPalette();
-extern PlayMusic(int16);
-extern WriteNewCharacter();
-extern PollInput();/*nonzero when the player wants to go on (key or time)*/
-extern ShowPassage(int16);
+extern PlayMusic(int16 song);
+extern int16 WriteNewCharacter();
+extern int16 PollInput();/*nonzero when the player wants to go on (key or time)*/
+extern ShowPassage(int16 n);
 extern DisplayPassage();
-extern AskForDisk(int16);/*AskForDisk*/
+extern AskForDisk(int16 n);/*AskForDisk*/
 extern SURF_alloc(struct tSurface *);/*gives a surface an off-screen buffer*/
 extern SURF_free(struct tSurface *);/*frees it*/
 extern SURF_share(struct tSurface *, ...);

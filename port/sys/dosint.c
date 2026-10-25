@@ -242,6 +242,31 @@ int intdosx(union REGS *inregs, union REGS *outregs, struct SREGS *segregs)
 /* The game's segment registers: there is one data segment, which the port does not
  * have; DS = SS = ES = a foreign segment, CS = 0. Only SetVGAPalette calls this, and it
  * replaces ES before use. */
+/* Turbo C's bdos: int 21h with AH = dosfun, DX, AL; returns AX (U.EXE's disk code) */
+int bdos(int dosfun, unsigned dosdx, unsigned dosal)
+{
+	union REGS r;
+
+	memset(&r, 0, sizeof r);
+	r.h.ah = (uint8_t)dosfun;
+	r.x.dx = (uint16_t)dosdx;
+	r.h.al = (uint8_t)dosal;
+	intdos(&r, &r);
+	return r.x.ax;
+}
+
+/* Turbo C's gettime (U.EXE's introduction shows the time on the clock) */
+void gettime(struct time *t)
+{
+	uint8_t h, m, sec, hund;
+
+	dos_time_live(&h, &m, &sec, &hund);
+	t->ti_hour = h;
+	t->ti_min = m;
+	t->ti_sec = sec;
+	t->ti_hund = hund;
+}
+
 void segread(struct SREGS *segp)
 {
 	segp->cs = 0;
