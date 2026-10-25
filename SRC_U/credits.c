@@ -8,15 +8,10 @@
 
 /*a drawing surface of the graphics driver (14 bytes)*/
 
-extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern int16 videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
 extern struct tSurface screen;/*the screen*/
 extern struct tSurface backBuffer;
 extern struct tSurface textArea;/*the console's surface*/
-extern struct tSurface *textWin;/*the console: surface it writes on*/
-extern int textX;/*the console: x*/
-extern int textY;/*the console: y*/
-extern char textFg, textBg;/*the console: text colours*/
-extern char textAlign;
 extern struct tSurface textAreaCopy;
 extern void far *vellum;/*the vellum background picture*/
 extern struct tSurface workArea;
@@ -24,16 +19,16 @@ extern char gameArgs[];/*GAME.EXE's command line argument*/
 
 extern SetPalette();
 extern PollInput();/*nonzero when the player wants to go on (key or time)*/
-extern AskForDisk(int);/*AskForDisk*/
+extern AskForDisk(int16);/*AskForDisk*/
 extern SURF_alloc(struct tSurface *);/*allocates an off-screen buffer (and row table) of a surface's size*/
 extern SURF_free(struct tSurface *);/*frees them*/
 extern TXT_clear();
-extern SURF_share(struct tSurface *, struct tSurface *, int);
+extern SURF_share(struct tSurface *, struct tSurface *, int16);
 extern TXT_sprintf(char far *, ...);/*console printf*/
 extern TXT_sappend(char far *);/*console print*/
-extern VID_setMode(int);
+extern VID_setMode(int16);
 extern FADE_in(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
-extern FADE_out(struct tSurface *, int);/*MCGA: palette fade out*/
+extern FADE_out(struct tSurface *, int16);/*MCGA: palette fade out*/
 extern void far *LZW_load(char *);/*loads a file in memory*/
 
 /*C_0676_0006*/Credits() {
@@ -187,7 +182,7 @@ extern void far *LZW_load(char *);/*loads a file in memory*/
 }
 
 /*C_0676_0699*/StartGame() {
-	int i;
+	int16 i;
 
 	workArea.left = workArea.top = 0;
 	workArea.right = 0x13f;

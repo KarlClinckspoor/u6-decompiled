@@ -6,25 +6,24 @@
 #include <alloc.h>
 #include <conio.h>
 
-extern int videoMode;/*video mode: 0x0d EGA, 0x13 MCGA*/
-extern char mouseL, mouseR;
-extern int menuDrawn;
-extern int escaped;
+extern int16 videoMode;/*video mode: 0x0d EGA, 0x13 MCGA*/
+extern int16 menuDrawn;
+extern int16 escaped;
 extern char dosMajor, dosMinor;/*DOS version: major, minor*/
 extern struct tSurface screen, backBuffer;
 
 /*names of the disks, as the disk prompt says them*/
 /*4038*/char *diskNames[] = {"", "Program", "Intro.", "Endgame", "Game", "Map", "Conversation", "Portrait", "Player"};
-/*404A*/int curDisk = 1;/*the disk in the current drive*/
-/*404C*/int wantDisk = 0;/*the disk asked for*/
+/*404A*/int16 curDisk = 1;/*the disk in the current drive*/
+/*404C*/int16 wantDisk = 0;/*the disk asked for*/
 /*404E*/char diskDrive[9] = {0};/*drive of each game disk (1 = A:)*/
 /*4057*/char driveKind[26] = {0};/*kind of each drive: 0 none, 1 fixed, 2 removable*/
 /*4071*/char markerFile[] = "u6.1";/*name of a disk's marker file; [3] is the disk number*/
 /*4076*/char mouseWasDown = 0;/*a mouse button was down: wait for it to be released*/
 /*4077*/char mouseHeld = 0;
 
-/*C_0BC1_0000*/int IsDiskIn(int n) {
-	int fd;
+/*C_0BC1_0000*/int16 IsDiskIn(int16 n) {
+	int16 fd;
 
 	markerFile[3] = n + '0';
 	fd = OSI_open(markerFile);
@@ -33,9 +32,9 @@ extern struct tSurface screen, backBuffer;
 	return fd != -1;
 }
 
-/*C_0BC1_0031*/SelectDiskDrive(int n) {
-	int drive;
-	int i;
+/*C_0BC1_0031*/SelectDiskDrive(int16 n) {
+	int16 drive;
+	int16 i;
 
 	drive = diskDrive[n];
 	bdos(0xe, drive - 1, 0);
@@ -44,10 +43,10 @@ extern struct tSurface screen, backBuffer;
 			diskDrive[i] = drive;
 }
 
-/*C_0BC1_0079*/AskForDisk(int n) {
-	int i;
-	int found;
-	int drive;
+/*C_0BC1_0079*/AskForDisk(int16 n) {
+	int16 i;
+	int16 found;
+	int16 drive;
 
 	drive = (bdos(0x19, 0, 0) & 0xff) + 'A';
 	while(curDisk != n && diskDrive[n] == 0) {
@@ -113,7 +112,7 @@ extern struct tSurface screen, backBuffer;
 
 /*C_0BC1_027D*/FindDrives() {
 	union REGS regs;
-	int i;
+	int16 i;
 
 	regs.h.ah = 0x30;
 	intdos(&regs, &regs);
@@ -159,14 +158,14 @@ extern struct tSurface screen, backBuffer;
 	SelectDiskDrive(1);
 }
 
-/*C_0BC1_03D2*/LoadPalette(int n) {
-	int k;
-	long ofs;
-	int fd;
+/*C_0BC1_03D2*/LoadPalette(int16 n) {
+	int16 k;
+	int32 ofs;
+	int16 fd;
 	unsigned char far *buf;
 	unsigned char far *p;
-	int rgb[3];
-	int i, j;
+	int16 rgb[3];
+	int16 i, j;
 
 	if(videoMode == 0x13) {
 		buf = farmalloc(0x300L);

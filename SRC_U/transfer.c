@@ -11,11 +11,11 @@
 
 /*a character of Ultima IV's PARTY.SAV (the program takes 40 bytes for it)*/
 struct tU4Char {
-	unsigned hp, hpMax;/*_00,_02*/
-	int xp;/*_04*/
-	int str, dex, intel;/*_06,_08,_0A*/
-	int mp;/*_0C*/
-	int unk0e, weapon, armor;/*_0E,_10,_12*/
+	uint16 hp, hpMax;/*_00,_02*/
+	int16 xp;/*_04*/
+	int16 str, dex, intel;/*_06,_08,_0A*/
+	int16 mp;/*_0C*/
+	int16 unk0e, weapon, armor;/*_0E,_10,_12*/
 	char name[16];/*_14*/
 	char sex;/*_24*//*0x0b: male*/
 	char klass;/*_25*/
@@ -24,9 +24,9 @@ struct tU4Char {
 };
 /*what follows the 8 characters in PARTY.SAV*/
 struct tU4Rest {
-	long food;/*_00*/
-	int gold;/*_04*/
-	int karma[8];/*_06*//*0: Avatarhood in that virtue*/
+	int32 food;/*_00*/
+	int16 gold;/*_04*/
+	int16 karma[8];/*_06*//*0: Avatarhood in that virtue*/
 };
 /*a character of Ultima V's SAVED.GAM*/
 struct tU5Char {
@@ -35,22 +35,17 @@ struct tU5Char {
 	char klass;/*_0A*/
 	char status;/*_0B*/
 	unsigned char str, dex, intel, mp;/*_0C.._0F*/
-	int hp, hpMax;/*_10,_12*/
-	int xp;/*_14*/
+	int16 hp, hpMax;/*_10,_12*/
+	int16 xp;/*_14*/
 	unsigned char level;/*_16*/
 };
 
-extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern int16 videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
 extern struct tSurface screen;/*the screen*/
 extern struct tSurface backBuffer;
 extern struct tSurface textArea;/*the console's surface*/
-extern struct tSurface *textWin;/*the console: surface it writes on*/
-extern int textX;/*the console: x*/
-extern int textY;/*the console: y*/
-extern char textFg, textBg;/*the console: text colours*/
-extern char textAlign;/*the console: alignment (0 left, 1 right, 2 centred)*/
 extern struct tSurface textAreaCopy;
-extern int menuDrawn;
+extern int16 menuDrawn;
 extern struct tSurface workArea;
 
 /*0263's initialised data*/
@@ -67,31 +62,31 @@ extern struct tSurface workArea;
 
 /*the character read from the old game*/
 extern char oldName[];/*name*/
-extern int oldStr, oldDex, oldInt;/*strength, dexterity, intelligence*/
+extern int16 oldStr, oldDex, oldInt;/*strength, dexterity, intelligence*/
 extern char oldSex[];/*"Male"/"Female"*/
 extern char oldClass[];/*class*/
 extern char oldGood;/*'G'*/
 extern char oldAvatar;/*1: an Avatar*/
-extern int oldExp;/*experience*/
-extern int oldLevel;/*level*/
-extern int oldHp, oldHpMax;/*hit points, maximum*/
-extern int oldMp;/*magic points*/
+extern int16 oldExp;/*experience*/
+extern int16 oldLevel;/*level*/
+extern int16 oldHp, oldHpMax;/*hit points, maximum*/
+extern int16 oldMp;/*magic points*/
 
 /*the character made for Ultima VI*/
 extern char newName[];/*name*/
-extern int newStr, newDex, newInt;/*strength, dexterity, intelligence*/
+extern int16 newStr, newDex, newInt;/*strength, dexterity, intelligence*/
 extern char newSex[];/*"Male"/"Female"*/
 extern char newClass[];/*class ("Avatar")*/
 extern char newGood;/*'G'*/
 extern char newAvatar;
-extern int newExp;/*experience*/
-extern int newLevel;/*level*/
-extern int newHp, newHpMax;/*hit points, maximum*/
-extern int newMp;/*magic points*/
-extern int newPortrait;/*portrait*/
+extern int16 newExp;/*experience*/
+extern int16 newLevel;/*level*/
+extern int16 newHp, newHpMax;/*hit points, maximum*/
+extern int16 newMp;/*magic points*/
+extern int16 newPortrait;/*portrait*/
 
-extern int transferFrom;/*the game the character comes from: 4, 5 (0 none)*/
-extern int portraitIdx;/*portrait (0-5)*/
+extern int16 transferFrom;/*the game the character comes from: 4, 5 (0 none)*/
+extern int16 portraitIdx;/*portrait (0-5)*/
 extern char *saveData;/*the save file read*/
 extern void far *portraits;/*the portraits (montage)*/
 extern void far *vellum;/*the vellum pictures*/
@@ -101,15 +96,15 @@ extern struct tSurface nameWindow;
 extern struct tSurface titleArea;/*the title*/
 extern struct tSurface sheet;/*the character sheet*/
 
-extern InputString(char *, int);/*text input*/
+extern InputString(char *, int16);/*text input*/
 extern MenuSelect(struct tSurface *, char *);/*waits for a button or key: index in the keys*/
 extern SetPalette();
-extern PlayMusic(int);
+extern PlayMusic(int16);
 extern WriteNewCharacter();
 extern PollInput();/*nonzero when the player wants to go on (key or time)*/
-extern ShowPassage(int);
+extern ShowPassage(int16);
 extern DisplayPassage();
-extern AskForDisk(int);/*AskForDisk*/
+extern AskForDisk(int16);/*AskForDisk*/
 extern SURF_alloc(struct tSurface *);/*gives a surface an off-screen buffer*/
 extern SURF_free(struct tSurface *);/*frees it*/
 extern SURF_share(struct tSurface *, ...);
@@ -119,7 +114,7 @@ extern TXT_sappend(char far *, ...);/*console printf*/
 extern MOUSE_SHOW();/*mouse cursor on*/
 extern MOUSE_HIDE();/*mouse cursor off*/
 extern FADE_in(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
-extern FADE_out(struct tSurface *, int);/*MCGA: palette fade out*/
+extern FADE_out(struct tSurface *, int16);/*MCGA: palette fade out*/
 extern void far *LZW_load(char *);/*loads a file in memory*/
 extern char *LOAD_near(char *);/*loads a file in memory*/
 
@@ -127,7 +122,7 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 /*C_0263_0000*/ReadU4Character() {
 	struct tU4Rest *rest;
 	struct tU4Char *p;
-	int i;
+	int16 i;
 
 	p = (struct tU4Char *)(saveData + 8);
 	rest = (struct tU4Rest *)(p + 8);
@@ -162,7 +157,7 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 
 /*reads the Avatar from Ultima V's SAVED.GAM (in saveData); nonzero if it looks wrong*/
 /*C_0263_013D*/ReadU5Character() {
-	int i;
+	int16 i;
 	struct tU5Char *p;
 
 	p = (struct tU5Char *)(saveData + 2);
@@ -186,7 +181,7 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 }
 
 /*an Ultima IV attribute (up to 99) in Ultima VI's scale*/
-/*C_0263_01FD*/ConvertU4Stat(int s) {
+/*C_0263_01FD*/ConvertU4Stat(int16 s) {
 	if(s < 10)
 		return s;
 	if(s >= 30)
@@ -196,7 +191,7 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 
 /*the Ultima VI character from the Ultima IV one*/
 /*C_0263_0233*/MakeFromU4() {
-	int i;
+	int16 i;
 
 	strcpy(newName, oldName);
 	newStr = ConvertU4Stat(oldStr);
@@ -217,7 +212,7 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 
 /*the Ultima VI character from the Ultima V one (same attribute scale)*/
 /*C_0263_02D4*/MakeFromU5() {
-	int i;
+	int16 i;
 
 	strcpy(newName, oldName);
 	newStr = oldStr;
@@ -288,10 +283,10 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 
 /*the character sheet: Name, Sex, Continue, Abort; 1 to go on, 0 to give up*/
 /*C_0263_0592*/CharacterScreen() {
-	int key;
-	int bottom;
-	int done;
-	int ret;
+	int16 key;
+	int16 bottom;
+	int16 done;
+	int16 ret;
 
 	if(videoMode == 0xd)
 		nameWindow.segment = screen.segment;
@@ -420,13 +415,13 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 }
 
 /*choosing the portrait: Sex, Portrait, Transfer (or Create), Abort; 1 when chosen*/
-/*C_0263_0987*/PortraitScreen(int transfer) {
-	int key;
-	int frame;
-	int bottom;
+/*C_0263_0987*/PortraitScreen(int16 transfer) {
+	int16 key;
+	int16 frame;
+	int16 bottom;
 	struct tSurface portrait;
-	int done;
-	int ret;
+	int16 done;
+	int16 ret;
 
 	portrait = nameWindow;
 	/*the last button: Transfer or Create*/
@@ -548,17 +543,17 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 
 /*asks for the drive of the old game and reads its save file: 4 (Ultima IV), 5 (Ultima V), 0 Escape*/
 /*C_0263_0E40*/FindCharacter() {
-	int found;
-	int ndrives;
-	int key;
+	int16 found;
+	int16 ndrives;
+	int16 key;
 	struct tSurface title;
 	struct tSurface text;
 	struct tSurface bar;
 	struct tSurface buttons[27];
 	struct tSurface line;
 	char keys[32];
-	int i;
-	int color;
+	int16 i;
+	int16 color;
 
 	if(videoMode == 0xd)
 		backBuffer.segment = screen.segment;
@@ -692,7 +687,7 @@ extern char *LOAD_near(char *);/*loads a file in memory*/
 /*the main menu's "Transfer a character"*/
 /*C_0263_13D6*/TransferCharacter() {
 	struct tSurface save;
-	int ret;
+	int16 ret;
 
 	PlayMusic(4);
 	if(videoMode == 0xd) {

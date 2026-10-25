@@ -18,36 +18,36 @@
 #pragma warn -def
 #pragma warn -par
 
-struct tRGB { int r, g, b; };
+struct tRGB { int16 r, g, b; };
 
 /*the graphics driver (as in u.h)*/
 union tDrv {
 	void (far *f)();
-	struct { unsigned ofs, seg; } p;
+	struct { uint16 ofs, seg; } p;
 };
 extern union tDrv gfxDrv;
 #define DRV(o) gfxDrv.p.ofs = (o); (*gfxDrv.f)
 
-/*45E2*/int fadeStart = 1;/*1: the next FADE_step starts a fade*/
+/*45E2*/int16 fadeStart = 1;/*1: the next FADE_step starts a fade*/
 /*this module's _BSS*/
-extern int *fadeErr;/*FADE_step: error term of each value*/
-extern int *fadeDist;/*  its distance to go*/
-extern int *fadeDir;/*  its direction (+1/-1)*/
-extern int fadeSteps;/*  the largest distance: the number of steps*/
-extern int fadeLeft;/*  the steps left*/
+extern int16 *fadeErr;/*FADE_step: error term of each value*/
+extern int16 *fadeDist;/*  its distance to go*/
+extern int16 *fadeDir;/*  its direction (+1/-1)*/
+extern int16 fadeSteps;/*  the largest distance: the number of steps*/
+extern int16 fadeLeft;/*  the steps left*/
 extern char *fadeInColors;/*FADE_in: the colors used by the picture*/
 extern char *fadeOutColors;/*FADE_out: the same*/
 
-extern DRW_getPixel(struct tSurface *s, int x, int y);/*DRW_getPixel*/
+extern DRW_getPixel(struct tSurface *s, int16 x, int16 y);/*DRW_getPixel*/
 extern VID_waitRetrace(void);/*wait for the vertical retrace*/
-extern PAL_set(int index, struct tRGB *rgb);/*PAL_set*/
-extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
+extern PAL_set(int16 index, struct tRGB *rgb);/*PAL_set*/
+extern PAL_get(int16 index, struct tRGB *rgb);/*PAL_get*/
 
 /*move each of the n values of cur one step towards target (all of them arrive in the
   same number of steps, as the points of Bresenham's lines): 0 when they have arrived*/
-/*C_136D_0004*/FADE_step(int *cur, int *target, int n) {
-	register int i;
-	register int d;
+/*C_136D_0004*/FADE_step(int16 *cur, int16 *target, int16 n) {
+	register int16 i;
+	register int16 d;
 
 	if(fadeStart) {
 		fadeErr = malloc(n * 2);
@@ -91,16 +91,16 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 /*show the picture src on dst (driver entry 0Fh), its colors fading in from the color
   of dst's top left pixel*/
 /*C_136D_014D*/FADE_in(struct tSurface *src, struct tSurface *dst) {
-	volatile int count;
-	volatile int i;
-	int row;
-	int width;
-	int height;
-	int *list;
+	volatile int16 count;
+	volatile int16 i;
+	int16 row;
+	int16 width;
+	int16 height;
+	int16 *list;
 	struct tRGB *cur;
 	struct tRGB *target;
 	struct tRGB rgb;
-	register int si_, di_;
+	register int16 si_, di_;
 
 	row; width; height;/*(used by the assembly)*/
 	list = calloc(256, 2);
@@ -160,7 +160,7 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 		target[i] = rgb;
 	}
 	DRV(0xf)(src, dst);
-	while(FADE_step((int *)target, (int *)cur, count * 3)) {
+	while(FADE_step((int16 *)target, (int16 *)cur, count * 3)) {
 		VID_waitRetrace();
 		for(i = 0; i < count; i++)
 			PAL_set(list[i], &target[i]);
@@ -171,17 +171,17 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 }
 
 /*fade the colors used in the window of s to the palette's color "color"*/
-/*C_136D_0346*/FADE_out(struct tSurface *s, int color) {
-	volatile int count;
-	volatile int i;
-	int row;
-	int width;
-	int height;
-	int *list;
+/*C_136D_0346*/FADE_out(struct tSurface *s, int16 color) {
+	volatile int16 count;
+	volatile int16 i;
+	int16 row;
+	int16 width;
+	int16 height;
+	int16 *list;
 	struct tRGB *cur;
 	struct tRGB *target;
 	struct tRGB rgb;
-	register int si_, di_;
+	register int16 si_, di_;
 
 	row; width; height;/*(used by the assembly)*/
 	list = calloc(256, 2);
@@ -236,7 +236,7 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 		PAL_get(list[i], &cur[i]);
 		target[i] = rgb;
 	}
-	while(FADE_step((int *)cur, (int *)target, count * 3)) {
+	while(FADE_step((int16 *)cur, (int16 *)target, count * 3)) {
 		VID_waitRetrace();
 		for(i = 0; i < count; i++)
 			PAL_set(list[i], &cur[i]);

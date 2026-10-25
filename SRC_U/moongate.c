@@ -9,64 +9,64 @@
 
 /*a drawing surface of the graphics driver (14 bytes)*/
 
-extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern int16 videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
 extern struct tSurface screen;/*the screen*/
 extern struct tSurface backBuffer;/*the page the introduction draws on*/
-extern int menuDrawn;
-extern int escaped;/*set when the player escapes the introduction*/
+extern int16 menuDrawn;
+extern int16 escaped;/*set when the player escapes the introduction*/
 extern void far *sceneShapes;/*the shapes of the introduction (intro.*)*/
 extern struct tSurface skySurface;/*twinkle: the surface the stars are drawn on*/
 extern struct tSurface workArea;/*an off-screen buffer*/
-extern int twinklePal;/*twinkle: palette index (a global: the twinkle runs from the timer)*/
+extern int16 twinklePal;/*twinkle: palette index (a global: the twinkle runs from the timer)*/
 extern char twinkleEntry[];/*twinkle: a palette entry*/
 extern char twinkleEntry2[];/*twinkle: a palette entry*/
-extern int starIndex;/*twinkle: star index*/
-extern int starPixel;/*twinkle: colour of the star's pixel*/
-extern int starLit;/*twinkle: colour of a lit star*/
+extern int16 starIndex;/*twinkle: star index*/
+extern int16 starPixel;/*twinkle: colour of the star's pixel*/
+extern int16 starLit;/*twinkle: colour of a lit star*/
 extern char far *starPosData;/*starpos.dat*/
-extern int twinkleFirst;/*twinkle: first star of the group that twinkles*/
-extern int starCount;/*number of stars*/
-extern int twinkleRandom;/*twinkle: random number (a shift register)*/
-extern int starColor[];/*colour of each star*/
-extern int starX[];/*x of each star*/
-extern int starY[];/*y of each star*/
-extern int hands[];/*the hands: x0,y0, x1,y1*/
-extern int shapeDest[];/*where the moving shapes go*/
-extern int shapePos[];/*the moving shapes: x,y each*/
+extern int16 twinkleFirst;/*twinkle: first star of the group that twinkles*/
+extern int16 starCount;/*number of stars*/
+extern int16 twinkleRandom;/*twinkle: random number (a shift register)*/
+extern int16 starColor[];/*colour of each star*/
+extern int16 starX[];/*x of each star*/
+extern int16 starY[];/*y of each star*/
+extern int16 hands[];/*the hands: x0,y0, x1,y1*/
+extern int16 shapeDest[];/*where the moving shapes go*/
+extern int16 shapePos[];/*the moving shapes: x,y each*/
 
 extern SetPalette();
 extern RestorePalette();
 extern SavePalette();
-extern PlayMusic(int);
+extern PlayMusic(int16);
 extern CheckInput();/*nonzero when a key (or the mouse) was pressed*/
-extern ScaleSpeed(int, int);/*a random number between the two*/
+extern ScaleSpeed(int16, int16);/*a random number between the two*/
 extern ShowFrame();/*waits for the next frame*/
-extern Delay(int);/*waits n ticks*/
-extern ShowPassage(int);/*writes text n*/
+extern Delay(int16);/*waits n ticks*/
+extern ShowPassage(int16);/*writes text n*/
 extern DisplayPassage();
-extern LoadPalette(int);
+extern LoadPalette(int16);
 extern SURF_alloc(struct tSurface *);/*gives a surface an off-screen buffer*/
 extern SURF_free(struct tSurface *);/*frees it*/
 extern VID_waitRetrace();
-extern FADE_step(int *, int *, int);/*moves n coordinates one step towards their targets: 0 when all are there*/
+extern FADE_step(int16 *, int16 *, int16);/*moves n coordinates one step towards their targets: 0 when all are there*/
 extern FADE_in(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
-extern FADE_out(struct tSurface *, int);/*MCGA: palette fade out*/
+extern FADE_out(struct tSurface *, int16);/*MCGA: palette fade out*/
 extern void far *LZW_load(char *);/*loads a file in memory*/
-extern DIS_dissolve(struct tSurface *, struct tSurface *, int);/*MCGA: dissolve*/
-extern DIS_dissolveEGA(struct tSurface *, struct tSurface *, int);/*EGA: dissolve*/
-extern DIS_dissolveCGA(struct tSurface *, struct tSurface *, int);/*CGA, Hercules: dissolve*/
-extern DIS_dissolveTDY(struct tSurface *, struct tSurface *, int);/*Tandy: dissolve*/
-extern PAL_set(int, char *);/*MCGA: sets a palette entry*/
-extern PAL_get(int, char *);/*MCGA: gets a palette entry*/
+extern DIS_dissolve(struct tSurface *, struct tSurface *, int16);/*MCGA: dissolve*/
+extern DIS_dissolveEGA(struct tSurface *, struct tSurface *, int16);/*EGA: dissolve*/
+extern DIS_dissolveCGA(struct tSurface *, struct tSurface *, int16);/*CGA, Hercules: dissolve*/
+extern DIS_dissolveTDY(struct tSurface *, struct tSurface *, int16);/*Tandy: dissolve*/
+extern PAL_set(int16, char *);/*MCGA: sets a palette entry*/
+extern PAL_get(int16, char *);/*MCGA: gets a palette entry*/
 extern TIM_setCallback(void (far *)());/*installs a timer routine*/
 extern TIM_resetCallback();
 extern TIM_install();
 extern TIM_remove();
 extern TIM_calibrate();
 
-/*40C4*/int handsRest[4] = {-8, 0x4d, 0xb6, 0x4f};/*where the hands come to rest: x0,y0, x1,y1*/
-/*40CC*/int twinkleToggle = 0;/*twinkle: toggles every tick (MCGA palette cycling every other tick)*/
-/*40CE*/unsigned twinkleTicks = 0;/*twinkle: tick counter*/
+/*40C4*/int16 handsRest[4] = {-8, 0x4d, 0xb6, 0x4f};/*where the hands come to rest: x0,y0, x1,y1*/
+/*40CC*/int16 twinkleToggle = 0;/*twinkle: toggles every tick (MCGA palette cycling every other tick)*/
+/*40CE*/uint16 twinkleTicks = 0;/*twinkle: tick counter*/
 
 KeyPressed();
 
@@ -77,7 +77,7 @@ KeyPressed();
 #define SHAPE(x, y, n) DRV(3)(&backBuffer, x, y, sceneShapes, n)
 
 /*the pixel of star i in MCGA video memory*/
-#define STAR_PIXEL(i) *(char far *)((long)(starY[i] * 320) + starX[i] + 0xa0000000L)
+#define STAR_PIXEL(i) *(char far *)((int32)(starY[i] * 320) + starX[i] + 0xa0000000L)
 
 /*shows the page that was drawn*/
 #define SHOW_PAGE() \
@@ -106,7 +106,7 @@ KeyPressed();
 	}
 
 /*draws the two hands (shapes 3 and 4), moved by x0 and x1, at height y*/
-/*C_0C17_0000*/DrawHands(int x0, int x1, int y) {
+/*C_0C17_0000*/DrawHands(int16 x0, int16 x1, int16 y) {
 	if(videoMode == 0xd)
 		backBuffer = screen;
 	SHAPE(x0 - 8, y + 0x4d, 3);
@@ -154,13 +154,13 @@ KeyPressed();
 			starLit = 3;
 		if(videoMode == 0xd) {
 			gfxDrv.p.ofs = 0x1e;
-			if(DRVF(long)(0))
+			if(DRVF(int32)(0))
 				return;
 		}
 		if(!(twinkleTicks & 3)) {
 			for(starIndex = twinkleFirst; starIndex <= twinkleRandom % 5 + twinkleFirst; starIndex++) {
 				gfxDrv.p.ofs = 0x1b;
-				starPixel = DRVF(int)(&skySurface, starX[starIndex], starY[starIndex]);
+				starPixel = DRVF(int16)(&skySurface, starX[starIndex], starY[starIndex]);
 				if(starPixel == starLit) {
 					DRV(0x18)(&skySurface, starX[starIndex], starY[starIndex], starColor[starIndex]);
 				}
@@ -176,7 +176,7 @@ KeyPressed();
 			}
 			for(starIndex = twinkleFirst; starIndex <= twinkleRandom % 5 + twinkleFirst; starIndex++) {
 				gfxDrv.p.ofs = 0x1b;
-				starPixel = DRVF(int)(&skySurface, starX[starIndex], starY[starIndex]);
+				starPixel = DRVF(int16)(&skySurface, starX[starIndex], starY[starIndex]);
 				if(starColor[starIndex] == starPixel && starPixel != 0) {
 					DRV(0x18)(&skySurface, starX[starIndex], starY[starIndex], starLit);
 				}
@@ -186,8 +186,8 @@ KeyPressed();
 }
 
 /*waits n ticks, or until a key is pressed*/
-/*C_0C17_03CA*/WaitTicks(int n) {
-	int i;
+/*C_0C17_03CA*/WaitTicks(int16 n) {
+	int16 i;
 
 	for(i = n; i; i--) {
 		Delay(1);
@@ -198,7 +198,7 @@ KeyPressed();
 
 /*draws a small glowing spot of 9 pixels at 0x57-0x59,0x55-0x58*/
 /*C_0C17_03EF*/DrawGlow() {
-	int c;
+	int16 c;
 
 	if(videoMode == 0x13)
 		c = 0xad;
@@ -228,19 +228,19 @@ KeyPressed();
  (the locals' order and which ones are declared after which matter for the stack
  layout and the si/di choice: found by trying)*/
 /*C_0C17_0508*/Intro() {
-	int frames;/*a random duration*/
-	int speed;/*a random speed of the current animation*/
-	int done;
-	int a;
-	int b;
-	int tmp;
-	int ofs;/*horizontal offset of shapes 8, 0xb/0xa; also a dissolve parameter*/
-	int jitter;
-	int left;/*the hands' trembling offsets and their directions*/
-	int right;
-	int dleft;
-	int dright;
-	int i;
+	int16 frames;/*a random duration*/
+	int16 speed;/*a random speed of the current animation*/
+	int16 done;
+	int16 a;
+	int16 b;
+	int16 tmp;
+	int16 ofs;/*horizontal offset of shapes 8, 0xb/0xa; also a dissolve parameter*/
+	int16 jitter;
+	int16 left;/*the hands' trembling offsets and their directions*/
+	int16 right;
+	int16 dleft;
+	int16 dright;
+	int16 i;
 
 	escaped = 0;
 	workArea.left = workArea.top = 0;
@@ -305,7 +305,7 @@ KeyPressed();
 			screen.segment ^= 0x200;
 		for(i = 0; i < 200; i++) {
 			gfxDrv.p.ofs = 0x1b;
-			starColor[i] = DRVF(int)(&screen, starX[i], starY[i]);
+			starColor[i] = DRVF(int16)(&screen, starX[i], starY[i]);
 		}
 		for(i = twinkleFirst; i <= twinkleRandom % 5 + twinkleFirst; i++) {
 			DRV(0x18)(&screen, starX[i], starY[i], 0xf);
@@ -879,7 +879,7 @@ end:
 /*whether a key was pressed; also updates the surface the twinkling stars are drawn
  on (skySurface: the screen, the visible EGA page)*/
 /*C_0C17_2FBB*/KeyPressed() {
-	int ret;
+	int16 ret;
 
 	skySurface = screen;
 	if(videoMode == 0xd)

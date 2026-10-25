@@ -12,21 +12,21 @@ extern TXT_printf(char far *fmt, ...);/*TXT_printf*/
 /*allocate the pixels of a surface (the size of its window) and its scanline table*/
 /*C_1277_000C*/SURF_alloc(struct tSurface *s) {
 	char huge *p;
-	unsigned ofs;
-	int height;
-	int width;
-	register int i;
+	uint16 ofs;
+	int16 height;
+	int16 width;
+	register int16 i;
 
 	height = s->bottom - s->top + 1;
 	width = s->right - s->left + 1;
-	p = farcalloc(1, (long)height * width);
+	p = farcalloc(1, (int32)height * width);
 	if(p == 0) {
 		TXT_printf(" << No far memory! >> ");
 		getch();
 	}
 	s->segment = FP_SEG(p);
 	ofs = FP_OFF(p);
-	s->scanlines = farmalloc((long)height * 2);
+	s->scanlines = farmalloc((int32)height * 2);
 	if(s->scanlines == 0) {
 		TXT_printf(" << No ytable memory! >> ");
 		getch();

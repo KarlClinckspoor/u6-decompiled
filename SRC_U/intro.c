@@ -43,13 +43,12 @@ extern TIM_remove();
 extern TIM_calibrate();
 
 /*---- data ----*/
-extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern char mouseL, mouseR;/*mouse buttons*/
-extern int escaped;/*1: Escape was pressed: leave the introduction*/
-extern unsigned long loopsPerTick;/*speed of the computer (loop count, see Delay)*/
+extern int16 videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern int16 escaped;/*1: Escape was pressed: leave the introduction*/
+extern uint32 loopsPerTick;/*speed of the computer (loop count, see Delay)*/
 extern struct tSurface screen;/*the back buffer*/
 extern struct tSurface backBuffer;/*the screen*/
-extern int musicCard;/*music on*/
+extern int16 musicCard;/*music on*/
 extern struct tSurface egaSaved;/*EGA: the page the noise is drawn into*/
 extern void far *songData;/*the music driver's song*/
 /*the music driver (as GAME.EXE's MUS_Driver): its entries take the pascal convention*/
@@ -62,44 +61,44 @@ extern struct tSurface workArea;/*320x32 work surface*/
 
 /*part 1: the computer's monitor*/
 extern struct tSurface monitor;/*the monitor's screen*/
-extern int monitorNoisy;/*1: the monitor showed noise: redraw its frame*/
+extern int16 monitorNoisy;/*1: the monitor showed noise: redraw its frame*/
 extern void far *intro1Shapes;/*shapes of intro1*/
-extern int monitorScroll;/*how far the monitor's picture went out of the screen on the left*/
-extern int script;/*script: the current one*/
-extern int scriptPos;/*script: position in it*/
-extern int loopPos;/*script: position of the loop*/
-extern int loopCount;/*script: loop count*/
-extern int chosenPicture;/*script: the picture chosen by command 0x87*/
+extern int16 monitorScroll;/*how far the monitor's picture went out of the screen on the left*/
+extern int16 script;/*script: the current one*/
+extern int16 scriptPos;/*script: position in it*/
+extern int16 loopPos;/*script: position of the loop*/
+extern int16 loopCount;/*script: loop count*/
+extern int16 chosenPicture;/*script: the picture chosen by command 0x87*/
 
 /*part 2: the storm*/
 extern struct tSurface *cloudSurface;/*clouds: the surface*/
 extern void far *cloudShapes;/*clouds: the shapes*/
-extern int cloudCount;/*clouds: their number*/
-extern int cloudY[], cloudShape[], cloudX[];/*clouds: x, y, shape of each*/
-extern int bankX, bankY;/*clouds: x, y of the big cloud bank*/
-extern int cloudSpeed;/*clouds: speed*/
+extern int16 cloudCount;/*clouds: their number*/
+extern int16 cloudY[], cloudShape[], cloudX[];/*clouds: x, y, shape of each*/
+extern int16 bankX, bankY;/*clouds: x, y of the big cloud bank*/
+extern int16 cloudSpeed;/*clouds: speed*/
 extern struct tSurface *rainSurface;/*rain: the surface*/
-extern int rainDelay;/*rain: frames between the moves of a drop*/
-extern int rainMax;/*rain: the maximum number of drops - 1*/
-extern int rainCount;/*rain: the number of drops*/
-extern int rainChance;/*rain: 1 in n chances of a new drop every frame*/
+extern int16 rainDelay;/*rain: frames between the moves of a drop*/
+extern int16 rainMax;/*rain: the maximum number of drops - 1*/
+extern int16 rainCount;/*rain: the number of drops*/
+extern int16 rainChance;/*rain: 1 in n chances of a new drop every frame*/
 extern char rainShape[];/*rain: shape of each drop*/
-extern int rainX[], rainY[];/*rain: x, y of each drop*/
-extern int rainWait[];/*rain: frames before the next move of each drop*/
+extern int16 rainX[], rainY[];/*rain: x, y of each drop*/
+extern int16 rainWait[];/*rain: frames before the next move of each drop*/
 extern void far *intro2Shapes;/*shapes of intro2*/
 
 /*part 3: the moongate*/
-extern int palEntry;/*palette entry*/
-extern int palColors[3], palColors2[3];/*palette colors*/
+extern int16 palEntry;/*palette entry*/
+extern int16 palColors[3], palColors2[3];/*palette colors*/
 
 /*---- this module's initialised data ----*/
-/*0FE4*/int randomPictures[9] = {5,6,7,13,14,24,25,31,32};/*the pictures command 0x87 chooses from*/
-/*0FF6*/int monitorX[54] = {/*x of each picture of the monitor (in its rectangle)*/
+/*0FE4*/int16 randomPictures[9] = {5,6,7,13,14,24,25,31,32};/*the pictures command 0x87 chooses from*/
+/*0FF6*/int16 monitorX[54] = {/*x of each picture of the monitor (in its rectangle)*/
 	0,0,0,0,0,31,31,31,0,0,0,0,0,31,31,0,9,9,
 	9,12,12,12,0,4,31,31,4,0,4,4,4,31,31,0,0,6,
 	6,8,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
-/*1062*/int monitorY[54] = {/*y of each picture of the monitor ([0x22] moved by command 0x83)*/
+/*1062*/int16 monitorY[54] = {/*y of each picture of the monitor ([0x22] moved by command 0x83)*/
 	0,0,0,0,0,2,2,2,0,0,0,0,0,2,2,0,7,7,
 	7,3,3,3,0,2,2,2,0,0,0,0,1,2,2,0,0,3,
 	8,29,28,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -118,15 +117,15 @@ extern int palColors[3], palColors2[3];/*palette colors*/
 	{0x82,0x82,0x80,0x05,0x27,0x8a,0x28,0x8a,0x29,0x81,0x80,0x06,0x2a,0x8a,0x2a,0x8a,0x2b,0x8a,0x2b,0x8a,0x2c,0x8a,0x2c,0x8a,0x2d,0x8a,0x2d,0x81,0x80,0x0a,0x2e,0x8a,0x2f,0x8a,0x30,0x8a,0x84,0x09,0x2e,0x2e,0x2e,0x2f,0x2f,0x2f,0x30,0x30,0x30,0x8a,0x2e,0x8a,0x2f,0x8a,0x30,0x81,0x85},
 	{0x82,0x82,0x80,0x55,0x16,0x17,0x84,0x0c,0x13,0x13,0x13,0x13,0x14,0x14,0x14,0x14,0x15,0x15,0x15,0x15,0x88,0x81,0x80,0x0f,0x16,0x84,0x02,0x1a,0x1b,0x89,0x88,0x81,0x80,0x03,0x16,0x1a,0x89,0x88,0x81,0x80,0x03,0x16,0x1c,0x88,0x81,0x80,0x03,0x16,0x1d,0x88,0x81,0x80,0x03,0x16,0x1e,0x88,0x81,0x80,0x03,0x16,0x23,0x88,0x81,0x80,0x03,0x16,0x24,0x88,0x81,0x80,0x32,0x16,0x88,0x81,0x85},
 };
-/*12FE*/int cycleTicks = 0;/*palette cycling: tick counter*/
-/*1300*/int blinkCount = 0;/*script: counter of command 0x88 (blinking)*/
-/*1302*/int prevRandom = -1;/*script: the previous random choice of command 0x84*/
-/*1304*/int picture = -1;/*script: the picture to draw, -1 none*/
-/*1306*/int scrollCount = 14;/*script: counter of command 0x83 (scrolling)*/
-/*1308*/int gateLight = 0;/*moongate light: 1 every other tick*/
+/*12FE*/int16 cycleTicks = 0;/*palette cycling: tick counter*/
+/*1300*/int16 blinkCount = 0;/*script: counter of command 0x88 (blinking)*/
+/*1302*/int16 prevRandom = -1;/*script: the previous random choice of command 0x84*/
+/*1304*/int16 picture = -1;/*script: the picture to draw, -1 none*/
+/*1306*/int16 scrollCount = 14;/*script: counter of command 0x83 (scrolling)*/
+/*1308*/int16 gateLight = 0;/*moongate light: 1 every other tick*/
 
-int PollInput();
-int ScaleSpeed(int, int);
+int16 PollInput();
+int16 ScaleSpeed(int16, int16);
 
 /*the computer's monitor shows noise ("snow"): random bits, read from this code
  segment, become pixels*/
@@ -134,7 +133,7 @@ int ScaleSpeed(int, int);
 	unsigned char far *dst;
 	unsigned char far *src;
 	struct tSurface s;
-	int x, y;
+	int16 x, y;
 
 	switch(videoMode) {
 		case 4: case 7:/*CGA, Hercules: 4 pixels a byte*/
@@ -198,9 +197,9 @@ int ScaleSpeed(int, int);
 
 /*MCGA: every 4th call, rotate the palette entries 0xe0-0xe5 (the monitor's glow)*/
 /*C_06E9_0262*/CyclePalette() {
-	int rgb[3];
-	int first[3];
-	int i;
+	int16 rgb[3];
+	int16 first[3];
+	int16 i;
 
 	if(videoMode == 0x13 && cycleTicks++ == 3) {
 		cycleTicks = 0;
@@ -215,21 +214,21 @@ int ScaleSpeed(int, int);
 }
 
 /*the monitor plays script n from its start*/
-/*C_06E9_02D5*/SetScript(int n) {
+/*C_06E9_02D5*/SetScript(int16 n) {
 	scriptPos = 0;
 	script = n;
 }
 
 /*draw picture n of the monitor (shape n + 0x10 of intro1) at its place*/
-/*C_06E9_02E6*/DrawMonitorShape(int n) {
+/*C_06E9_02E6*/DrawMonitorShape(int16 n) {
 	if(videoMode == 0xd)
 		monitor.segment = screen.segment;
 	DRV(3)(&monitor, monitorX[n] + monitor.left - monitorScroll, monitorY[n] + monitor.top, intro1Shapes, n + 0x10);
 }
 
 /*PollInput, and Escape leaves the introduction*/
-/*C_06E9_033A*/int CheckInput() {
-	int k;
+/*C_06E9_033A*/int16 CheckInput() {
+	int16 k;
 
 	k = PollInput();
 	if(k == 0x1b)
@@ -239,7 +238,7 @@ int ScaleSpeed(int, int);
 
 /*0 nothing; 1 a mouse click; else the key pressed. A digit key (0-6, mod 7)
  starts that script of the monitor, and counts as nothing*/
-/*C_06E9_0351*/int PollInput() {
+/*C_06E9_0351*/int16 PollInput() {
 	char c[2];
 
 	MOUSE_SERVE();
@@ -261,9 +260,9 @@ int ScaleSpeed(int, int);
 /*one frame of the monitor: run its script up to the end of the frame (0x81, 0x82,
  0x8a). A byte below 0x80 draws that picture*/
 /*C_06E9_03C3*/RunScript() {
-	int c;
-	int done;
-	int n, i;
+	int16 c;
+	int16 done;
+	int16 n, i;
 
 	monitorNoisy = done = 0;
 	while(!done) {
@@ -356,17 +355,17 @@ int ScaleSpeed(int, int);
 }
 
 /*a random x, y in the clipping rectangle of s*/
-/*C_06E9_0630*/int RandomX(struct tSurface *s) {
+/*C_06E9_0630*/int16 RandomX(struct tSurface *s) {
 	return rand() % (s->right - s->left + 1) + s->left;
 }
 
-/*C_06E9_064E*/int RandomY(struct tSurface *s) {
+/*C_06E9_064E*/int16 RandomY(struct tSurface *s) {
 	return rand() % (s->bottom - s->top + 1) + s->top;
 }
 
 /*n clouds (shapes 2, 3), at random left of the surface; the cloud bank (shape 0)*/
-/*C_06E9_066C*/InitClouds(struct tSurface *s, int n, void far *shapes) {
-	int i;
+/*C_06E9_066C*/InitClouds(struct tSurface *s, int16 n, void far *shapes) {
+	int16 i;
 
 	cloudSurface = s;
 	cloudShapes = shapes;
@@ -383,7 +382,7 @@ int ScaleSpeed(int, int);
 
 /*draw the clouds and move them right; one out on the right comes back on the left*/
 /*C_06E9_06FD*/MoveClouds() {
-	int i;
+	int16 i;
 
 	for(i = 0; i < cloudCount; i++) {
 		DRV(3)(cloudSurface, cloudY[i], cloudShape[i], cloudShapes, cloudX[i]);
@@ -404,7 +403,7 @@ int ScaleSpeed(int, int);
 }
 
 /*at most n - 1 drops of rain, moving every delay + 1 frames*/
-/*C_06E9_081A*/InitRain(struct tSurface *s, int n, int delay) {
+/*C_06E9_081A*/InitRain(struct tSurface *s, int16 n, int16 delay) {
 	rainMax = n - 1;
 	rainCount = 0;
 	rainDelay = delay;
@@ -414,7 +413,7 @@ int ScaleSpeed(int, int);
 /*maybe a new drop at the top; move the drops down (and right), one out at the
  bottom comes back at the top; draw them (shapes 4-7 of intro2)*/
 /*C_06E9_0838*/MoveRain() {
-	int i;
+	int16 i;
 
 	if(rainCount != rainMax && rand() % rainChance == 0) {
 		rainShape[rainCount] = (rand() & 3) + 4;
@@ -443,8 +442,8 @@ int ScaleSpeed(int, int);
 
 /*the clock radio of the bedroom shows the time of the computer's clock: 12-hour,
  digits (shapes 2-11) at x, x + 4, x + 10, x + 14; shape 12: no tens of hours*/
-/*C_06E9_09DC*/DrawClock(struct tSurface *s, void far *shapes, int x) {
-	int hours[24] = {12,1,2,3,4,5,6,7,8,9,10,11,12,1,2,3,4,5,6,7,8,9,10,11};
+/*C_06E9_09DC*/DrawClock(struct tSurface *s, void far *shapes, int16 x) {
+	int16 hours[24] = {12,1,2,3,4,5,6,7,8,9,10,11,12,1,2,3,4,5,6,7,8,9,10,11};
 	struct time t;
 
 	gettime(&t);
@@ -461,10 +460,10 @@ int ScaleSpeed(int, int);
 
 /*from b toward a, by how fast the computer is (loopsPerTick from 1500 to 20000): b on
  a slow computer, a on a fast one. Not MCGA: b counts twice; EGA: twice the result*/
-/*C_06E9_0AF0*/int ScaleSpeed(int a, int b) {
-	unsigned d;
-	unsigned speed;
-	int mul;
+/*C_06E9_0AF0*/int16 ScaleSpeed(int16 a, int16 b) {
+	uint16 d;
+	uint16 speed;
+	int16 mul;
 
 	mul = 1;
 	if(videoMode == 0xd)
@@ -489,26 +488,26 @@ int ScaleSpeed(int, int);
 /*the introduction. Every part ends at a key or a click (Escape: all of it)*/
 /*C_06E9_0BA6*/Introduction() {
 	void far *shapes;/*the shapes of the current part*/
-	int allocated;/*1: skyCopy has its own buffer*/
-	int flashColor[3];/*MCGA, the storm: the color of the lightning (part 3: a color saved)*/
-	int sky0[3];/*MCGA, the storm: the colors of the sky*/
-	int sky1[3];
-	int sky2[3];
-	int frames;/*the storm: frame count*/
-	int scene;/*the storm: what happens*/
-	int x;
-	int started;/*the storm: 0 before the first frame*/
-	int flashTime;/*the storm: frames left of the lightning*/
-	int flashShape;
-	int face;/*the storm: the face in the clouds (shape - 0xb)*/
-	int prevFace;
-	int flashX;
-	int flashY;
-	int speed;/*steps of the moves, by the speed of the computer*/
-	int speed2;
-	int speed3;
-	int i;
-	int done;
+	int16 allocated;/*1: skyCopy has its own buffer*/
+	int16 flashColor[3];/*MCGA, the storm: the color of the lightning (part 3: a color saved)*/
+	int16 sky0[3];/*MCGA, the storm: the colors of the sky*/
+	int16 sky1[3];
+	int16 sky2[3];
+	int16 frames;/*the storm: frame count*/
+	int16 scene;/*the storm: what happens*/
+	int16 x;
+	int16 started;/*the storm: 0 before the first frame*/
+	int16 flashTime;/*the storm: frames left of the lightning*/
+	int16 flashShape;
+	int16 face;/*the storm: the face in the clouds (shape - 0xb)*/
+	int16 prevFace;
+	int16 flashX;
+	int16 flashY;
+	int16 speed;/*steps of the moves, by the speed of the computer*/
+	int16 speed2;
+	int16 speed3;
+	int16 i;
+	int16 done;
 
 	allocated = started = 0;
 	skySurface = skyCopy = lowerSurface = backBuffer;
@@ -1182,9 +1181,9 @@ quit:
 }
 
 /*wait n times loopsPerTick / 400 loops*/
-/*C_06E9_2B34*/Delay(int n) {
-	int i;
-	int dummy;/*(never set)*/
+/*C_06E9_2B34*/Delay(int16 n) {
+	int16 i;
+	int16 dummy;/*(never set)*/
 
 	while(n--)
 		for(i = 0; i < loopsPerTick / 400; i++)

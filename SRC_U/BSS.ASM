@@ -8,25 +8,23 @@
 DGROUP	GROUP	_BSS
 _BSS	SEGMENT WORD PUBLIC 'BSS'
 
-PUBLIC	_menuColors,_gfxDrv,_vgaPalette,_videoMode,_mouseL,_mouseR,_mouseX,_mouseY
-PUBLIC	_mouseShapes,_mouseShape,_mouseSurface,_mouseSave,_mouseInstalled,_savedPalette,_textArea,_textWin
-PUBLIC	_textX,_textY,_textFont,_textFg,_textBg,_textBuf,_textAlign,_songData
-PUBLIC	_gameArgs,_spareSurface,_textAreaCopy,_screen,_songPos,_musicPort,_conSurface,_backBuffer
-PUBLIC	_farMemLeft,_musicCard,_egaSaved,_menuDrawn,_scanlineOfs,_mouseOn,_adapter,_escaped
-PUBLIC	_blockShapes,_blockShapesSeg,_cursorShapes,_musDrv,_buttonAreas,_oldName,_oldStr,_oldDex
-PUBLIC	_oldInt,_oldSex,_oldClass,_oldGood,_oldAvatar,_oldExp,_oldLevel,_oldHp
-PUBLIC	_oldHpMax,_oldMp,_dialogArea,_nameWindow,_titleArea,_transferFrom,_sheet,_portraitIdx
-PUBLIC	_newName,_newStr,_newDex,_newInt,_newSex,_newClass,_newGood,_newAvatar
-PUBLIC	_newExp,_newLevel,_newHp,_newHpMax,_newMp,_newPortrait,_portraits,_vellum
-PUBLIC	_saveData,_sceneShapes,_patternArea,_egaPage2,_egaScreen,_patternAdded,_vialLevel,_patternColorCount
-PUBLIC	_chosenVirtues,_patternColors,_pattern,_loopPos,_loopCount,_chosenPicture,_palEntry,_palColors
-PUBLIC	_palColors2,_skySurface,_skyCopy,_lowerSurface,_introPage2,_cloudCount,_script,_cloudShapes
-PUBLIC	_cloudSurface,_rainSurface,_rainDelay,_bankX,_bankY,_scriptPos,_rainX,_cloudX
-PUBLIC	_rainY,_cloudY,_cloudShape,_rainWait,_monitor,_rainShape,_cloudSpeed,_intro1Shapes
-PUBLIC	_rainChance,_monitorScroll,_intro2Shapes,_rainMax,_monitorNoisy,_rainCount,_workArea,_frameShape
-PUBLIC	_frameX,_frameY,_passageArea,_dosMajor,_dosMinor,_twinklePal,_twinkleEntry,_twinkleEntry2
-PUBLIC	_starIndex,_starPixel,_starLit,_starPosData,_twinkleFirst,_starCount,_twinkleRandom,_starColor
-PUBLIC	_starX,_starY,_hands,_shapeDest,_shapePos
+PUBLIC	_menuColors,_gfxDrv,_vgaPalette,_videoMode,_mouseInfo,_savedPalette,_textArea,_console
+PUBLIC	_songData,_gameArgs,_spareSurface,_textAreaCopy,_screen,_songPos,_musicPort,_conSurface
+PUBLIC	_backBuffer,_farMemLeft,_musicCard,_egaSaved,_menuDrawn,_scanlineOfs,_mouseOn,_adapter
+PUBLIC	_escaped,_blockShapes,_blockShapesSeg,_cursorShapes,_musDrv,_buttonAreas,_oldName,_oldStr
+PUBLIC	_oldDex,_oldInt,_oldSex,_oldClass,_oldGood,_oldAvatar,_oldExp,_oldLevel
+PUBLIC	_oldHp,_oldHpMax,_oldMp,_dialogArea,_nameWindow,_titleArea,_transferFrom,_sheet
+PUBLIC	_portraitIdx,_newName,_newStr,_newDex,_newInt,_newSex,_newClass,_newGood
+PUBLIC	_newAvatar,_newExp,_newLevel,_newHp,_newHpMax,_newMp,_newPortrait,_portraits
+PUBLIC	_vellum,_saveData,_sceneShapes,_patternArea,_egaPage2,_egaScreen,_patternAdded,_vialLevel
+PUBLIC	_patternColorCount,_chosenVirtues,_patternColors,_pattern,_loopPos,_loopCount,_chosenPicture,_palEntry
+PUBLIC	_palColors,_palColors2,_skySurface,_skyCopy,_lowerSurface,_introPage2,_cloudCount,_script
+PUBLIC	_cloudShapes,_cloudSurface,_rainSurface,_rainDelay,_bankX,_bankY,_scriptPos,_rainX
+PUBLIC	_cloudX,_rainY,_cloudY,_cloudShape,_rainWait,_monitor,_rainShape,_cloudSpeed
+PUBLIC	_intro1Shapes,_rainChance,_monitorScroll,_intro2Shapes,_rainMax,_monitorNoisy,_rainCount,_workArea
+PUBLIC	_frameShape,_frameX,_frameY,_passageArea,_dosMajor,_dosMinor,_twinklePal,_twinkleEntry
+PUBLIC	_twinkleEntry2,_starIndex,_starPixel,_starLit,_starPosData,_twinkleFirst,_starCount,_twinkleRandom
+PUBLIC	_starColor,_starX,_starY,_hands,_shapeDest,_shapePos
 
 _menuColors	LABEL	WORD	;D_4A14 the 5 main menu highlight colors (r, g, b)
 	ORG	$+32
@@ -36,44 +34,14 @@ _vgaPalette	LABEL	WORD	;D_4A40 VGA palette (r, g, b)
 	ORG	$+1540
 _videoMode	LABEL	WORD	;D_5044 video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA
 	ORG	$+2
-_mouseL	LABEL	BYTE	;D_5046 mouse buttons
-	ORG	$+1
-_mouseR	LABEL	BYTE	;D_5047 mouse buttons
-	ORG	$+1
-_mouseX	LABEL	WORD	;D_5048 mouse x, y
-	ORG	$+2
-_mouseY	LABEL	WORD	;D_504A mouse x, y
-	ORG	$+4
-_mouseShapes	LABEL	DWORD	;D_504E mouse pointer shapes
-	ORG	$+4
-_mouseShape	LABEL	WORD	;D_5052 mouse pointer shape
-	ORG	$+2
-_mouseSurface	LABEL	BYTE	;D_5054 the surface the mouse pointer is drawn on
-	ORG	$+2
-_mouseSave	LABEL	BYTE	;D_5056 mouse background save area
-	ORG	$+8
-_mouseInstalled	LABEL	BYTE	;D_505E a mouse is present?
-	ORG	$+1
+_mouseInfo	LABEL	BYTE	;D_5046 struct tMouse: the mouse
+	ORG	$+25
 _savedPalette	LABEL	WORD	;D_505F saved VGA palette
 	ORG	$+1536
 _textArea	LABEL	BYTE	;D_565F the vellum's area
 	ORG	$+14
-_textWin	LABEL	BYTE	;D_566D the current text window
-	ORG	$+2
-_textX	LABEL	WORD	;D_566F text cursor x, y
-	ORG	$+2
-_textY	LABEL	WORD	;D_5671 text cursor x, y
-	ORG	$+2
-_textFont	LABEL	DWORD	;D_5673 console: font
-	ORG	$+4
-_textFg	LABEL	BYTE	;D_5677 text colors
-	ORG	$+1
-_textBg	LABEL	BYTE	;D_5678 text colors
-	ORG	$+1
-_textBuf	LABEL	BYTE	;D_5679 console: buffer
-	ORG	$+4
-_textAlign	LABEL	BYTE	;D_567D the console: alignment (0 left, 1 right, 2 centred)
-	ORG	$+21
+_console	LABEL	BYTE	;D_566D struct tText: the console's text window
+	ORG	$+37
 _songData	LABEL	DWORD	;D_5692 the music driver's song
 	ORG	$+4
 _gameArgs	LABEL	BYTE	;D_5696 GAME.EXE's command line argument

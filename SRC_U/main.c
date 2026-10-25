@@ -22,92 +22,80 @@
 /*a drawing surface (the same as GAME.EXE's mouse.h)*/
 
 
-extern int menuColors[][3];/*the 5 main menu highlight colors (r, g, b)*/
-extern int vgaPalette[][3];/*VGA palette (r, g, b)*/
-extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern char mouseL, mouseR;/*mouse buttons*/
-extern int mouseX, mouseY;/*mouse x, y*/
-extern void far *mouseShapes;/*mouse pointer shapes*/
-extern int mouseShape;/*mouse pointer shape*/
-extern struct tSurface *mouseSurface;/*the surface the mouse pointer is drawn on*/
-extern void far *mouseSave;/*mouse background save area*/
-extern int savedPalette[][3];/*saved VGA palette*/
+extern int16 menuColors[][3];/*the 5 main menu highlight colors (r, g, b)*/
+extern int16 vgaPalette[][3];/*VGA palette (r, g, b)*/
+extern int16 videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern int16 savedPalette[][3];/*saved VGA palette*/
 extern struct tSurface textArea;/*text window*/
-extern struct tSurface *textWin;/*console: surface*/
-extern int textX, textY;/*console: text cursor x, y*/
-extern void far *textFont;/*console: font*/
-extern char textFg, textBg;/*console: text foreground, background color*/
-extern char *textBuf;/*console: buffer*/
-extern char textAlign;
 extern char far *songData;/*song (or midi.dat) data*/
 extern char gameArgs[];/*the command line arguments, concatenated*/
 extern struct tSurface spareSurface;
 extern struct tSurface screen;/*the screen*/
-extern int songPos;/*parse position in midi.dat*/
-extern int musicPort;/*music card i/o port*/
+extern int16 songPos;/*parse position in midi.dat*/
+extern int16 musicPort;/*music card i/o port*/
 extern struct tSurface conSurface;
 extern struct tSurface backBuffer;/*the drawing surface (EGA: the other page)*/
-extern unsigned long farMemLeft;/*free far memory*/
-extern int musicCard;/*music card: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
+extern uint32 farMemLeft;/*free far memory*/
+extern int16 musicCard;/*music card: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
 extern struct tSurface egaSaved;/*saved screen surface (EGA)*/
-extern int menuDrawn;/*the main menu screen is drawn*/
-extern int scanlineOfs[];/*scanline offsets*/
-extern int mouseOn;/*mouse on*/
-extern int adapter;/*graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
-extern int escaped;
+extern int16 menuDrawn;/*the main menu screen is drawn*/
+extern int16 scanlineOfs[];/*scanline offsets*/
+extern int16 mouseOn;/*mouse on*/
+extern int16 adapter;/*graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
+extern int16 escaped;
 extern void far *blockShapes;/*blocks.xxx*/
 extern void far *cursorShapes;/*mouse pointer shapes (cursors.xxx)*/
 extern union tMus musDrv;/*the music driver*/
-extern int far drvDrawPointer[];/*graphic driver entries for the OSI library: (offset, segment) pairs; declared far in the original (its accesses load its segment)*/
+extern int16 far drvDrawPointer[];/*graphic driver entries for the OSI library: (offset, segment) pairs; declared far in the original (its accesses load its segment)*/
 
 extern void far *LoadZFile(char *);/*load a driver file*/
 extern void far *LZW_load(char *);/*load a (compressed) file*/
 extern SetDosHandlers();
 extern FindDrives();/*FindDrives*/
-extern LoadPalette(int);/*LoadPalette*/
+extern LoadPalette(int16);/*LoadPalette*/
 extern Intro();
 extern TransferCharacter();
 extern CreateCharacter();
 extern Credits();
 extern StartGame();
-extern ScaleSpeed(int, int);
+extern ScaleSpeed(int16, int16);
 extern Introduction();
-extern Delay(int);
+extern Delay(int16);
 extern SURF_alloc(struct tSurface *);
 extern SURF_free(struct tSurface *);
 extern MOUSE_INIT(void *);/*mouse init*/
-extern MOUSE_POINTER(void far *, int);/*mouse pointer shape*/
+extern MOUSE_POINTER(void far *, int16);/*mouse pointer shape*/
 extern MOUSE_NOINIT(void *);/*mouse init (keyboard)*/
 extern TXT_select(void *);/*console init*/
 extern MOUSE_SERVE();/*mouse serve*/
-extern VID_setMode(int);
+extern VID_setMode(int16);
 extern MOUSE_SHOW();/*mouse show*/
 extern MOUSE_HIDE();/*mouse hide*/
 extern MOUSE_IN_RECT(struct tSurface *);/*mouse in the rectangle*/
-extern TXT_putc(int);/*print a character*/
+extern TXT_putc(int16);/*print a character*/
 extern VID_inRetrace();
 extern VID_waitRetrace();/*wait for the vertical retrace*/
 extern FADE_in(struct tSurface *, struct tSurface *);
-extern DIS_dissolve(struct tSurface *, struct tSurface *, int);
-extern DIS_dissolveEGA(struct tSurface *, struct tSurface *, int);
-extern DIS_dissolveCGA(struct tSurface *, struct tSurface *, int);
-extern DIS_dissolveTDY(struct tSurface *, struct tSurface *, int);
-extern PAL_set(int, int *);/*set a VGA palette entry*/
-extern PAL_get(int, int *);/*read a VGA palette entry*/
+extern DIS_dissolve(struct tSurface *, struct tSurface *, int16);
+extern DIS_dissolveEGA(struct tSurface *, struct tSurface *, int16);
+extern DIS_dissolveCGA(struct tSurface *, struct tSurface *, int16);
+extern DIS_dissolveTDY(struct tSurface *, struct tSurface *, int16);
+extern PAL_set(int16, int16 *);/*set a VGA palette entry*/
+extern PAL_get(int16, int16 *);/*read a VGA palette entry*/
 
 InitHercules();
-LoadMusicDriver(int, int);
-PlayMusic(int);
+LoadMusicDriver(int16, int16);
+PlayMusic(int16);
 
-/*0194*/int introSeen = 0;/*the introduction has been seen (main menu choice 0)*/
+/*0194*/int16 introSeen = 0;/*the introduction has been seen (main menu choice 0)*/
 /*Hercules 720x348 graphics: the CRTC registers (low byte: index, high byte: value)*/
-/*0196*/int herculesCrtc[9] = {0x3500, 0x2d01, 0x2e02, 0x0703, 0x5b04, 0x0205, 0x5706, 0x5707, 0x0309};
-/*01A8*/int songPlaying = 0;/*song playing (1-based in songFiles), 0 none, -2: song 2 loaded but not started*/
+/*0196*/int16 herculesCrtc[9] = {0x3500, 0x2d01, 0x2e02, 0x0703, 0x5b04, 0x0205, 0x5706, 0x5707, 0x0309};
+/*01A8*/int16 songPlaying = 0;/*song playing (1-based in songFiles), 0 none, -2: song 2 loaded but not started*/
 
 /*parse an hexadecimal music i/o port (e.g. "388") into musicPort;
 returns the pointer to the first non hex digit*/
 /*C_00E1_0006*/char *ParseHexPort(char *str) {
-	int ch;
+	int16 ch;
 
 	for(musicPort = 0; ((ch = toupper(*str)) >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F'); str++) {
 		musicPort <<= 4;
@@ -158,10 +146,10 @@ card (A, X, Z, I may be followed by an hexadecimal i/o port)*/
 /*wait for a key, with a blinking '_' cursor; the arrows left/right
 give 8/0x15, other extended keys 0*/
 /*C_00E1_016C*/char GetKey() {
-	int x, y;
-	int color;
-	int key;
-	int blink, done;
+	int16 x, y;
+	int16 color;
+	int16 key;
+	int16 blink, done;
 
 	x = textX;
 	y = textY;
@@ -206,13 +194,13 @@ give 8/0x15, other extended keys 0*/
 
 /*input a string of at most <max> characters into <dest>; returns 0
 when cancelled (escape, or return on an empty string)*/
-/*C_00E1_028A*/InputString(char *dest, int max) {
-	int *xs, *ys;
-	int color;
-	int key;
-	int done;
-	int ret;
-	int len;
+/*C_00E1_028A*/InputString(char *dest, int16 max) {
+	int16 *xs, *ys;
+	int16 color;
+	int16 key;
+	int16 done;
+	int16 ret;
+	int16 len;
 	char *buf;
 
 	len = 0;
@@ -263,11 +251,11 @@ when cancelled (escape, or return on an empty string)*/
 /*choose one of the options: by its key in <keys>, or by a click in its
 rectangle <rects>; returns its index*/
 /*C_00E1_041B*/char MenuSelect(struct tSurface *rects, char *keys) {
-	int i;
-	int ch;
-	int pressed;
-	int sel;
-	int over;
+	int16 i;
+	int16 ch;
+	int16 pressed;
+	int16 sel;
+	int16 over;
 
 	sel = -1;
 	over = -1;
@@ -298,7 +286,7 @@ rectangle <rects>; returns its index*/
 
 /*set the VGA palette from vgaPalette*/
 /*C_00E1_04F9*/SetPalette() {
-	int i;
+	int16 i;
 
 	if(videoMode == 0x13) {
 		for(i = 0; i < 0x100; i++) {
@@ -311,7 +299,7 @@ rectangle <rects>; returns its index*/
 
 /*set the VGA palette from the saved one savedPalette*/
 /*C_00E1_052D*/RestorePalette() {
-	int i;
+	int16 i;
 
 	if(videoMode == 0x13) {
 		for(i = 0; i < 0x100; i++) {
@@ -324,7 +312,7 @@ rectangle <rects>; returns its index*/
 
 /*save the VGA palette into savedPalette*/
 /*C_00E1_0561*/SavePalette() {
-	int i;
+	int16 i;
 
 	if(videoMode == 0x13) {
 		for(i = 0; i < 0x100; i++) {
@@ -342,14 +330,14 @@ rectangle <rects>; returns its index*/
 	void far *titles;
 	void far *menu;
 	struct tSurface rects[5];
-	int colors[5] = {0xe, 0x21, 0x22, 0x23, 0x24};
-	int effect;
-	int done;
-	int lastX, lastY;
-	int over;
+	int16 colors[5] = {0xe, 0x21, 0x22, 0x23, 0x24};
+	int16 effect;
+	int16 done;
+	int16 lastX, lastY;
+	int16 over;
 	struct tSurface dst, src;
-	int i;
-	int sel;
+	int16 i;
+	int16 sel;
 
 	switch(videoMode) {
 		case 4: menu = LZW_load("mainmenu.cga"); break;
@@ -549,7 +537,7 @@ rectangle <rects>; returns its index*/
 
 /*wait for a key or a mouse click*/
 /*C_00E1_0ED4*/WaitKeyOrClick() {
-	int key;
+	int16 key;
 
 	key = 0;
 	MOUSE_SHOW();
@@ -567,12 +555,12 @@ rectangle <rects>; returns its index*/
 /*the program: configuration (CONFIG.U6, then the command line), graphic
 and music drivers, screen surfaces, console, mouse, then the main menu
 until "journey onward" or quit*/
-/*C_00E1_0F23*/main(register int argc, char **argv) {
-	int i;
-	int fd;
+/*C_00E1_0F23*/main(register int16 argc, char **argv) {
+	int16 i;
+	int16 fd;
 	char buf[80];
 	char cfg[10];
-	register int done;
+	register int16 done;
 
 	/*the command line, for the game*/
 	gameArgs[0] = 0;
@@ -646,7 +634,7 @@ until "journey onward" or quit*/
 	textArea.bottom = 0xc5;
 	textWin = &conSurface;
 	textFont = LZW_load("u6.set");
-	TXT_select(&textWin);
+	TXT_select(&console);
 	textFg = 0xf;
 	textBg = 0;
 	textBuf = malloc(0x400);
@@ -671,9 +659,9 @@ until "journey onward" or quit*/
 	mouseX = mouseY = mouseShape = 0;
 	mouseShapes = cursorShapes;
 	if(mouseOn == 0)
-		MOUSE_NOINIT(&mouseL);
+		MOUSE_NOINIT(&mouseInfo);
 	else
-		MOUSE_INIT(&mouseL);
+		MOUSE_INIT(&mouseInfo);
 	MOUSE_POINTER(cursorShapes, 0);
 	MOUSE_HIDE();
 	done = 0;
@@ -800,7 +788,7 @@ next:
 };
 
 /*load the driver of music card <card> and init it with the i/o <port>*/
-/*C_00E1_1614*/LoadMusicDriver(int card, int port) {
+/*C_00E1_1614*/LoadMusicDriver(int16 card, int16 port) {
 	if(card) {
 		musDrv.f = (void (far pascal *)())LoadZFile(musicDrivers[card - 1]);
 		MUS(0)(port);
@@ -810,7 +798,7 @@ next:
 /*midi.dat parser: returns the next decimal number, or -1 when the
 closing ')' comes first*/
 /*C_00E1_1644*/MidiNumber() {
-	int ch, n;
+	int16 ch, n;
 
 	while(1) {
 		ch = songData[songPos];
@@ -835,9 +823,9 @@ closing ')' comes first*/
 /*set up the (Roland) driver's channels for song <song> (0-based): midi.dat
 holds a "( a b a b ...)" group per song; without it all 16 channels get
 (2, 0)*/
-/*C_00E1_169D*/MidiChannels(int song) {
-	int fd, ch;
-	int parens, channel, val, prog;
+/*C_00E1_169D*/MidiChannels(int16 song) {
+	int16 fd, ch;
+	int16 parens, channel, val, prog;
 
 	fd = OSI_open("midi.dat");
 	songData = farmalloc(0x401L);
@@ -882,7 +870,7 @@ holds a "( a b a b ...)" group per song; without it all 16 channels get
 
 /*play song <song> (1-based in songFiles), 0 stops the music; song 2 is only
 loaded (songPlaying = -2), the main menu starts it*/
-/*C_00E1_178A*/PlayMusic(int song) {
+/*C_00E1_178A*/PlayMusic(int16 song) {
 	if(musicCard == 0)
 		return;
 	if(song == songPlaying)

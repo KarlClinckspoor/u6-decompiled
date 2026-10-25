@@ -11,7 +11,7 @@
 
 /*a drawing surface of the graphics driver (GAME.EXE's struct tSurface)*/
 
-extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern int16 videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
 extern struct tSurface screen;/*the screen*/
 extern struct tSurface backBuffer;/*the back buffer*/
 extern struct tSurface textArea;/*the vellum's area*/
@@ -23,26 +23,19 @@ extern struct tSurface patternArea;/*the area of the gypsy's pattern*/
 extern struct tSurface egaPage2;/*EGA: the second page (segment a800)*/
 extern struct tSurface egaScreen;/*EGA: the screen, for the mouse pointer*/
 extern struct tSurface workArea;/*a 320x56 work surface (the A/B buttons)*/
-extern struct tSurface *mouseSurface;/*the surface the mouse pointer is drawn on*/
-extern struct tSurface *textWin;/*the current text window*/
-extern int textX, textY;/*text cursor x, y*/
-extern char textFg, textBg;/*text colors*/
-extern char textAlign;
-extern char mouseL, mouseR;/*mouse buttons*/
-extern char mouseInstalled;/*a mouse is present?*/
-extern int menuDrawn;/*set when the player gave up*/
-extern int transferFrom;/*here: the vellum has been shown (transfer.c: the game the character comes from)*/
-extern int portraitIdx;
+extern int16 menuDrawn;/*set when the player gave up*/
+extern int16 transferFrom;/*here: the vellum has been shown (transfer.c: the game the character comes from)*/
+extern int16 portraitIdx;
 
 /*the new character*/
 extern char newName[];/*name*/
-extern int newStr, newDex, newInt;/*strength, dexterity, intelligence*/
+extern int16 newStr, newDex, newInt;/*strength, dexterity, intelligence*/
 extern char newSex;/*sex: 'M' or 'F'*/
 extern char newClass[];/*"Avatar"*/
 extern char newGood;/*'G'*/
-extern int newExp;/*experience*/
-extern int newLevel;/*level*/
-extern int newHp;/*hit points*/
+extern int16 newExp;/*experience*/
+extern int16 newLevel;/*level*/
+extern int16 newHp;/*hit points*/
 extern char newPortrait;
 
 extern char far *portraits;/*montage image*/
@@ -51,11 +44,11 @@ extern char far *sceneShapes;/*woods / gypsy image*/
 
 /*the gypsy's table: this module's initialised data*/
 /*0692*/char avatarKarma = 75;/*karma (75; +3 when Humility is chosen): objlist 0x1bf9*/
-/*0693*/int pourColor = 0;/*the vial being poured gives its color this step*/
-/*0695*/int vialOffsetX[8] = {10, 10, 10, 10, -13, -13, -13, -13};/*x offset of each vial (left side +10, right side -13)*/
-/*06A5*/int sceneY = -20;/*y offset of the gypsy scene*/
-/*06A7*/int virtueColor[8] = {239, 14, 231, 103, 228, 5, 15, 219};/*pattern color of each virtue (MCGA; set per video mode by CreateCharacter)*/
-/*06B7*/int questionOf[8][8] = {
+/*0693*/int16 pourColor = 0;/*the vial being poured gives its color this step*/
+/*0695*/int16 vialOffsetX[8] = {10, 10, 10, 10, -13, -13, -13, -13};/*x offset of each vial (left side +10, right side -13)*/
+/*06A5*/int16 sceneY = -20;/*y offset of the gypsy scene*/
+/*06A7*/int16 virtueColor[8] = {239, 14, 231, 103, 228, 5, 15, 219};/*pattern color of each virtue (MCGA; set per video mode by CreateCharacter)*/
+/*06B7*/int16 questionOf[8][8] = {
 	{-1, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f},
 	{0x69, -1, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75},
 	{0x6a, 0x70, -1, 0x76, 0x77, 0x78, 0x79, 0x7a},
@@ -65,15 +58,15 @@ extern char far *sceneShapes;/*woods / gypsy image*/
 	{0x6e, 0x74, 0x79, 0x7d, 0x80, 0x82, -1, 0x84},
 	{0x6f, 0x75, 0x7a, 0x7e, 0x81, 0x83, 0x84, -1}
 };/*the question (its text number) for each pair of virtues (0 Honesty, 1 Compassion, 2 Valor, 3 Justice, 4 Sacrifice, 5 Honor, 6 Spirituality, 7 Humility)*/
-/*0737*/int answerAVirtue[28] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6};/*virtue chosen by answer A, by question - 0x69*/
-/*076F*/int answerBVirtue[28] = {1, 2, 3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 4, 5, 6, 7, 5, 6, 7, 6, 7, 7};/*virtue chosen by answer B, by question - 0x69*/
-/*07A7*/int strGain[8] = {0, 0, 2, 0, 1, 1, 1, 0};/*strength gained per virtue*/
-/*07B7*/int dexGain[8] = {0, 2, 0, 1, 1, 0, 1, 0};/*dexterity gained per virtue*/
-/*07C7*/int intGain[8] = {2, 0, 0, 1, 0, 1, 1, 0};/*intelligence gained per virtue*/
-/*07D7*/int shapeArm = 1;/*shape base: the arm, the A/B buttons*/
-/*07D9*/int shapeVial = 9;/*shape base: hand and vials (streams of vials 6, 7)*/
-/*07DB*/int shapeStream = 66;/*shape base: streams, level marks*/
-/*07DD*/int markShape[4][3][8] = {
+/*0737*/int16 answerAVirtue[28] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6};/*virtue chosen by answer A, by question - 0x69*/
+/*076F*/int16 answerBVirtue[28] = {1, 2, 3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 4, 5, 6, 7, 5, 6, 7, 6, 7, 7};/*virtue chosen by answer B, by question - 0x69*/
+/*07A7*/int16 strGain[8] = {0, 0, 2, 0, 1, 1, 1, 0};/*strength gained per virtue*/
+/*07B7*/int16 dexGain[8] = {0, 2, 0, 1, 1, 0, 1, 0};/*dexterity gained per virtue*/
+/*07C7*/int16 intGain[8] = {2, 0, 0, 1, 0, 1, 1, 0};/*intelligence gained per virtue*/
+/*07D7*/int16 shapeArm = 1;/*shape base: the arm, the A/B buttons*/
+/*07D9*/int16 shapeVial = 9;/*shape base: hand and vials (streams of vials 6, 7)*/
+/*07DB*/int16 shapeStream = 66;/*shape base: streams, level marks*/
+/*07DD*/int16 markShape[4][3][8] = {
 	{
 		{58, 79, 100, 124, 40, 126, 32, 52},
 		{54, 75, 96, 118, 38, 120, 28, 48},
@@ -95,7 +88,7 @@ extern char far *sceneShapes;/*woods / gypsy image*/
 		{2, 5, 8, 11, 24, 27, 30, 33}
 	}
 };/*shape of the stream: [kind][level][vial]*/
-/*089D*/int markX[4][3][8] = {
+/*089D*/int16 markX[4][3][8] = {
 	{
 		{4, 4, 4, 4, 20, 20, 20, 20},
 		{4, 4, 4, 4, 19, 19, 19, 19},
@@ -117,61 +110,61 @@ extern char far *sceneShapes;/*woods / gypsy image*/
 		{3, 3, 3, 3, 3, 3, 3, 3}
 	}
 };/*x of the stream: [kind][level][vial]*/
-/*095D*/int markY[4][3] = {
+/*095D*/int16 markY[4][3] = {
 	{27, 19, 19},
 	{22, 14, 14},
 	{14, 14, 14},
 	{11, 11, 11}
 };/*y of the stream: [kind][level]*/
-/*0975*/int vialMarkShape[8] = {2, 5, 8, 11, 24, 27, 30, 33};/*per vial: level marks: shape*/
-/*0985*/int armX[8] = {93, 93, 93, 93, 172, 172, 172, 172};/*per vial: arm x (steps 4-12)*/
-/*0995*/int vialX[8] = {41, 62, 83, 104, 200, 221, 242, 263};/*per vial: vial x*/
-/*09A5*/int handX3[8] = {29, 50, 71, 92, 202, 223, 244, 264};/*per vial: hand x, steps 3/13*/
-/*09B5*/int handX4[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 4/12*/
-/*09C5*/int handX5[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 5/11*/
-/*09D5*/int handX6[8] = {109, 109, 109, 109, 168, 168, 168, 168};/*per vial: hand x, steps 6/10*/
-/*09E5*/int handX7[8] = {112, 112, 112, 112, 165, 165, 165, 165};/*per vial: hand x, steps 7-9*/
-/*09F5*/int handY4[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 4/12*/
-/*0A05*/int handY5[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 5/11*/
-/*0A15*/int handY6[8] = {41, 41, 41, 41, 41, 41, 41, 41};/*per vial: hand y, steps 6/10*/
-/*0A25*/int handY7[8] = {33, 33, 33, 33, 33, 33, 33, 33};/*per vial: hand y, steps 7-9*/
-/*0A35*/int vialStanding[8] = {11, 11, 11, 11, 14, 14, 14, 14};/*per vial: vial shape, standing*/
-/*0A45*/int vialShape1[8] = {12, 12, 12, 12, 13, 13, 13, 13};/*per vial: vial shape, steps 1-2/14-15*/
-/*0A55*/int vialShape3[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 3/13*/
-/*0A65*/int vialShape4[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 4/12*/
-/*0A75*/int vialShape5[8] = {10, 10, 10, 10, 18, 18, 18, 18};/*per vial: vial shape, steps 5/11*/
-/*0A85*/int vialShape6[8] = {16, 16, 16, 16, 46, 46, 46, 46};/*per vial: vial shape, steps 6/10*/
-/*0A95*/int vialShape7[8] = {15, 15, 15, 15, 37, 37, 37, 37};/*per vial: vial shape, steps 7-9*/
-/*0AA5*/int armShape1[8] = {0, 0, 0, 0, 5, 5, 5, 5};/*per vial: arm shape, steps 1/15*/
-/*0AB5*/int armShape2[8] = {1, 1, 1, 1, 4, 4, 4, 4};/*per vial: arm shape, steps 2-3/13-14*/
-/*0AC5*/int armShape4[8] = {2, 2, 2, 2, 3, 3, 3, 3};/*per vial: arm shape, steps 4-12*/
-/*0AD5*/int streamShape[3][8] = {
+/*0975*/int16 vialMarkShape[8] = {2, 5, 8, 11, 24, 27, 30, 33};/*per vial: level marks: shape*/
+/*0985*/int16 armX[8] = {93, 93, 93, 93, 172, 172, 172, 172};/*per vial: arm x (steps 4-12)*/
+/*0995*/int16 vialX[8] = {41, 62, 83, 104, 200, 221, 242, 263};/*per vial: vial x*/
+/*09A5*/int16 handX3[8] = {29, 50, 71, 92, 202, 223, 244, 264};/*per vial: hand x, steps 3/13*/
+/*09B5*/int16 handX4[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 4/12*/
+/*09C5*/int16 handX5[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 5/11*/
+/*09D5*/int16 handX6[8] = {109, 109, 109, 109, 168, 168, 168, 168};/*per vial: hand x, steps 6/10*/
+/*09E5*/int16 handX7[8] = {112, 112, 112, 112, 165, 165, 165, 165};/*per vial: hand x, steps 7-9*/
+/*09F5*/int16 handY4[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 4/12*/
+/*0A05*/int16 handY5[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 5/11*/
+/*0A15*/int16 handY6[8] = {41, 41, 41, 41, 41, 41, 41, 41};/*per vial: hand y, steps 6/10*/
+/*0A25*/int16 handY7[8] = {33, 33, 33, 33, 33, 33, 33, 33};/*per vial: hand y, steps 7-9*/
+/*0A35*/int16 vialStanding[8] = {11, 11, 11, 11, 14, 14, 14, 14};/*per vial: vial shape, standing*/
+/*0A45*/int16 vialShape1[8] = {12, 12, 12, 12, 13, 13, 13, 13};/*per vial: vial shape, steps 1-2/14-15*/
+/*0A55*/int16 vialShape3[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 3/13*/
+/*0A65*/int16 vialShape4[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 4/12*/
+/*0A75*/int16 vialShape5[8] = {10, 10, 10, 10, 18, 18, 18, 18};/*per vial: vial shape, steps 5/11*/
+/*0A85*/int16 vialShape6[8] = {16, 16, 16, 16, 46, 46, 46, 46};/*per vial: vial shape, steps 6/10*/
+/*0A95*/int16 vialShape7[8] = {15, 15, 15, 15, 37, 37, 37, 37};/*per vial: vial shape, steps 7-9*/
+/*0AA5*/int16 armShape1[8] = {0, 0, 0, 0, 5, 5, 5, 5};/*per vial: arm shape, steps 1/15*/
+/*0AB5*/int16 armShape2[8] = {1, 1, 1, 1, 4, 4, 4, 4};/*per vial: arm shape, steps 2-3/13-14*/
+/*0AC5*/int16 armShape4[8] = {2, 2, 2, 2, 3, 3, 3, 3};/*per vial: arm shape, steps 4-12*/
+/*0AD5*/int16 streamShape[3][8] = {
 	{43, 67, 86, 107, 36, 116, 25, 44},
 	{44, 68, 87, 108, 35, 115, 24, 43},
 	{45, 69, 88, 109, 34, 114, 23, 42}
 };/*shape of the liquid in the bowl: [3 - level][vial]*/
-/*0B05*/int streamX[3][8] = {
+/*0B05*/int16 streamX[3][8] = {
 	{146, 146, 146, 146, 169, 169, 169, 169},
 	{145, 145, 145, 145, 169, 169, 169, 169},
 	{148, 148, 148, 148, 170, 170, 170, 170}
 };/*x of the liquid in the bowl: [3 - level][vial]*/
-/*0B35*/int streamY[3] = {50, 55, 64};/*y of the liquid in the bowl: [3 - level]*/
+/*0B35*/int16 streamY[3] = {50, 55, 64};/*y of the liquid in the bowl: [3 - level]*/
 
-extern int patternAdded;
-extern int vialLevel[];/*level of each vial*/
-extern int patternColorCount;/*number of colors in the pattern*/
-extern int chosenVirtues[];/*virtues*/
-extern int patternColors[];/*colors of the pattern*/
+extern int16 patternAdded;
+extern int16 vialLevel[];/*level of each vial*/
+extern int16 patternColorCount;/*number of colors in the pattern*/
+extern int16 chosenVirtues[];/*virtues*/
+extern int16 patternColors[];/*colors of the pattern*/
 extern char pattern[];/*pattern*/
 
 char far *LOAD_far();/*load a whole file into far memory*/
-int DIS_farcpy(void far *, void far *, int);/*far copy (from, to, size)*/
-int TXT_sprintf(char far *, ...);/*printf in the text window*/
+int16 DIS_farcpy(void far *, void far *, int16);/*far copy (from, to, size)*/
+int16 TXT_sprintf(char far *, ...);/*printf in the text window*/
 char far *LZW_load();/*load an image file*/
 
-/*C_0406_0006*/int WriteNewCharacter() {
+/*C_0406_0006*/int16 WriteNewCharacter() {
 	char far *buf;
-	int fd;
+	int16 fd;
 
 	buf = LOAD_far("savegame\\objlist");
 	if(buf[0x1c72])
@@ -198,10 +191,10 @@ char far *LZW_load();/*load an image file*/
 }
 
 /*ask the name and the sex of the new character; 0 if the player gave up (escape)*/
-/*C_0406_012A*/int AskNameAndSex() {
+/*C_0406_012A*/int16 AskNameAndSex() {
 	struct tSurface win;
-	int ok;
-	int y;
+	int16 ok;
+	int16 y;
 
 	win = nameWindow;
 	switch(videoMode) {
@@ -269,9 +262,9 @@ char far *LZW_load();/*load an image file*/
 
 /*add a color to the gypsy's pattern: the 16 entries of the pattern are shared
 between the colors added so far*/
-/*C_0406_033B*/AddPatternColor(int c) {
-	int j;
-	int i;
+/*C_0406_033B*/AddPatternColor(int16 c) {
+	int16 j;
+	int16 i;
 
 	patternArea.top -= 4;
 	patternColors[patternColorCount++] = c;
@@ -286,8 +279,8 @@ through the colors of the pattern*/
 	char far *dst;
 	char far *src;
 	struct tSurface s;
-	int x;
-	int y;
+	int16 x;
+	int16 y;
 
 	src = MK_FP(_CS, rand() % 0x800);
 	switch(videoMode) {
@@ -342,10 +335,10 @@ through the colors of the pattern*/
 }
 
 /*draw the stream poured from vial n (the gypsy's frame shape) at x, y*/
-/*C_0406_05D3*/DrawPouring(int n, int shape, int x, int y) {
-	int ofs;
-	int kind;
-	int level;
+/*C_0406_05D3*/DrawPouring(int16 n, int16 shape, int16 x, int16 y) {
+	int16 ofs;
+	int16 kind;
+	int16 level;
 
 	switch(shape) {
 		case 9: case 0x11: kind = 0; break;
@@ -370,13 +363,13 @@ through the colors of the pattern*/
 
 /*draw the gypsy's table with her hand at step of pouring vial n (redraw=1: the
 pouring itself is not taken into account); 0 when the step is the last one*/
-/*C_0406_06F8*/int DrawGypsyStep(int n, int step, int redraw) {
-	int done;
-	int y0;
-	int shape;
-	int x;
-	int y;
-	int i;
+/*C_0406_06F8*/int16 DrawGypsyStep(int16 n, int16 step, int16 redraw) {
+	int16 done;
+	int16 y0;
+	int16 shape;
+	int16 x;
+	int16 y;
+	int16 i;
 
 	y0 = 0x56;
 	if(videoMode == 0xd)
@@ -510,11 +503,11 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 }
 
 /*shuffle the n ints of tab*/
-/*C_0406_0D73*/Shuffle(int *tab, int n) {
-	int i;
-	int k;
-	int j;
-	int tmp;
+/*C_0406_0D73*/Shuffle(int16 *tab, int16 n) {
+	int16 i;
+	int16 k;
+	int16 j;
+	int16 tmp;
 
 	k = rand() % (n * n) + n;
 	while(k) {
@@ -529,12 +522,12 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 
 /*animate the gypsy's table until a key or a mouse click: the key (upper case),
 'A' / 'B' for a click on a card, 1 for a click elsewhere*/
-/*C_0406_0DDE*/char WaitForAnswer(int mouse) {
-	int key;
+/*C_0406_0DDE*/char WaitForAnswer(int16 mouse) {
+	int16 key;
 	struct tSurface cardA;
 	struct tSurface cardB;
-	int got;
-	int first;
+	int16 got;
+	int16 first;
 
 	got = 0;
 	key = 0;
@@ -599,7 +592,7 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 }
 
 /*ask question q: the virtue chosen*/
-/*C_0406_0F99*/int AskQuestion(int q) {
+/*C_0406_0F99*/int16 AskQuestion(int16 q) {
 	char key;
 
 	if(mouseInstalled) {
@@ -617,10 +610,10 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 }
 
 /*the virtue v was chosen: its attribute points, and the gypsy pours its vial*/
-/*C_0406_1040*/ChooseVirtue(int v) {
-	int count;
-	int step;
-	int i;
+/*C_0406_1040*/ChooseVirtue(int16 v) {
+	int16 count;
+	int16 step;
+	int16 i;
 
 	newStr += strGain[v];
 	newDex += dexGain[v];
@@ -687,14 +680,14 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 /*create a new character: the name and the sex on the vellum, the woods, the
 gypsy and her questions, then write the character into savegame\objlist;
 1 if the player gave up at the name, else what WriteNewCharacter said*/
-/*C_0406_1269*/int CreateCharacter() {
-	int virtue;
-	int speed;
-	int done;
-	int ret;
+/*C_0406_1269*/int16 CreateCharacter() {
+	int16 virtue;
+	int16 speed;
+	int16 done;
+	int16 ret;
 	struct tSurface save;
-	int i;
-	int q;
+	int16 i;
+	int16 q;
 
 	if(videoMode == 0xd) {
 		backBuffer.segment = screen.segment ^ 0x200;

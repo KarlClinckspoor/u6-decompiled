@@ -7,32 +7,20 @@
 #include <conio.h>
 
 /*a 14-byte graphics area (see disk.c); the first word is the only one used here*/
-/*a text window of the console library (TXT_select makes one current)*/
-struct tWin {
-	struct tSurface *area;/*+00 where it is drawn*/
-	int curX, curY;/*+02,+04 cursor*/
-	int f06, f08;
-	unsigned char bgColor;/*+0a*/
-	unsigned char fgColor;/*+0b*/
-	char *buf;/*+0c text buffer*/
-	char *ptr;/*+0e write position in buf*/
-	char f10;/*+10 3 at first, 2 for a passage that waits for a key (?)*/
-};
 
-extern int videoMode;/*video mode: 0x0d EGA, 0x13 MCGA*/
-extern struct tWin textWin;/*the console's normal text window*/
+extern int16 videoMode;/*video mode: 0x0d EGA, 0x13 MCGA*/
 extern struct tSurface screen;/*the screen*/
 extern struct tSurface backBuffer;/*the drawing area (EGA: copy of the screen's)*/
 extern struct tSurface workArea;/*the text area of a passage*/
-extern int frameShape;
-extern int frameX, frameY;/*where the text area is on the screen: x (in 8-pixel columns?), y*/
+extern int16 frameShape;
+extern int16 frameX, frameY;/*where the text area is on the screen: x (in 8-pixel columns?), y*/
 extern struct tSurface passageArea;/*copy of backBuffer the text area is shown in*/
-extern int blockShapes, blockShapesSeg;
-extern int wantDisk;/*the disk asked for (disk.c)*/
+extern int16 blockShapes, blockShapesSeg;
+extern int16 wantDisk;/*the disk asked for (disk.c)*/
 extern char *diskNames[];/*names of the disks*/
 extern char newName[];/*the player's name*/
 
-extern TXT_select(struct tWin *);/*make a text window current*/
+extern TXT_select(struct tText *);/*make a text window current*/
 extern TXT_sappend(char far *, ...);/*printf in the current text window*/
 extern TXT_puts(char far *);/*print a text (word wrapped?) in the current window*/
 
@@ -41,36 +29,36 @@ extern TXT_puts(char far *);/*print a text (word wrapped?) in the current window
 /*prints passage n (0-15 the introduction, 100-137 the gypsy, 200-219 the arrival in
 Britannia, 998/999 messages) in the text area workArea, after setting where it goes on the
 screen; DisplayPassage puts it there*/
-/*C_09A0_000B*/ShowPassage(int n) {
-	struct tWin win;
-	int color;
+/*C_09A0_000B*/ShowPassage(int16 n) {
+	struct tText win;
+	int16 color;
 
-	win = textWin;
+	win = console;
 	/*flush the keyboard*/
 	while(kbhit())
 		getch();
 	passageArea = backBuffer;
-	win.area = &workArea;
+	win.surface = &workArea;
 	workArea.top = workArea.left = win.curX = win.curY = 0;
-	win.f10 = 3;
+	win.justify = 3;
 	switch(videoMode) {
 	case 4: case 7:
 		color = 3;
-		win.bgColor = 0;
+		win.fgColor = 0;
 		break;
 	case 9: case 0xd:
 		color = 0xe;
-		win.bgColor = 0;
+		win.fgColor = 0;
 		break;
 	case 0x13:
 		color = 0x31;
-		win.bgColor = 0x3e;
+		win.fgColor = 0x3e;
 		break;
 	}
-	win.fgColor = color;
+	win.bgColor = color;
 	/*print in a copy of the normal window, drawn in workArea*/
 	TXT_select(&win);
-	win.ptr = win.buf;
+	win.bufPtr = win.buffer;
 	/*each passage: where its text area is, then it is cleared and the text printed*/
 	switch(n) {
 	case 0:
@@ -84,7 +72,7 @@ screen; DisplayPassage puts it there*/
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("Upon your world, five seasons have passed since your ");
 		TXT_sappend("triumphant homecoming from Britannia.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 1:
 		frameX = 1;
@@ -110,7 +98,7 @@ screen; DisplayPassage puts it there*/
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("Outside, a chill wind rises...");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 3:
 		frameX = 0;
@@ -122,7 +110,7 @@ screen; DisplayPassage puts it there*/
 		workArea.bottom = 15;
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("...and in moments, the storm is upon you.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 4:
 		frameX = 1;
@@ -159,7 +147,7 @@ screen; DisplayPassage puts it there*/
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("Lightning among the stones!\nIs this a sign from ");
 		TXT_sappend("distant Britannia?");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 8:
 		frameX = 1;
@@ -198,7 +186,7 @@ screen; DisplayPassage puts it there*/
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("Wondering, you pick it up....");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 11:
 		frameX = 1;
@@ -237,7 +225,7 @@ screen; DisplayPassage puts it there*/
 		TXT_sappend("But your joy soon gives way to apprehension.\n\n");
 		TXT_sappend("The gate to Britannia has always been blue...\nas ");
 		TXT_sappend("blue as the morning sky.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 14:
 		frameX = 1;
@@ -261,7 +249,7 @@ screen; DisplayPassage puts it there*/
 		workArea.bottom = 15;
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("Desperation makes the decision an easy one.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 100:
 		frameX = 1;
@@ -273,7 +261,7 @@ screen; DisplayPassage puts it there*/
 		workArea.bottom = 15;
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("\"Welcome, O Seeker!%c", QUOTE_END);
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 101:
 		frameX = 1;
@@ -818,7 +806,7 @@ screen; DisplayPassage puts it there*/
 		workArea.right = 234;
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
-		win.f10 = 2;
+		win.justify = 2;
 		TXT_sappend("...but you have no place to go.");
 		break;
 	case 203:
@@ -842,7 +830,7 @@ screen; DisplayPassage puts it there*/
 		workArea.right = 303;
 		workArea.bottom = 15;
 		DRV(0xc)(&workArea, color);
-		win.f10 = 2;
+		win.justify = 2;
 		TXT_sappend("With unearthly strength, the monsters bind you to the altar stone!");
 		break;
 	case 205:
@@ -856,7 +844,7 @@ screen; DisplayPassage puts it there*/
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("Kneeling, the hordes sway and chant as a stately ");
 		TXT_sappend("winged nightmare steps forward.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 206:
 		frameX = 1;
@@ -894,7 +882,7 @@ screen; DisplayPassage puts it there*/
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("You close your eyes. A dying scream, certainly your own, ");
 		TXT_sappend("curdles the air.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 209:
 		frameX = 1;
@@ -905,7 +893,7 @@ screen; DisplayPassage puts it there*/
 		workArea.right = 303;
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
-		win.f10 = 2;
+		win.justify = 2;
 		TXT_sappend("Catcalls, the dagger, a scream, Death....");
 		break;
 	case 210:
@@ -917,7 +905,7 @@ screen; DisplayPassage puts it there*/
 		workArea.right = 303;
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
-		win.f10 = 2;
+		win.justify = 2;
 		TXT_sappend("Pandemonium. Shrieks of rage, of terror.");
 		break;
 	case 211:
@@ -929,7 +917,7 @@ screen; DisplayPassage puts it there*/
 		workArea.right = 303;
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
-		win.f10 = 2;
+		win.justify = 2;
 		TXT_sappend("From the inevitable, an impossibility emerges.");
 		break;
 	case 212:
@@ -941,7 +929,7 @@ screen; DisplayPassage puts it there*/
 		workArea.right = 303;
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
-		win.f10 = 2;
+		win.justify = 2;
 		TXT_sappend("You are still alive.");
 		break;
 	case 213:
@@ -1008,7 +996,7 @@ screen; DisplayPassage puts it there*/
 		workArea.bottom = 15;
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("The gate wanes rapidly as you and Dupre charge through...");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 218:
 		frameX = 33;
@@ -1019,7 +1007,7 @@ screen; DisplayPassage puts it there*/
 		workArea.right = 234;
 		workArea.bottom = 7;
 		DRV(0xc)(&workArea, color);
-		win.f10 = 2;
+		win.justify = 2;
 		TXT_sappend("...but not rapidly enough.");
 		break;
 	case 219:
@@ -1047,7 +1035,7 @@ screen; DisplayPassage puts it there*/
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("A game is already in progress.  Please run the install ");
 		TXT_sappend("program to create a new character disk.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	case 999:
 		frameX = 32;
@@ -1061,7 +1049,7 @@ screen; DisplayPassage puts it there*/
 		TXT_sappend("Please insert the ");
 		TXT_sappend(diskNames[wantDisk]);
 		TXT_sappend(" disk.");
-		win.f10 = 2;
+		win.justify = 2;
 		break;
 	default:
 		frameX = 1;
@@ -1074,8 +1062,8 @@ screen; DisplayPassage puts it there*/
 		DRV(0xc)(&workArea, color);
 		TXT_sappend("<< Passage undefined! >>");
 	}
-	TXT_puts(win.buf);
-	TXT_select(&textWin);
+	TXT_puts(win.buffer);
+	TXT_select(&console);
 }
 
 /*draws the passage's frame (?) and copies the text area to the screen*/
