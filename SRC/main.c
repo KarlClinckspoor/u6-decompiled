@@ -3,14 +3,32 @@
  * Copyright (c) 1990 Origin Systems, Inc. and Richard Gariott
  * reverse-coded by Ergonomy Joe in 2013
  */
+/*
+	Main/startup module.
+
+	main() parses the configuration (CONFIG.U6 + command line), grabs all
+	the far heap with farmalloc() and then hands out pieces of it with the
+	simple bump allocator __MemAlloc() (Mem_BP/Mem_Remain).  It sets up the
+	mouse and the screen surfaces (scanline offset tables for VGA/EGA/
+	Tandy/CGA/Hercules), loads the graphic and music drivers, the font,
+	palette, tile tables and animation data, loads the saved game and
+	finally runs the game loop (GameLoop).
+	Also here: the generic file loader LoadFile() (plain or LZW "Z" files),
+	the loader callback given to the graphic driver (LoadFileGr), the OSI
+	file error handler (FileErrorHandler), the VGA palette cycling for fire/
+	water colors (PaletteAnimation) and the launch of END.EXE/ULTIMA6.EXE.
+*/
 #include "u6.h"
 
 /*====---- ----====*/
-/*0194*/int IsZFile = 0;
-char *D_0196[] = {
+/*0194*/int IsZFile = 0;/*1: LoadFile() decompresses LZW (".z") files*/
+/*list of file names the OSI loader (LOW.ASM C_049C) would treat as
+  compressed; empty list (only the "" terminator)*/
+/*0196*/char *CompressedFileList[] = {
 	/*01EB*/""
 };
-char *D_0198[] = {
+/*full screen bitmaps*/
+/*0198*/char *BitmapFiles[] = {
 	/*01EC*/"paper.bmp",/*main screen*/
 	/*01F6*/"newmagic.bmp",/*small scroll*/
 	/*0203*/"u6face0.bmp",
@@ -29,81 +47,95 @@ char *D_0198[] = {
 	/*0255*/"West",
 	/*025A*/"Northwest"
 };
-int __01C2 = 0;
-int __01C4 = 0;
-int D_01C6 = 1;
-int D_01C8 = 0;/*gr type*/
-int D_01CA = 0;/*music adapter?*/
-int D_01CC = 0x388;/*sound card i/o port*/
-int D_01CE = 0;/*gr flag*/
+int Unused01C2 = 0;/*unused*/
+int Unused01C4 = 0;/*unused*/
+/*01C6*/int IgnoreShortRead = 1;/*1: ignore "short read" errors (OSI_read hit end of file)*/
+/*01C8*/int GrAdapter = 0;/*graphic adapter: 0 VGA/MCGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
+/*01CA*/int MusicAdapter = 0;/*music adapter: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
+/*01CC*/int MusicPort = 0x388;/*music card i/o port*/
+/*01CE*/int GrDriverOption = 0;/*'$' config flag, added to the init parameter of the graphic driver (see InitGraphicsDriver); meaning unknown*/
 /*01D0*/unsigned char MouseOn = 1;
-char D_01D1 = 0;
-unsigned char D_01D2 = 0;
-char D_01D3[] = "vetch";/*[vga/ega/tandy/cga/hercules?]*/
-char D_01D9[] = "naxyrzi";
+/*01D1*/char ConsoleReady = 0;/*1 once the console can display messages (error handler)*/
+/*01D2*/unsigned char PaletteCycle = 0;/*palette cycling counter*/
+/*01D3*/char GrAdapterLetters[] = "vetch";/*config letters for GrAdapter: Vga/Ega/Tandy/Cga/Hercules*/
+/*01D9*/char MusicAdapterLetters[] = "naxyrzi";/*config letters for MusicAdapter: None/Adlib/cms(X)/tandY/Roland/covoX(Z)/Innovation*/
 /*====---- ----====*/
 
+/*far pointer <-> 20-bit linear address*/
 #define PTR2NORM(p) (((unsigned long)FP_SEG(p) << 4) + FP_OFF(p))
 #define NORM2PTR(n) (MK_FP((n) >> 4, (n) & 0xf))
 
+/*allocate "size" zeroed bytes from the far heap block (Mem_BP/Mem_Remain);
+  exits to DOS if there is not enough memory.
+  The allocator never frees: memory is handed out once at startup*/
 /*C_0903_0001*/static __MemAlloc(char huge **pptr, unsigned long size) {
-	unsigned long i, bp_04;
+	unsigned long offset, linearAddr;
 
 	if(size > Mem_Remain) {
 		/*not enough memory*/
 		OSI_delay_clean();
-		GR_03();
+		GR_SHUTDOWN();
 		exit(1);
 		return;
 	}
 
 	*pptr = Mem_BP;
 	/*update remaining memory and base pointer*/
-	bp_04 = PTR2NORM(Mem_BP);
-	bp_04 += size;
-	Mem_BP = NORM2PTR(bp_04);
+	linearAddr = PTR2NORM(Mem_BP);
+	linearAddr += size;
+	Mem_BP = NORM2PTR(linearAddr);
 	Mem_Remain -= size;
 	/*zero memory*/
-	for(i = 0; i < size; i ++)
-		*(*pptr + i) = 0; 
+	for(offset = 0; offset < size; offset ++)
+		*(*pptr + offset) = 0; 
 }
 
+/*load a whole file.
+  pBuffer == 0: the file is loaded into newly allocated (paragraph aligned)
+  far heap memory; returns 0 if the file is missing or too big.
+  pBuffer != 0: the file is loaded into pBuffer; returns pBuffer.
+  If IsZFile is set, the file is LZW compressed: its first 4 bytes hold the
+  uncompressed size and decompress() needs a work area (hash table, input
+  buffer) given as a segment located after the destination data*/
 /*C_0903_00DE*/void far *LoadFile(char *fname, void far *pBuffer) {
-	int fh;
+	int fileHandle;
 	unsigned aSegment;
 	void far *pRetBuff;
-	long bp_08;
+	long linearAddr;
 	long fsize;
 
 	if(pBuffer == 0) {
 		/*para align*/
-		bp_08 = PTR2NORM(Mem_BP);
-		if(bp_08 & 0xf) {
-			Mem_Remain -= 0x10 - (bp_08 & 0xf);
-			bp_08 = (bp_08 & ~0xf) + 0x10;
-			Mem_BP = MK_FP(bp_08 >> 4, 0);
+		linearAddr = PTR2NORM(Mem_BP);
+		if(linearAddr & 0xf) {
+			Mem_Remain -= 0x10 - (linearAddr & 0xf);
+			linearAddr = (linearAddr & ~0xf) + 0x10;
+			Mem_BP = MK_FP(linearAddr >> 4, 0);
 		}
 
-		fh = OSI_open(fname);
+		fileHandle = OSI_open(fname);
 		pRetBuff = 0;
-		if(fh >= 0) {
+		if(fileHandle >= 0) {
 			if(IsZFile) {
-				OSI_read(fh, 0, 4, &fsize);
+				/*uncompressed size*/
+				OSI_read(fileHandle, 0, 4, &fsize);
+				/*data + work area (hash table + input buffer)*/
 				if(fsize + 0x3410 <= Mem_Remain) {
 					pRetBuff = Mem_BP;
-					decompress(fh, 0L, Mem_BP, FP_SEG(Mem_BP) + ((fsize + 0xf) >> 4));
+					decompress(fileHandle, 0L, Mem_BP, FP_SEG(Mem_BP) + ((fsize + 0xf) >> 4));
 				}
 			} else {
-				fsize = OSI_fileSize(fh);
+				fsize = OSI_fileSize(fileHandle);
 				if(fsize <= Mem_Remain) {
 					pRetBuff = Mem_BP;
-					OSI_read(fh, 0, fsize, Mem_BP);
+					OSI_read(fileHandle, 0, fsize, Mem_BP);
 				}
 			}
-			bp_08 += fsize;
-			Mem_BP = NORM2PTR(bp_08);
+			/*note: memory is consumed even when the file did not fit*/
+			linearAddr += fsize;
+			Mem_BP = NORM2PTR(linearAddr);
 			Mem_Remain -= fsize;
-			OSI_close(fh);
+			OSI_close(fileHandle);
 		}
 
 		return pRetBuff;
@@ -111,241 +143,281 @@ char D_01D9[] = "naxyrzi";
 
 	if(IsZFile) {
 		pRetBuff = pBuffer;
-		fh = OSI_open(fname);
-		if(fh >= 0) {
-			OSI_read(fh, 0, 4, &fsize);
+		fileHandle = OSI_open(fname);
+		if(fileHandle >= 0) {
+			OSI_read(fileHandle, 0, 4, &fsize);
+			/*work area: right after the data when loading into
+			  ScratchBuf, else ScratchBuf itself*/
 			if(pBuffer == ScratchBuf) {
 				aSegment = FP_SEG(pBuffer) + ((FP_OFF(pBuffer) + fsize + 0xf) >> 4);
 			} else {
 				aSegment = FP_SEG(ScratchBuf);
 				aSegment += ((FP_OFF(ScratchBuf) + 0xf) >> 4);
 			}
-			decompress(fh, 0L, pBuffer, aSegment);
-			OSI_close(fh);
+			decompress(fileHandle, 0L, pBuffer, aSegment);
+			OSI_close(fileHandle);
 		}
 	} else {
 		pRetBuff = pBuffer;
-		fh = OSI_open(fname);
-		OSI_read(fh, 0, OSI_fileSize(fh), pBuffer);
-		OSI_close(fh);
+		fileHandle = OSI_open(fname);
+		OSI_read(fileHandle, 0, OSI_fileSize(fileHandle), pBuffer);
+		OSI_close(fileHandle);
 	}
 
 	return pRetBuff;
 }
 
-/*for graphic driver*/
+/*file loader callback given to the graphic driver (tGr._24):
+  same as the "pBuffer != 0" part of LoadFile, but the file name is a far
+  string (copied locally) and the compression flag is a parameter.
+  Returns nothing (pRetBuff is computed but unused)*/
 /*C_0903_033A*/LoadFileGr(char far *fn, void far *pBuffer, int isZ) {
-	int fh, di;
+	int fileHandle, i;
 	void far *pRetBuff;
 	long fsize;
 	unsigned aSegment;
 	char fname[14];
 
-	for(di = 0; di < 13; di++)
-		fname[di] = fn[di];
+	for(i = 0; i < 13; i++)
+		fname[i] = fn[i];
 	
 	if(isZ) {
 		pRetBuff = pBuffer;
-		fh = OSI_open(fname);
-		if(fh >= 0) {
-			OSI_read(fh, 0, 4, &fsize);
+		fileHandle = OSI_open(fname);
+		if(fileHandle >= 0) {
+			OSI_read(fileHandle, 0, 4, &fsize);
 			if(pBuffer == ScratchBuf) {
 				aSegment = FP_SEG(pBuffer) + ((FP_OFF(pBuffer) + fsize + 0xf) >> 4);
 			} else {
 				aSegment = FP_SEG(ScratchBuf);
 				aSegment += ((FP_OFF(ScratchBuf) + 0xf) >> 4);
 			}
-			decompress(fh, 0L, pBuffer, aSegment);
-			OSI_close(fh);
+			decompress(fileHandle, 0L, pBuffer, aSegment);
+			OSI_close(fileHandle);
 		}
 	} else {
 		pRetBuff = pBuffer;
-		fh = OSI_open(fname);
-		OSI_read(fh, 0, OSI_fileSize(fh), pBuffer);
-		OSI_close(fh);
+		fileHandle = OSI_open(fname);
+		OSI_read(fileHandle, 0, OSI_fileSize(fileHandle), pBuffer);
+		OSI_close(fileHandle);
 	}
 }
 
-/*some OSI_callback handler?*/
-void C_0903_0430() {
-	int si;
-	struct tClipInfo *di;
+/*OSI file error handler (installed in OSI_ErrorHandler by main, see OSI_FILE.ASM).
+  Called by the OSI file functions with OSI_ErrorCode = DOS error code (-1 = fewer
+  bytes read/written than asked) and OSI_ErrorFunc = function (1 open, 2 close,
+  3 create, 4 delete, 5 read, 6 write, 7 rename, 8 copy).
+  Leaving OSI_ErrorCode != 0 makes the operation fail, clearing it means "retry".
+  A short write is reported as "disk full", other errors are displayed and
+  a key is awaited: <CTRL+C>/<ESC> give up, any other key retries.
+  Note: "key" is not initialized on the "silent" and "disk full" paths.*/
+/*C_0903_0430*/void FileErrorHandler() {
+	int key;
+	struct tClipInfo *savedClip;
 
-	if(D_0332 == -1 && D_0334 == 5/*OSI_read*/)
-		if(D_01C6)
+	/*end of file reached: not an error*/
+	if(OSI_ErrorCode == -1 && OSI_ErrorFunc == 5/*OSI_read*/)
+		if(IgnoreShortRead)
 			return;
-	if(D_0332 == 2 && D_0334 == 4/*OSI_delete*/)
+	/*deleting a file that does not exist: not an error*/
+	if(OSI_ErrorCode == 2 && OSI_ErrorFunc == 4/*OSI_delete*/)
 		return;
-	if(D_01D1) {
-		di = D_04DF;
-		CON_setClip(&(D_B6B5[3]));
-		if(D_0332 == -1 && D_0334 == 6/*OSI_write*/) {
+	if(ConsoleReady) {
+		savedClip = CurClip;
+		CON_setClip(&(TextWindows[3]));
+		if(OSI_ErrorCode == -1 && OSI_ErrorFunc == 6/*OSI_write*/) {
 			DISK_full();
 		} else {
-			CON_printf(/*0264*/"DISK ERROR!!!! Function: %d, error: %d, file: ", D_0334, D_0332);
-			CON_printf(D_0336);
+			CON_printf(/*0264*/"DISK ERROR!!!! Function: %d, error: %d, file: ", OSI_ErrorFunc, OSI_ErrorCode);
+			CON_printf(OSI_ErrorFile);
 			CON_printf("\n");
-			while(!(si = C_31FA_000C(1)));
+			/*wait for a key (flushing the keyboard buffer)*/
+			while(!(key = KBD_GetKey(1)));
 		}
-		CON_setClip(di);
+		CON_setClip(savedClip);
 	}
-	if(si != 3 && si != 27)
-		D_0332 = 0;
+	/*not <CTRL+C>/<ESC>: retry*/
+	if(key != 3 && key != 27)
+		OSI_ErrorCode = 0;
 }
 
-static C_0903_04DB() {
-	int si, di;
+/*give all the remaining memory to the graphic driver (which loads its
+  tile graphics there through the callbacks; tGr._20 == 0 means failure),
+  then load the tile animation table "animdata" and the tile/type
+  property tables "tileflag"*/
+/*C_0903_04DB*/static InitGraphicsData() {
+	int animFile, flagFile;
 	unsigned aSegment;
-	long bp_04;
+	long linearAddr;
 
-	bp_04 = PTR2NORM(Mem_BP);
-	if(bp_04 & 0xf) {
-		Mem_Remain -= 0x10 - (bp_04 & 0xf);
-		bp_04 = (bp_04 & ~0xf) + 0x10;
-		Mem_BP = NORM2PTR(bp_04);
+	linearAddr = PTR2NORM(Mem_BP);
+	if(linearAddr & 0xf) {
+		Mem_Remain -= 0x10 - (linearAddr & 0xf);
+		linearAddr = (linearAddr & ~0xf) + 0x10;
+		Mem_BP = NORM2PTR(linearAddr);
 	}
-	aSegment = bp_04 >> 4;
-	DISK_confirm(DISK_4);
-	GR_2A(aSegment, (unsigned)(Mem_Remain >> 4));
-	D_4D48 = D_ECC4->_20;
-	if(D_4D48 == 0) {
+	aSegment = linearAddr >> 4;
+	DISK_confirm(DISK_GAME);
+	GR_INIT_MEMORY(aSegment, (unsigned)(Mem_Remain >> 4));
+	GrMemory = GrInfo->pDriverMem;
+	if(GrMemory == 0) {
 		OSI_delay_clean();
-		GR_03();
+		GR_SHUTDOWN();
 		exit(1);
 	}
-	D_8E4A = FP_SEG(D_4D48) + (((long)D_4D48 & 0xffff) >> 4);/*unused?*/
+	GrMemorySeg = FP_SEG(GrMemory) + (((long)GrMemory & 0xffff) >> 4);/*unused?*/
 
-	DISK_confirm(DISK_4);
-	si = OSI_open(/*0295*/"animdata");
-	OSI_read(si, 0, 2, &NumAnimData);
-	OSI_read(si, -1, MAX_ANIM * sizeof(int), D_67E4);
-	OSI_read(si, -1, MAX_ANIM * sizeof(int), D_9DF5);
-	OSI_read(si, -1, MAX_ANIM, D_9495);/*anim tile mask*/
-	OSI_read(si, -1, MAX_ANIM, D_B3F7);/*anim tile shift*/
-	OSI_close(si);
+	/*animated tiles: count, tile number, first frame, frame mask, shift*/
+	DISK_confirm(DISK_GAME);
+	animFile = OSI_open(/*0295*/"animdata");
+	OSI_read(animFile, 0, 2, &NumAnimData);
+	OSI_read(animFile, -1, MAX_ANIM * sizeof(int), AnimTile);
+	OSI_read(animFile, -1, MAX_ANIM * sizeof(int), AnimFirstFrame);
+	OSI_read(animFile, -1, MAX_ANIM, AnimFrameMask);/*anim tile mask*/
+	OSI_read(animFile, -1, MAX_ANIM, AnimFrameShift);/*anim tile shift*/
+	OSI_close(animFile);
 
-	DISK_confirm(DISK_4);
-	di = OSI_open(/*029E*/"tileflag");
-	OSI_read(di, 0, 0x800, TerrainType);
-	OSI_read(di, -1, 0x800, TileFlag);
-	OSI_read(di, -1, 0x400, TypeWeight);
-	OSI_read(di, -1, 0x800, D_B3EF);
-	OSI_close(di);
+	/*0x800 tiles terrain flags, 0x800 tiles flags, 0x400 types weight,
+	  0x800 tiles flags #2*/
+	DISK_confirm(DISK_GAME);
+	flagFile = OSI_open(/*029E*/"tileflag");
+	OSI_read(flagFile, 0, 0x800, TerrainType);
+	OSI_read(flagFile, -1, 0x800, TileFlag);
+	OSI_read(flagFile, -1, 0x400, TypeWeight);
+	OSI_read(flagFile, -1, 0x800, TileFlag2);
+	OSI_close(flagFile);
 }
 
-/*display "paper.bmp"*/
-C_0903_070B() {
-	int si;
-	struct tPixmap far *bp_04;
+/*display the main screen background "paper.bmp" (decompressed into the
+  free far memory, which is not reserved)*/
+/*C_0903_070B*/ShowMainScreen() {
+	int fileHandle;
+	struct tPixmap far *pixmap;
 
-	DISK_confirm(DISK_4);
-	bp_04 = Mem_BP;
-	si = OSI_open(D_0198[0]);
-	if(si < 0)
+	DISK_confirm(DISK_GAME);
+	pixmap = Mem_BP;
+	fileHandle = OSI_open(BitmapFiles[0]);
+	if(fileHandle < 0)
 		return;
-	decompress(si, 0L, bp_04, FP_SEG(bp_04) + (FP_OFF(bp_04) >> 4) + (0xfa20 >> 4));
-	OSI_close(si);
-	GR_18(bp_04, 0, 0);
+	/*work area after the 4 bytes header + 320x200 pixels*/
+	decompress(fileHandle, 0L, pixmap, FP_SEG(pixmap) + (FP_OFF(pixmap) >> 4) + (0xfa20 >> 4));
+	OSI_close(fileHandle);
+	GR_DRAW_PIXMAP(pixmap, 0, 0);
 }
 
-/*palette related*/
-C_0903_0776() {
-	union REGS bp_18;
-	struct SREGS bp_08;
+/*VGA only: send the whole 256 colors palette VGAPalette to the DAC
+  (BIOS int 10h/1012h); also bound to <ALT+P>*/
+/*C_0903_0776*/SetVGAPalette() {
+	union REGS regs;
+	struct SREGS sregs;
 
-	if(D_01C8 != 0)
+	if(GrAdapter != 0)
 		return;
-	bp_18.x.ax = 0x1012;
-	bp_18.x.bx = 0;
-	bp_18.x.cx = 0x100;
-	bp_18.x.dx = FP_OFF(D_8C2C);
-	segread(&bp_08);
-	bp_08.es = FP_SEG(D_8C2C);
-	int86x(0x10, &bp_18, &bp_18, &bp_08);
+	regs.x.ax = 0x1012;
+	regs.x.bx = 0;
+	regs.x.cx = 0x100;
+	regs.x.dx = FP_OFF(VGAPalette);
+	segread(&sregs);
+	sregs.es = FP_SEG(VGAPalette);
+	int86x(0x10, &regs, &regs, &sregs);
 }
 
-C_0903_07C4() {
-	int si;
+/*load and set the palette ("u6pal" for VGA, by the driver otherwise)*/
+/*C_0903_07C4*/LoadPalette() {
+	int fileHandle;
 
-	if(D_01C8 == 0) {
-		__MemAlloc(&D_8C2C, 0x100 * 3);
-		DISK_confirm(DISK_4);
-		si = OSI_open(/*02A7*/"u6pal");
-		OSI_read(si, 0, 0x100 * 3, D_8C2C);
-		OSI_close(si);
-		C_0903_0776();
+	if(GrAdapter == 0) {
+		__MemAlloc(&VGAPalette, 0x100 * 3);
+		DISK_confirm(DISK_GAME);
+		fileHandle = OSI_open(/*02A7*/"u6pal");
+		OSI_read(fileHandle, 0, 0x100 * 3, VGAPalette);
+		OSI_close(fileHandle);
+		SetVGAPalette();
 	} else {
-		GR_24();
+		GR_INIT_PALETTE();
 	}
 }
 
-/*fire/water*/
+/*palette cycling for fire/water/lava colors (not while time is stopped).
+  VGA: color 0xff pulses in grey levels 12..19, colors 0xe0-0xe7 and
+  0xe8-0xef rotate by one step per call, colors 0xf0-0xf3, 0xf4-0xf7 and
+  0xf8-0xfb every second call (values taken from the VGAPalette palette).
+  Other adapters: done by the graphic driver*/
 /*C_0903_0820*/PaletteAnimation() {
-	int si;
-	union REGS bp_12;
-	int bp_02;
+	int rgb;
+	union REGS regs;
+	int step;
 
 	if(SpellFx[14] != 0)
 		return;
-	if(D_01C8 == 0) {
-		bp_02 = (D_01D2 ++) & 0xf;
-		if(bp_02 > 7)
-			bp_02 = 0xf - bp_02;
-		bp_02 += 0xc;
-		bp_12.x.ax = 0x1010;
-		bp_12.x.bx = 0xff;
-		bp_12.h.dh = 
-		bp_12.h.ch = 
-		bp_12.h.cl = bp_02;
-		int86(0x10, &bp_12, &bp_12);
-		for(bp_02 = 0; bp_02 < 8; bp_02 ++) {
-			outportb(0x3c8, ((D_01D2 - bp_02) & 7) + 0xe0);
-			for(si = 0; si < 3; si ++)
-				outportb(0x3c9, D_8C2C[0xe7 - bp_02].content[si]);
+	if(GrAdapter == 0) {
+		/*triangle wave 0..7..0 -> grey level 12..19*/
+		step = (PaletteCycle ++) & 0xf;
+		if(step > 7)
+			step = 0xf - step;
+		step += 0xc;
+		/*BIOS: set DAC register bx to (dh,ch,cl)*/
+		regs.x.ax = 0x1010;
+		regs.x.bx = 0xff;
+		regs.h.dh = 
+		regs.h.ch = 
+		regs.h.cl = step;
+		int86(0x10, &regs, &regs);
+		/*0x3c8: DAC write index, 0x3c9: r,g,b*/
+		for(step = 0; step < 8; step ++) {
+			outportb(0x3c8, ((PaletteCycle - step) & 7) + 0xe0);
+			for(rgb = 0; rgb < 3; rgb ++)
+				outportb(0x3c9, VGAPalette[0xe7 - step].content[rgb]);
 
-			outportb(0x3c8, ((D_01D2 - bp_02) & 7) + 0xe8);
-			for(si = 0; si < 3; si ++)
-				outportb(0x3c9, D_8C2C[0xef - bp_02].content[si]);
+			outportb(0x3c8, ((PaletteCycle - step) & 7) + 0xe8);
+			for(rgb = 0; rgb < 3; rgb ++)
+				outportb(0x3c9, VGAPalette[0xef - step].content[rgb]);
 		}
-		for(bp_02 = 0; bp_02 < 4; bp_02 ++) {
-			outportb(0x3c8, (((D_01D2 >> 1) - bp_02) & 3) + 0xf0);
-			for(si = 0; si < 3; si ++)
-				outportb(0x3c9, D_8C2C[0xf3 - bp_02].content[si]);
+		for(step = 0; step < 4; step ++) {
+			outportb(0x3c8, (((PaletteCycle >> 1) - step) & 3) + 0xf0);
+			for(rgb = 0; rgb < 3; rgb ++)
+				outportb(0x3c9, VGAPalette[0xf3 - step].content[rgb]);
 
-			outportb(0x3c8, (((D_01D2 >> 1) - bp_02) & 3) + 0xf4);
-			for(si = 0; si < 3; si ++)
-				outportb(0x3c9, D_8C2C[0xf7 - bp_02].content[si]);
+			outportb(0x3c8, (((PaletteCycle >> 1) - step) & 3) + 0xf4);
+			for(rgb = 0; rgb < 3; rgb ++)
+				outportb(0x3c9, VGAPalette[0xf7 - step].content[rgb]);
 
-			outportb(0x3c8, (((D_01D2 >> 1) - bp_02) & 3) + 0xf8);
-			for(si = 0; si < 3; si ++)
-				outportb(0x3c9, D_8C2C[0xfb - bp_02].content[si]);
+			outportb(0x3c8, (((PaletteCycle >> 1) - step) & 3) + 0xf8);
+			for(rgb = 0; rgb < 3; rgb ++)
+				outportb(0x3c9, VGAPalette[0xfb - step].content[rgb]);
 		}
 	} else {
-		GR_27((unsigned char)(D_01D2 ++));
+		GR_CYCLE_PALETTE((unsigned char)(PaletteCycle ++));
 	}
 }
 
-/*create param string*/
-C_0903_09BB(char *si/*bp06*/) {
-	*(si++) = D_01D3[D_01C8];
-	*(si++) = MouseOn?'M':'K';
-	*(si++) = D_01D9[D_01CA];
-	if(D_01CA == 1 || D_01CA == 2) {
-		*(si++) = (D_01CC >> 8) + '0';
-		*(si++) = ((D_01CC >> 4) & 0xf) + '0';
-		*(si++) = (D_01CC & 0xf) + '0';
+/*build the configuration string given to END.EXE/ULTIMA6.EXE
+  (same format as CONFIG.U6): adapter letter, 'M'ouse/'K'eyboard, music
+  letter and, for AdLib/CMS, the 3 digits i/o port (digits above 9 would
+  not come out as hex)*/
+/*C_0903_09BB*/BuildConfigString(char *dst/*bp06*/) {
+	*(dst++) = GrAdapterLetters[GrAdapter];
+	*(dst++) = MouseOn?'M':'K';
+	*(dst++) = MusicAdapterLetters[MusicAdapter];
+	if(MusicAdapter == 1 || MusicAdapter == 2) {
+		*(dst++) = (MusicPort >> 8) + '0';
+		*(dst++) = ((MusicPort >> 4) & 0xf) + '0';
+		*(dst++) = (MusicPort & 0xf) + '0';
 	}
-	*si = 0;
+	*dst = 0;
 }
 
-/*go to ending?*/
-C_0903_0A1E() {
+/*the Codex has vanished: launch the endgame END.EXE with the time spent
+  in Britannia since 4/7/161 (years, months, days) - never returns*/
+/*C_0903_0A1E*/LaunchEndGame() {
 	char param_str[8],y_str[6],m_str[6],d_str[6];
 	int years,monthes,days;
 
 	years = Date_Y - 161;
 	monthes = Date_M - 7;
 	days = Date_D - 4;
+	/*bug: should test and fix "days" (Date_D is unsigned, so this never
+	  happens and "days" may be negative); also months wrap at 12, not 13*/
 	if(Date_D < 0/*should be "days"?bug?*/) {
 		Date_D += 28;
 		monthes --;
@@ -354,68 +426,73 @@ C_0903_0A1E() {
 		monthes += 13;
 		years --;
 	}
-	CON_atoi(years, y_str, 5, 10);
-	CON_atoi(monthes, m_str, 5, 10);
-	CON_atoi(days, d_str, 5, 10);
-	DISK_confirm(DISK_3);
-	MUS_091A(0);
+	CON_itoa(years, y_str, 5, 10);
+	CON_itoa(monthes, m_str, 5, 10);
+	CON_itoa(days, d_str, 5, 10);
+	DISK_confirm(DISK_ENDGAME);
+	MUS_PlaySong(0);
 	OSI_delay_clean();
-	GR_03();
-	C_0903_09BB(param_str);
+	GR_SHUTDOWN();
+	BuildConfigString(param_str);
 	do {
 		execl(/*02AD*/"end.exe", /*02AD*/"end.exe", param_str, y_str, m_str, d_str, 0);
 	} while(1);
 }
 
-/*parse music i/o port?*/
-char *C_0903_0AE6(unsigned char *di/*bp06*/) {
-	int si;
+/*parse an hexadecimal music i/o port (e.g. "A388") into MusicPort;
+  returns the pointer to the first non hex digit*/
+/*C_0903_0AE6*/char *ParseHexPort(unsigned char *str/*bp06*/) {
+	int ch;
 
-	for(D_01CC = 0; ((si = toupper(*di)) >= '0' && si <= '9') || (si >= 'A' && si <='F'); di ++) {
-		D_01CC <<= 4;
-		if(si >= '0' && si <= '9')
-			D_01CC += si - '0';
+	for(MusicPort = 0; ((ch = toupper(*str)) >= '0' && ch <= '9') || (ch >= 'A' && ch <='F'); str ++) {
+		MusicPort <<= 4;
+		if(ch >= '0' && ch <= '9')
+			MusicPort += ch - '0';
 		else
-			D_01CC += si - 'A' + 10;
+			MusicPort += ch - 'A' + 10;
 	}
-	return di;
+	return str;
 }
 
-/*C_0903_0B46*/cfg_parse(unsigned char *si/*bp06*/) {
-	while(*si) {
-		switch(toupper(*si++)) {
-			case '$': D_01CE = 1; break;
-			case 'V': D_01C8 = 0; break;
-			case 'E': D_01C8 = 1; break;
-			case 'T': D_01C8 = 2; break;
-			case 'C': D_01C8 = 3; break;
-			case 'H': D_01C8 = 4; break;
+/*parse a configuration string (CONFIG.U6 or a command line argument):
+  V/E/T/C/H graphic adapter, M/K mouse or keyboard, N/A/X/Y/R/Z/I music
+  adapter (A, X, Z, I may be followed by an hex i/o port), '$' see GrDriverOption*/
+/*C_0903_0B46*/cfg_parse(unsigned char *str/*bp06*/) {
+	while(*str) {
+		switch(toupper(*str++)) {
+			case '$': GrDriverOption = 1; break;
+			case 'V': GrAdapter = 0; break;
+			case 'E': GrAdapter = 1; break;
+			case 'T': GrAdapter = 2; break;
+			case 'C': GrAdapter = 3; break;
+			case 'H': GrAdapter = 4; break;
 			case 'M': MouseOn = 1; break;
 			case 'K': MouseOn = 0; break;
-			case 'N': D_01CA = 0; break;
-			case 'A': D_01CA = 1; D_01CC = 0x388;
-				if(*si == '3' || *si == '2')
-					si = C_0903_0AE6(si);
+			case 'N': MusicAdapter = 0; break;
+			case 'A': MusicAdapter = 1; MusicPort = 0x388;
+				if(*str == '3' || *str == '2')
+					str = ParseHexPort(str);
 			break;
-			case 'X': D_01CA = 2; D_01CC = 0x220;
-				if(*si == '2')
-					si = C_0903_0AE6(si);
+			case 'X': MusicAdapter = 2; MusicPort = 0x220;
+				if(*str == '2')
+					str = ParseHexPort(str);
 			break;
-			case 'Y': D_01CA = 3; break;
-			case 'R': D_01CA = 4; break;
-			case 'Z': D_01CA = 5; D_01CC = 0x220;
-				if(*si == '2')
-					si = C_0903_0AE6(si);
+			case 'Y': MusicAdapter = 3; break;
+			case 'R': MusicAdapter = 4; break;
+			case 'Z': MusicAdapter = 5; MusicPort = 0x220;
+				if(*str == '2')
+					str = ParseHexPort(str);
 			break;
-			case 'I': D_01CA = 6; D_01CC = 0x280;
-				if(*si == '2')
-					si = C_0903_0AE6(si);
+			case 'I': MusicAdapter = 6; MusicPort = 0x280;
+				if(*str == '2')
+					str = ParseHexPort(str);
 			break;
 		}
 	}
 }
 
-char *D_01E1[] = {
+/*mouse pointer shapes, by graphic adapter*/
+/*01E1*/char *PointerFiles[] = {
 	/*02B5*/"u6mcga.ptr",
 	/*02C0*/"u6curs.ega",
 	/*02CB*/"u6curs.tga",
@@ -423,144 +500,157 @@ char *D_01E1[] = {
 	/*02D6*/"u6curs.cga"
 };
 
+/*program entry: initialization, game loop, exit*/
 /*C_0903_0C5E*/cdecl main(int argc, char **argv) {
-	int si, di;
-	char bp_0a[7];
-	int bp_02;
+	int i, fileHandle;
+	char cfgString[7];
+	int hercRow;
 
-	OSI_randomize(C_33CA_000E());
-	/*config*/
-	di = OSI_open(/*02E1*/"config.u6");
-	if(di >= 0) {
-		OSI_read(di, 0, 6, bp_0a);
-		bp_0a[6] = 0;
-		cfg_parse(bp_0a);
-		OSI_close(di);
+	/*seed the random generator from the time of day*/
+	OSI_randomize(OSI_timeSeed());
+	/*config: CONFIG.U6 (6 characters) then the command line arguments*/
+	fileHandle = OSI_open(/*02E1*/"config.u6");
+	if(fileHandle >= 0) {
+		OSI_read(fileHandle, 0, 6, cfgString);
+		cfgString[6] = 0;
+		cfg_parse(cfgString);
+		OSI_close(fileHandle);
 	}
-	for(si = 1; si < argc; si ++)
-		cfg_parse(argv[si]);
-	/*memory*/
-	D_B41B = farcoreleft();
-	D_B3F3 = farmalloc(D_B41B);
-	if(!D_B3F3)
+	for(i = 1; i < argc; i ++)
+		cfg_parse(argv[i]);
+	/*memory: take the whole far heap, __MemAlloc() hands it out*/
+	FarHeapSize = farcoreleft();
+	FarHeap = farmalloc(FarHeapSize);
+	if(!FarHeap)
 		goto c_12ef;
-	Mem_BP = D_B3F3;
-	Mem_Remain = D_B41B;
+	Mem_BP = FarHeap;
+	Mem_Remain = FarHeapSize;
 
 	DISK_init();
-	C_3368_0002();/*init LOW?*/
+	OSI_lowInit();/*init LOW?*/
 	OSI_delay_init();
-	D_032E.f = C_0903_0430;
+	/*install the file error handler*/
+	OSI_ErrorHandler.f = FileErrorHandler;
+	/*the surfaces (scanline offset tables) are only used by the mouse code:
+	  Screen = the 320x200 screen, MapSurface = the 160x160 map view*/
 	if(MouseOn) {
-		Screen.pScanlines = D_4D54;
+		Screen.pScanlines = ScreenScanlines;
 		Screen.left = 0;
 		Screen.right = 319;
 		Screen.top = 0;
 		Screen.bottom = 199;
 
-		D_9E3D.pScanlines = D_9E4B;
-		D_9E3D.left = 0;
-		D_9E3D.right = 159;
-		D_9E3D.top = 0;
-		D_9E3D.bottom = 159;
+		MapSurface.pScanlines = MapScanlines;
+		MapSurface.left = 0;
+		MapSurface.right = 159;
+		MapSurface.top = 0;
+		MapSurface.bottom = 159;
 
-		if(D_01C8 == 0) {/*VGA*/
+		if(GrAdapter == 0) {/*VGA*/
 			Screen.segment = 0xa000;
-			D_4D54[0] = 0;
-			for(si = 1; si < 200; si++)
-				D_4D54[si] = D_4D54[si - 1] + 0x140;
+			ScreenScanlines[0] = 0;
+			for(i = 1; i < 200; i++)
+				ScreenScanlines[i] = ScreenScanlines[i - 1] + 0x140;
 		} else
-		if(D_01C8 == 1) {/*EGA*/
+		if(GrAdapter == 1) {/*EGA*/
 			Screen.segment = 0xa000;
-			D_4D54[0] = 0;
-			for(si = 1; si < 200; si++)
-				D_4D54[si] = D_4D54[si - 1] + 40;
-			Screen.pScanlines = D_4D54;
-			D_9E4B[0] = 0x141;
-			for(si = 1; si < 176; si++)
-				D_9E4B[si] = D_9E4B[si - 1] + 40;
-			D_9E3D.segment = 0xa200;
+			ScreenScanlines[0] = 0;
+			for(i = 1; i < 200; i++)
+				ScreenScanlines[i] = ScreenScanlines[i - 1] + 40;
+			Screen.pScanlines = ScreenScanlines;
+			MapScanlines[0] = 0x141;
+			for(i = 1; i < 176; i++)
+				MapScanlines[i] = MapScanlines[i - 1] + 40;
+			MapSurface.segment = 0xa200;
 		} else
-		if(D_01C8 == 2) {/*TANDY*/
+		if(GrAdapter == 2) {/*TANDY*/
 			Screen.segment = 0xb800;
-			D_4D54[0] = 0;
-			D_4D54[1] = 0x2000;
-			D_4D54[2] = 0x4000;
-			D_4D54[3] = 0x6000;
-			for(si = 4; si < 200; si++)
-				D_4D54[si] = D_4D54[si - 4] + 0xa0;
-			Screen.pScanlines = D_4D54;
+			ScreenScanlines[0] = 0;
+			ScreenScanlines[1] = 0x2000;
+			ScreenScanlines[2] = 0x4000;
+			ScreenScanlines[3] = 0x6000;
+			for(i = 4; i < 200; i++)
+				ScreenScanlines[i] = ScreenScanlines[i - 4] + 0xa0;
+			Screen.pScanlines = ScreenScanlines;
 		} else
-		if(D_01C8 == 3) {/*CGA*/
+		if(GrAdapter == 3) {/*CGA*/
 			Screen.segment = 0xb800;
-			D_4D54[0] = 0;
-			D_4D54[1] = 0x2000;
-			for(si = 2; si < 200; si++)
-				D_4D54[si] = D_4D54[si - 2] + 80;
-			Screen.pScanlines = D_4D54;
+			ScreenScanlines[0] = 0;
+			ScreenScanlines[1] = 0x2000;
+			for(i = 2; i < 200; i++)
+				ScreenScanlines[i] = ScreenScanlines[i - 2] + 80;
+			Screen.pScanlines = ScreenScanlines;
 		} else
-		if(D_01C8 == 4) {/*HERCULES*/
+		if(GrAdapter == 4) {/*HERCULES*/
 			Screen.segment = 0xb000;
-			for(si = 0; si < 200; si++) {
-				bp_02 = (si * 3 >> 1) + 0xf;
-				D_4D54[si] = ((bp_02 & 3) << 13) + (bp_02 >> 2) * 90 + 5;
+			/*200 lines stretched to 300 (x1.5), 4 interleaved banks
+			  of 90 bytes per line*/
+			for(i = 0; i < 200; i++) {
+				hercRow = (i * 3 >> 1) + 0xf;
+				ScreenScanlines[i] = ((hercRow & 3) << 13) + (hercRow >> 2) * 90 + 5;
 			}
-			Screen.pScanlines = D_4D54;
+			Screen.pScanlines = ScreenScanlines;
 		}
-		__MemAlloc(&Mouse.f_10, 0x400);
-		__MemAlloc(&D_B623, 0x800);
-		DISK_confirm(DISK_4);
-		di = OSI_open(D_01E1[D_01C8]);
-		if(di >= 0) {
-			decompress(di, 0L, D_B623, FP_SEG(Mem_BP) + 1);
-			OSI_close(di);
+		/*background save area and pointer shapes*/
+		__MemAlloc(&Mouse.saveBuf, 0x400);
+		__MemAlloc(&PointerShapes, 0x800);
+		DISK_confirm(DISK_GAME);
+		fileHandle = OSI_open(PointerFiles[GrAdapter]);
+		if(fileHandle >= 0) {
+			decompress(fileHandle, 0L, PointerShapes, FP_SEG(Mem_BP) + 1);
+			OSI_close(fileHandle);
 		}
-		Mouse.f_08 = D_B623;
-		Mouse.f_0e = &Screen;
-		MOUSE_0000(&Mouse);
-		Mouse.f_14 = C_0C9C_01FB;
-		MOUSE_POINTER(D_B623, 0);
+		Mouse.shapes = PointerShapes;
+		Mouse.surface = &Screen;
+		MOUSE_INIT(&Mouse);
+		Mouse.onMove = CON_UpdateMousePointer;
+		MOUSE_POINTER(PointerShapes, 0);
 	}
-	C_2FC1_000A(D_01C8);/*init gr*/
-	MUS_0A3A(D_01CA, D_01CC);/*init music*/
-	C_0903_07C4();
-	DISK_confirm(DISK_4);
-	D_ECC4->_06 = LoadFile(/*02EB*/"U6.CH", 0L);
-	D_01D1 = 1;
-	CON_createClip(&(D_B6B5[0]), 0, 0, 39, 24);
-	C_0903_070B();
-	CON_createClip(&(D_B6B5[1]), 22,  1, 38, 12);
-	CON_createClip(&(D_B6B5[3]), 22, 14, 38, 23);
-	CON_setClip(&(D_B6B5[3]));
-	D_04DF->_attr |= 1;
-	D_04DF->_attr |= 0x20;
-	D_04DF->_attr |= 4;
+	InitGraphicsDriver(GrAdapter);/*init gr*/
+	MUS_InitDriver(MusicAdapter, MusicPort);/*init music*/
+	LoadPalette();
+	DISK_confirm(DISK_GAME);
+	/*font*/
+	GrInfo->font = LoadFile(/*02EB*/"U6.CH", 0L);
+	ConsoleReady = 1;
+	/*text windows: [0] whole screen, [1] status area, [3] message area*/
+	CON_createClip(&(TextWindows[0]), 0, 0, 39, 24);
+	ShowMainScreen();
+	CON_createClip(&(TextWindows[1]), 22,  1, 38, 12);
+	CON_createClip(&(TextWindows[3]), 22, 14, 38, 23);
+	CON_setClip(&(TextWindows[3]));
+	/*message area: word wrap, scroll, capitalize*/
+	CurClip->attrFlags |= 1;
+	CurClip->attrFlags |= 0x20;
+	CurClip->attrFlags |= 4;
 
 	__MemAlloc(&TerrainType, 0x800);
 	__MemAlloc(&TileFlag, 0x800);
 	__MemAlloc(&BaseTile, 0x800);
 	__MemAlloc(&TypeWeight, 0x400);
-	__MemAlloc(&D_B3EF, 0x800);
+	__MemAlloc(&TileFlag2, 0x800);
 
+	/*ScratchBuf is also the 176x176 (0x7900 bytes) map view back buffer:
+	  MapScanlines gives the offsets of its 160x160 inner part (8 pixels border)*/
 	__MemAlloc(&ScratchBuf, 0x7900);
-	D_ECC4->_1c = ScratchBuf;
-	if(D_01C8 == 0) {/*VGA*/
-		D_9E3D.segment = FP_SEG(ScratchBuf);
-		D_9E4B[0] = FP_OFF(ScratchBuf) + 0x588;
-		for(si = 1; si < 0xa0; si++)
-			D_9E4B[si] = D_9E4B[si - 1] + 0xb0;
+	GrInfo->pWorkBuf = ScratchBuf;
+	if(GrAdapter == 0) {/*VGA*/
+		MapSurface.segment = FP_SEG(ScratchBuf);
+		MapScanlines[0] = FP_OFF(ScratchBuf) + 0x588;
+		for(i = 1; i < 0xa0; i++)
+			MapScanlines[i] = MapScanlines[i - 1] + 0xb0;
 	} else
-	if(D_01C8 == 2) {/*TANDY*/
-		D_9E3D.segment = FP_SEG(ScratchBuf);
-		D_9E4B[0] = FP_OFF(ScratchBuf) + 0x404;
-		for(si = 1; si < 0xa0; si++)
-			D_9E4B[si] = D_9E4B[si - 1] + 0x80;
+	if(GrAdapter == 2) {/*TANDY*/
+		MapSurface.segment = FP_SEG(ScratchBuf);
+		MapScanlines[0] = FP_OFF(ScratchBuf) + 0x404;
+		for(i = 1; i < 0xa0; i++)
+			MapScanlines[i] = MapScanlines[i - 1] + 0x80;
 	} else
-	if(D_01C8 == 3 || D_01C8 == 4) {/*CGA/HERCULES*/
-		D_9E3D.segment = FP_SEG(ScratchBuf);
-		D_9E4B[0] = FP_OFF(ScratchBuf) + 0x282;
-		for(si = 1; si < 0xa0; si++)
-			D_9E4B[si] = D_9E4B[si - 1] + 0x50;
+	if(GrAdapter == 3 || GrAdapter == 4) {/*CGA/HERCULES*/
+		MapSurface.segment = FP_SEG(ScratchBuf);
+		MapScanlines[0] = FP_OFF(ScratchBuf) + 0x282;
+		for(i = 1; i < 0xa0; i++)
+			MapScanlines[i] = MapScanlines[i - 1] + 0x50;
 	}
 
 	__MemAlloc(&Schedule, 600 * sizeof(struct tSchedule));
@@ -571,57 +661,61 @@ char *D_01E1[] = {
 	__MemAlloc(&NPCFlag, 0x100);
 	__MemAlloc(&OrigShapeType, 0x100 * sizeof(int));
 	__MemAlloc(&Level, 0x100);
-	__MemAlloc(&D_8C42, 0x100);
-	__MemAlloc(&D_B7A4, 0x600);
+	__MemAlloc(&PathData, 0x100);
+	__MemAlloc(&ChunkIndexBuf, 0x600);
 
 	__MemAlloc(&TalkBuf, 0x2800);
 
-	C_1184_3B1D();
+	OBJ_InitLists();
 
-	C_0903_04DB();
+	InitGraphicsData();
 
-	/*draw icons*/
-	for(si = 0; si < 9; si ++)
-		GR_2D(TIL_190 + si, TIL2SCR(si) + 8, 176);
-	GR_2D(TIL_19E, 152, 176);
+	/*draw the command icons and the combat mode icon*/
+	for(i = 0; i < 9; i ++)
+		GR_PUT_TILE_SCREEN(TIL_BUTTON_ATTACK + i, TIL2SCR(i) + 8, 176);
+	GR_PUT_TILE_SCREEN(TIL_BUTTON_COMBAT_OFF, 152, 176);
 	/* */
-	D_2FFC = 1;
-	C_101C_052D();
-	C_0C9C_042A();/*load game?*/
-	for(si = 0; si < NumAnimData; si ++)
-		GR_4B(D_67E4[si], D_9DF5[si]);
+	OSI_Started = 1;/*never read*/
+	MAP_InitChunkCache();/*empty the map chunk cache*/
+	GAME_Load();/*load game?*/
+	/*set every animated tile to its first frame*/
+	for(i = 0; i < NumAnimData; i ++)
+		GR_SET_ANIM_FRAME(AnimTile[i], AnimFirstFrame[i]);
 
-	if(D_2CCB == 0) {
+	/*no character in the saved game: go back to ULTIMA6.EXE*/
+	if(AvatarPortrait == 0) {
 		CON_printf(/*02F1*/"You must first create or transfer a character. ");
-		D_049C = 0;
+		AnimateAtPrompt = 0;
 		CON_getch();
-		DISK_confirm(DISK_1);
+		DISK_confirm(DISK_PROGRAM);
 		OSI_delay_clean();
-		GR_03();
-		C_0903_09BB(bp_0a);
+		GR_SHUTDOWN();
+		BuildConfigString(cfgString);
 		while(1)
-			execl(/*0321*/"ultima6.exe", /*0321*/"ultima6.exe", bp_0a, 0);
+			execl(/*0321*/"ultima6.exe", /*0321*/"ultima6.exe", cfgString, 0);
 	}
 
-	C_1E0F_512A();
+	InitNPCTracker();
 
-	C_0A33_1355(0);
+	PassTime(0);/*refresh the time dependent state*/
 
 	ShowMouse
 	if(InCombat)
 		COMBAT_begin();
 	else
-		MUS_09A8();/*play a random song?*/
+		MUS_PlayAreaSong();/*play a random song?*/
 
 	/*-- game loop --*/
-	C_0A33_1CB4();
+	GameLoop();
 	/*-- --*/
 
-	MUS_091A(0);
-	C_1184_26E2();
+	/*exit: stop the music, delete the temporary files*/
+	MUS_PlaySong(0);
+	OBJ_DeleteTmpBlocks();
 	OSI_delay_clean();
 
 c_12ef:
-	GR_03();
+	/*restore the video mode*/
+	GR_SHUTDOWN();
 	exit(0);
 }

@@ -5,13 +5,22 @@
  */
 /*
 	Status, equipment, inventory module
+
+	Draws the status panel (top right of the screen, TextWindows[1]):
+	the party list, a character's portrait and statistics, and the
+	equipment/inventory view (8 equipment slots around the character
+	figure, a 4x3 grid of carried objects, scrollable by rows of 4).
+	Also computes carried weights (in tenths of stones) and fills
+	Equipment[] (object in each SLOT_xxx; 1 in SLOT_LHND means "taken by
+	a two-handed weapon"), maps mouse clicks on the panel to Selection,
+	and implements the "Ready" / "Unready" actions.
 */
 #include  "u6.h"
 
-unsigned char D_07CE = 0;
+/*07CE*/unsigned char InvenScroll = 0;
 
-/*display fight mode*/
-static char *D_07CF[] = {
+/*display fight mode (indexed by NPCComMode - AI_COMMAND)*/
+/*07CF*/static char *ComModeNames[] = {
 	/*0831*/"COMMAND",
 	/*0839*/"FRONT",
 	/*083F*/"REAR",
@@ -21,77 +30,82 @@ static char *D_07CF[] = {
 	/*085A*/"ASSAULT"
 };
 
-/*display party info*/
-C_155D_000C(int index) {
+/*display party info: up to 5 members starting with party index
+  "first" (picture, hit points, name), with scroll arrows*/
+/*C_155D_000C*/STAT_ShowParty(int first) {
 	int i;
-	int bp_08, bp_06, bp_04, bp_02;
+	int mouseState, tile, objTyp, objNum;
 
-	bp_08 = CON_mouseOffAt(176, 6, 311, 103);
-	GR_06(D_2A54);
-	GR_12(168, 6, 312, 103);
-	C_2FC1_19C5();
-	CON_setClip(&D_B6B5[0]);
+	mouseState = CON_mouseOffAt(176, 6, 311, 103);
+	GR_SET_COLOR(ColorPaper);
+	GR_FILL_RECT(168, 6, 312, 103);
+	DrawSkyBar();
+	CON_setClip(&TextWindows[0]);
 	/*up arrow*/
-	if(index) {
+	if(first) {
 		CON_gotoxy(21, 3);
 		CON_putch(0x18);
 	}
 	/*down arrow*/
-	if(index < 16 && PartySize > index + 5) {
+	if(first < 16 && PartySize > first + 5) {
 		CON_gotoxy(21, 12);
 		CON_putch(0x19);
 	}
-	CON_setClip(&D_B6B5[1]);
-	for(i = index; i < PartySize && i < index + 5; i ++) {
-		bp_02 = Party[i];
-		bp_04 = OrigShapeType[bp_02] & 0x3ff;
-		bp_06 = OBJ_MakeDirFrame(bp_04, 4) + BaseTile[bp_04];
-		C_0C9C_0E57(bp_06, TIL_19B, 176, TIL2SCR(i - index) + 24);
-		CON_gotoxy(14, ((i - index) << 1) + 2);
-		if(IsPoisoned(bp_02))
-			D_04DF->_fg = D_2A4C;
-		else if(HitPoints[bp_02] < 10)
-			D_04DF->_fg = D_2A4A;
-		CON_printf(/*0862*/"%3d\n", HitPoints[bp_02]);
-		D_04DF->_fg = D_2A56;
-		CON_gotoxy(3, ((i - index) << 1) + 3);
+	CON_setClip(&TextWindows[1]);
+	for(i = first; i < PartySize && i < first + 5; i ++) {
+		objNum = Party[i];
+		/*original (not current) shape, facing south*/
+		objTyp = OrigShapeType[objNum] & 0x3ff;
+		tile = OBJ_MakeDirFrame(objTyp, 4) + BaseTile[objTyp];
+		DrawSlotTile(tile, TIL_SLOT_EMPTY, 176, TIL2SCR(i - first) + 24);
+		CON_gotoxy(14, ((i - first) << 1) + 2);
+		/*hit points: green if poisoned, red if low*/
+		if(IsPoisoned(objNum))
+			CurClip->fgColor = ColorGreen;
+		else if(HitPoints[objNum] < 10)
+			CurClip->fgColor = ColorRed;
+		CON_printf(/*0862*/"%3d\n", HitPoints[objNum]);
+		CurClip->fgColor = ColorText;
+		CON_gotoxy(3, ((i - first) << 1) + 3);
 		CON_printf(/*0867*/"%s\n", Names[i]);
 	}
-	CON_setClip(&D_B6B5[3]);
-	CON_mouseOn(bp_08);
+	CON_setClip(&TextWindows[3]);
+	CON_mouseOn(mouseState);
 }
 
-/*character combat mode*/
+/*character combat mode: (re)print the combat mode of the displayed
+  party member (StatusMember) at the bottom right of the panel*/
 /*C_155D_01BC*/STAT_refreshComMode() {
-	int si, di;
-	int bp_04;
-	struct tClipInfo *bp_02;
+	int objNum, len;
+	int mouseState;
+	struct tClipInfo *savedClip;
 
-	bp_04 = CON_mouseOffAt(176, 6, 311, 103);
-	bp_02 = D_04DF;
-	CON_setClip(&D_B6B5[1]);
-	GR_06(D_2A54);
-	GR_12(256, 96, 311, 103);
-	si = Party[D_04B3];
-	di = strlen(D_07CF[NPCComMode[si] - AI_COMMAND]);
-	CON_gotoxy((8 - di) / 2 + 10, 11);
-	CON_printf(/*086B*/"%s", D_07CF[NPCComMode[si] - AI_COMMAND]);
-	CON_setClip(bp_02);
-	CON_mouseOn(bp_04);
+	mouseState = CON_mouseOffAt(176, 6, 311, 103);
+	savedClip = CurClip;
+	CON_setClip(&TextWindows[1]);
+	GR_SET_COLOR(ColorPaper);
+	GR_FILL_RECT(256, 96, 311, 103);
+	objNum = Party[StatusMember];
+	len = strlen(ComModeNames[NPCComMode[objNum] - AI_COMMAND]);
+	CON_gotoxy((8 - len) / 2 + 10, 11);
+	CON_printf(/*086B*/"%s", ComModeNames[NPCComMode[objNum] - AI_COMMAND]);
+	CON_setClip(savedClip);
+	CON_mouseOn(mouseState);
 }
 
-/*character status view*/
-C_155D_028A(int di/*bp06*/) {
-	int objNum,bp_02;
+/*character status view: portrait, attributes, magic, health,
+  level/experience of party member #partyIdx, and the panel buttons*/
+/*C_155D_028A*/STAT_ShowPortrait(int partyIdx/*bp06*/) {
+	int objNum,mouseState;
 
-	bp_02 = CON_mouseOffAt(176, 6, 311, 103);
-	GR_06(D_2A54);
-	GR_12(168, 6, 312, 103);
-	CON_setClip(&D_B6B5[1]);
-	CON_gotoxy((17 - strlen(Names[di])) / 2, 0);
-	CON_printf(/*0867*/"%s\n", Names[di]);
-	C_2FC1_1C19(Party[di], 176, 16);/*load portrait?*/
-	objNum = Party[di];
+	mouseState = CON_mouseOffAt(176, 6, 311, 103);
+	GR_SET_COLOR(ColorPaper);
+	GR_FILL_RECT(168, 6, 312, 103);
+	CON_setClip(&TextWindows[1]);
+	CON_gotoxy((17 - strlen(Names[partyIdx])) / 2, 0);
+	CON_printf(/*0867*/"%s\n", Names[partyIdx]);
+	DrawPortrait(Party[partyIdx], 176, 16);/*load portrait?*/
+	objNum = Party[partyIdx];
 	CON_gotoxy(10, 2); CON_printf(/*086E*/"STR:%d\n", STREN[objNum]);
 	CON_gotoxy(10, 3); CON_printf(/*0876*/"DEX:%d\n", DEXTE[objNum]);
 	CON_gotoxy(10, 4); CON_printf(/*087E*/"INT:%d\n", INTEL[objNum]);
@@ -100,146 +114,166 @@ C_155D_028A(int di/*bp06*/) {
 	CON_gotoxy(10, 8); CON_printf(/*0894*/"Health");
 	CON_gotoxy(10, 9);
 	if(IsPoisoned(objNum))
-		D_04DF->_fg = D_2A4C;
+		CurClip->fgColor = ColorGreen;
 	else if(HitPoints[objNum] < 10)
-		D_04DF->_fg = D_2A4A;
+		CurClip->fgColor = ColorRed;
 	CON_printf(/*089B*/"%3d", HitPoints[objNum]);
-	D_04DF->_fg = D_2A56;
+	CurClip->fgColor = ColorText;
 	CON_printf(/*088F*/"%/%d", MaxHP(objNum));
 	CON_gotoxy(10, 10); CON_printf(/*089F*/"Lev%/Exp");
 	CON_gotoxy(10, 11); CON_printf(/*08A8*/"%d%/%d", GetLevel(objNum), ExpPoints[objNum]);
-	if(D_04B3 > 0)
-		GR_2D(TIL_183, 176, 88);
-	GR_2D(TIL_180, 192, 88);
-	GR_2D(TIL_182, 208, 88);
-	if(PartySize - 1 > D_04B3)
-		GR_2D(TIL_184, 224, 88);
-	CON_setClip(&D_B6B5[3]);
-	CON_mouseOn(bp_02);
+	if(StatusMember > 0)
+		GR_PUT_TILE_SCREEN(TIL_BUTTON_NEXT_LEFT, 176, 88);
+	GR_PUT_TILE_SCREEN(TIL_BUTTON_PARTY, 192, 88);
+	GR_PUT_TILE_SCREEN(TIL_BUTTON_BAG, 208, 88);
+	if(PartySize - 1 > StatusMember)
+		GR_PUT_TILE_SCREEN(TIL_BUTTON_NEXT_RIGHT, 224, 88);
+	CON_setClip(&TextWindows[3]);
+	CON_mouseOn(mouseState);
 }
 
-int D_07DD[] = {
-	TIL_220,TIL_221,TIL_223,TIL_224,TIL_225,TIL_226,TIL_227,TIL_22A,
-	TIL_22F,TIL_230,TIL_238,TIL_254,TIL_256,TIL_255,TIL_259,TIL_262,
-	TIL_263,TIL_264,TIL_270,TIL_271,TIL_272,TIL_273,TIL_274,TIL_275,
-	TIL_279,TIL_27D,TIL_27E,TIL_27F,TIL_280,TIL_281,TIL_2A2,TIL_2A3,
-	TIL_2B9
+/*tiles of the objects readied in one hand (SLOT_RHND)*/
+/*07DD*/int OneHandedTiles[] = {
+	TIL_SLING,TIL_CLUB,TIL_SPEAR,TIL_THROWING_AXE,TIL_DAGGER,TIL_MACE,TIL_MORNING_STAR,TIL_SWORD,
+	TIL_GLASS_SWORD,TIL_BOOMERANG,TIL_SPELLBOOK,TIL_STAFF,TIL_FIRE_WAND,TIL_LIGHTNING_WAND,TIL_FLASK_OF_OIL,TIL_TORCH,
+	TIL_TORCH_LIT,TIL_ZU_YLEM,TIL_SCYTHE,TIL_PITCHFORK,TIL_RAKE,TIL_PICK,TIL_SHOVEL,TIL_HOE,
+	TIL_ROLLING_PIN,TIL_CLEAVER,TIL_KNIFE,TIL_KNIFE_1,TIL_WINE,TIL_MEAD,TIL_DECORATIVE_SWORD_0,TIL_DECORATIVE_SWORD_1,
+	TIL_LUTE
 };
 
+/*equipment slot an object goes to (by its tile): SLOT_xxx,
+  SLOT_2HND for two-handed weapons, SLOT_RING for rings (either hand),
+  or -1 if it can't be readied*/
 /*C_155D_0516*/STAT_GetEquipSlot(int objNum) {
-	int si, di;
+	int tile, i;
 
-	si = TILE_FRAME(objNum);
-	if(si == TIL_21A || si == TIL_21B)
+	tile = TILE_FRAME(objNum);
+	if(tile == TIL_LEATHER_BOOTS || tile == TIL_SWAMP_BOOTS)
 		return SLOT_FEET;
-	if(si == TIL_258 || (si >= TIL_37D && si <= TIL_37F))
+	if(tile == TIL_RING || (tile >= TIL_PROTECTION_RING && tile <= TIL_INVISIBILITY_RING))
 		return SLOT_RING;
-	if(si == TIL_219 || (si >= TIL_250 && si <= TIL_252) || si == TIL_217 || si == TIL_101)
+	if(tile == TIL_GARGOYLE_BELT || (tile >= TIL_ANKH_AMULET && tile <= TIL_AMULET_OF_SUBMISSION) || tile == TIL_SPIKED_COLLAR || tile == TIL_HIT/*?? (ground tile)*/)
 		return SLOT_NECK;
-	if(si >= TIL_200 && si <= TIL_207)
+	if(tile >= TIL_LEATHER_HELM && tile <= TIL_MAGIC_HELM)
 		return SLOT_HEAD;
-	if((si >= TIL_210 && si <= TIL_216) || si == TIL_218 || si == TIL_219 || si == TIL_28C || si == TIL_28E || si == TIL_29D || si == TIL_257)
+	if((tile >= TIL_CLOTH_ARMOR && tile <= TIL_MAGIC_ARMOR) || tile == TIL_GUILD_BELT ||
+		tile == TIL_GARGOYLE_BELT || tile == TIL_TUNIC || tile == TIL_DRESS || tile == TIL_PANTS ||
+		tile == TIL_STORM_CLOAK)
 		return SLOT_CHST;
-	if(si == TIL_228 || si == TIL_229 || si == TIL_231 || si == TIL_235 || (si >= TIL_22B && si <= TIL_22E))
+	if(tile == TIL_BOW || tile == TIL_CROSSBOW || tile == TIL_TRIPLE_CROSSBOW || tile == TIL_MAGIC_BOW || (tile >= TIL_TWO_HANDED_HAMMER && tile <= TIL_HALBERD))
 		return SLOT_2HND;
-	if((si >= TIL_208 && si <= TIL_20F) || si == TIL_222)
+	if((tile >= TIL_WOODEN_SHIELD && tile <= TIL_MAGIC_SHIELD) || tile == TIL_MAIN_GAUCHE)
 		return SLOT_LHND;
-	for(di = 0; di < 33; di ++)
-		if(D_07DD[di] == si)
+	for(i = 0; i < 33; i ++)
+		if(OneHandedTiles[i] == tile)
 			return SLOT_RHND;
 	return -1;
 }
 
-int D_081F[] = {OBJ_058,OBJ_041,OBJ_042,OBJ_043,OBJ_044,OBJ_045,OBJ_046,OBJ_047,OBJ_048};
+/*types whose TypeWeight is for 10 units (gold coins, reagents)*/
+/*081F*/int WeightPer10Types[] = {OBJ_GOLD,OBJ_BLACK_PEARL,OBJ_BLOOD_MOSS,OBJ_GARLIC,OBJ_GINSENG,OBJ_MANDRAKE,OBJ_NIGHTSHADE,OBJ_SPIDERSILK,OBJ_ASH};
 
-C_155D_063A(int objType) {
-	int si;
+/*is objType one of WeightPer10Types (weight counted per 10 units)?*/
+/*C_155D_063A*/IsWeightPer10Type(int objType) {
+	int i;
 
-	for(si = 0; si < 9; si ++) {
-		if(D_081F[si] == objType)
+	for(i = 0; i < 9; i ++) {
+		if(WeightPer10Types[i] == objType)
 			return 1;
 	}
 	return 0;
 }
 
+/*weight of an object (not of its content), in tenths of stones;
+  a weight of 255 means "immovable" (10000)*/
 /*C_155D_0661*/GetWeight(int objNum) {
-	int si, qty, weight, bp_02;
+	int objTyp, qty, weight, quanType;
 
-	si = GetType(objNum);
-	bp_02 = QuanType(si);
-	if(bp_02 == 4)
+	objTyp = GetType(objNum);
+	quanType = QuanType(objTyp);
+	if(quanType == 4)
+		/*quantity on 16 bits*/
 		qty = Amount[objNum];
-	else if(bp_02 == 2 && (si != OBJ_05A || GetFrame(objNum) != 1))
+	else if(quanType == 2 && (objTyp != OBJ_TORCH || GetFrame(objNum) != 1))
+		/*quantity on 8 bits (a lit torch counts for one)*/
 		qty = GetQuan(objNum);
 	else
 		qty = 1;
-	if(C_155D_063A(si))
-		weight = (TypeWeight[si] * qty) / 10;
+	if(IsWeightPer10Type(objTyp))
+		weight = (TypeWeight[objTyp] * qty) / 10;
 	else
-		weight = TypeWeight[si] * qty;
+		weight = TypeWeight[objTyp] * qty;
 	if(weight == 255)
 		weight = 10000;
 	return weight;
 }
 
+/*total weight of the objects contained (at any depth) in objNum:
+  they follow it in the Link list*/
 /*C_155D_0707*/Encumbrance(int objNum) {
-	int si, weight;
+	int item, weight;
 
 	weight = 0;
 	for(
-		si = Link[objNum];
-		si >= 0 && GetCoordUse(si) != LOCXYZ && C_1184_1D2E(si, objNum);
-		si = Link[si]
-	) weight += GetWeight(si);
+		item = Link[objNum];
+		item >= 0 && GetCoordUse(item) != LOCXYZ && OBJ_IsInside(item, objNum);
+		item = Link[item]
+	) weight += GetWeight(item);
 	return weight;
 }
 
-C_155D_0748(int objNum) {
-	int si, di;
+/*compute InvenSize, WeightInven and (for an NPC) WeightEquip of
+  objNum's inventory, without touching Equipment[]*/
+/*C_155D_0748*/STAT_ComputeWeights(int objNum) {
+	int item, partyIdx;
 	int objTyp;
 
 	InvenSize = 0;
 	WeightInven = 0;
 	if(objNum < 0x100)
 		WeightEquip = 0;
-	for(di = 0; di < 8; di ++)
-		if(Party[di] == objNum)
+	/*party index: computed but unused*/
+	for(partyIdx = 0; partyIdx < 8; partyIdx ++)
+		if(Party[partyIdx] == objNum)
 			break;
-	for(si = FindInv(objNum); si >= 0; si = NextInv()) {
-		objTyp = GetType(si);
-		if(GetCoordUse(si) == EQUIP) {
+	for(item = FindInv(objNum); item >= 0; item = NextInv()) {
+		objTyp = GetType(item);
+		if(GetCoordUse(item) == EQUIP) {
 			WeightEquip += TypeWeight[objTyp];
 		} else {
-			WeightInven += GetWeight(si) + Encumbrance(si);
+			WeightInven += GetWeight(item) + Encumbrance(item);
 			InvenSize ++;
 		}
 	}
 }
 
-C_155D_07E0(int objNum) {
-	int slot, di;
-	int bp_04, bp_02;
+/*same as STAT_ComputeWeights, and also put each equipped object of objNum
+  in its Equipment[] slot (Equipment[] must have been cleared)*/
+/*C_155D_07E0*/STAT_ComputeEquipment(int objNum) {
+	int slot, item;
+	int objTyp, partyIdx;
 
 	InvenSize = 0;
 	WeightInven = 0;
 	if(objNum < 0x100)
 		WeightEquip = 0;
-	for(bp_02 = 0; bp_02 < 8; bp_02 ++) {
-		if(Party[bp_02] == objNum)
+	for(partyIdx = 0; partyIdx < 8; partyIdx ++) {
+		if(Party[partyIdx] == objNum)
 			break;
 	}
-	for(di = FindInv(objNum); di >= 0; di = NextInv()) {
-		bp_04 = GetType(di);
-		if(GetCoordUse(di) == EQUIP) {
-			WeightEquip += TypeWeight[bp_04];
-			slot = STAT_GetEquipSlot(di);
+	for(item = FindInv(objNum); item >= 0; item = NextInv()) {
+		objTyp = GetType(item);
+		if(GetCoordUse(item) == EQUIP) {
+			WeightEquip += TypeWeight[objTyp];
+			slot = STAT_GetEquipSlot(item);
 			if(slot == SLOT_2HND) {
+				/*two-handed: right hand, left hand marked as taken*/
 				slot = SLOT_RHND;
 				Equipment[SLOT_LHND] = 1;
 				if(!ShowNPCInven)
-					Party_1Hand[bp_02] = 1;
+					Party_2Handed[partyIdx] = 1;
 				else
-					NPC_1Hand = 1;
+					NPC_2Handed = 1;
 			} else if(slot == SLOT_RHND && Equipment[SLOT_RHND]) {
 				slot = SLOT_LHND;
 			} else if(slot == SLOT_LHND && Equipment[SLOT_LHND]) {
@@ -250,251 +284,277 @@ C_155D_07E0(int objNum) {
 				else
 					slot = SLOT_RFNG;
 			}
-			Equipment[slot] = di;
+			Equipment[slot] = item;
 		} else {
-			WeightInven += GetWeight(di) + Encumbrance(di);
+			WeightInven += GetWeight(item) + Encumbrance(item);
 			InvenSize ++;
 		}
 	}
 }
 
-/*draw equipment*/
-C_155D_08F4(register int x, register int y) {
+/*draw equipment: the 8 slots of Equipment[] (empty slot frame if
+  nothing; left hand "taken" if a two-handed weapon is readied),
+  shifted by (x, y)*/
+/*C_155D_08F4*/STAT_DrawEquipment(register int x, register int y) {
 	int slot, objNum;
 
 	for(slot = 0; slot < 8; slot ++) {
 		objNum = Equipment[slot];
 		if(objNum) {
 			switch(slot) {
-				case SLOT_HEAD: C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 200, y + 16); break;
-				case SLOT_NECK: C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 176, y + 24); break;
-				case SLOT_CHST: C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 224, y + 24); break;
-				case SLOT_RHND: C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 176, y + 40); break;
+				case SLOT_HEAD: DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 200, y + 16); break;
+				case SLOT_NECK: DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 176, y + 24); break;
+				case SLOT_CHST: DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 224, y + 24); break;
+				case SLOT_RHND: DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 176, y + 40); break;
 				case SLOT_LHND:
-					if((!ShowNPCInven && Party_1Hand[D_04B3]) || (ShowNPCInven && NPC_1Hand))
-						GR_2D(TIL_185, x + 224, y + 40);
+					if((!ShowNPCInven && Party_2Handed[StatusMember]) || (ShowNPCInven && NPC_2Handed))
+						GR_PUT_TILE_SCREEN(TIL_SLOT_TWO_HANDED, x + 224, y + 40);
 					else
-						C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 224, y + 40);
+						DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 224, y + 40);
 				break;
-				case SLOT_RFNG: C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 176, y + 56); break;
-				case SLOT_LFNG: C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 224, y + 56); break;
-				case SLOT_FEET: C_0C9C_0E57(TILE_FRAME(objNum), TIL_19B, x + 200, y + 64); break;
+				case SLOT_RFNG: DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 176, y + 56); break;
+				case SLOT_LFNG: DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 224, y + 56); break;
+				case SLOT_FEET: DrawSlotTile(TILE_FRAME(objNum), TIL_SLOT_EMPTY, x + 200, y + 64); break;
 			}
 		} else {
 			switch(slot) {
-				case SLOT_HEAD: GR_2D(TIL_19A, x + 200, y + 16); break;
-				case SLOT_NECK: GR_2D(TIL_19A, x + 176, y + 24); break;
-				case SLOT_CHST: GR_2D(TIL_19A, x + 224, y + 24); break;
-				case SLOT_RHND: GR_2D(TIL_19A, x + 176, y + 40); break;
+				case SLOT_HEAD: GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 200, y + 16); break;
+				case SLOT_NECK: GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 176, y + 24); break;
+				case SLOT_CHST: GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 224, y + 24); break;
+				case SLOT_RHND: GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 176, y + 40); break;
 				case SLOT_LHND:
-					if((!ShowNPCInven && Party_1Hand[D_04B3]) || (ShowNPCInven && NPC_1Hand))
-						GR_2D(TIL_185, x + 224, y + 40);
+					if((!ShowNPCInven && Party_2Handed[StatusMember]) || (ShowNPCInven && NPC_2Handed))
+						GR_PUT_TILE_SCREEN(TIL_SLOT_TWO_HANDED, x + 224, y + 40);
 					else
-						GR_2D(TIL_19A, x + 224, y + 40);
+						GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 224, y + 40);
 				break;
-				case SLOT_RFNG: GR_2D(TIL_19A, x + 176, y + 56); break;
-				case SLOT_LFNG: GR_2D(TIL_19A, x + 224, y + 56); break;
-				case SLOT_FEET: GR_2D(TIL_19A, x + 200, y + 64); break;
+				case SLOT_RFNG: GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 176, y + 56); break;
+				case SLOT_LFNG: GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 224, y + 56); break;
+				case SLOT_FEET: GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x + 200, y + 64); break;
 			}
 		}
 	}
 }
 
-static C_155D_0CB6(int bp06) {
-	int si, di;
+/*tenths of stones -> displayed stones: rounded to nearest,
+  but anything below 1 stone shows as 1*/
+/*C_155D_0CB6*/static WeightToStones(int tenths) {
+	int stones, rest;
 
-	si = bp06 / 10;
-	di = bp06 % 10;
-	if(si)
-		return si + (di >= 5);
+	stones = tenths / 10;
+	rest = tenths % 10;
+	if(stones)
+		return stones + (rest >= 5);
 	else
-		return si + (di != 0);
+		return stones + (rest != 0);
 }
 
-C_155D_0CF5() {
-	int si, di;
-	int bp_0a, bp_08, bp_06, bp_04;
-	struct tClipInfo *bp_02;
+/*draw the equipment and inventory of InvenOwner (12 visible objects from
+  scroll position InvenScroll, recorded in InvenSlotObj), the scroll arrows,
+  the owner's picture and the equipped/total weights vs capacity*/
+/*C_155D_0CF5*/STAT_DrawInventory() {
+	int slot, item;
+	int mouseState, objTyp, tile, owner;
+	struct tClipInfo *savedClip;
 
-	if(StatusDisplay == CMD_91 && D_EBB5 == 0)
+	if(StatusDisplay == CMD_STAT_PARTY && PickpocketActive == 0)
 		return;
-	bp_0a = CON_mouseOffAt(176, 6, 311, 103);
-	bp_02 = D_04DF;
-	CON_setClip(&D_B6B5[1]);
-	GR_06(D_2A54);
-	GR_12(248, 16, 311, 79);
-	C_155D_08F4(0, 0);
-	di = FindInv(D_E709);
-	si = 0;
-	if(D_07CE >= 4 && D_07CE + 8 >= InvenSize)
-		D_07CE -= 4;
-	while(D_07CE > si) {
-		if(GetCoordUse(di) == INVEN || GetCoordUse(di) == CONTAINED)
-			si ++;
-		di = NextInv();
+	mouseState = CON_mouseOffAt(176, 6, 311, 103);
+	savedClip = CurClip;
+	CON_setClip(&TextWindows[1]);
+	GR_SET_COLOR(ColorPaper);
+	GR_FILL_RECT(248, 16, 311, 79);
+	STAT_DrawEquipment(0, 0);
+	item = FindInv(InvenOwner);
+	slot = 0;
+	/*the last row became empty: scroll back one row*/
+	if(InvenScroll >= 4 && InvenScroll + 8 >= InvenSize)
+		InvenScroll -= 4;
+	/*skip the scrolled-out objects*/
+	while(InvenScroll > slot) {
+		if(GetCoordUse(item) == INVEN || GetCoordUse(item) == CONTAINED)
+			slot ++;
+		item = NextInv();
 	}
-	bp_08 = GetType(D_E709);
-	if(D_E709 < 0x100) {
-		bp_08 = OrigShapeType[D_E709] & 0x3ff;
-		bp_06 = OBJ_MakeDirFrame(bp_08, 4) + BaseTile[bp_08];
-		C_0C9C_0E57(bp_06, TIL_19B, 272, 16);
+	/*owner's picture (an NPC facing south, or the container)*/
+	objTyp = GetType(InvenOwner);
+	if(InvenOwner < 0x100) {
+		objTyp = OrigShapeType[InvenOwner] & 0x3ff;
+		tile = OBJ_MakeDirFrame(objTyp, 4) + BaseTile[objTyp];
+		DrawSlotTile(tile, TIL_SLOT_EMPTY, 272, 16);
 	} else {
-		C_0C9C_0E57(TILE_FRAME(D_E709), TIL_19B, 272, 16);
+		DrawSlotTile(TILE_FRAME(InvenOwner), TIL_SLOT_EMPTY, 272, 16);
 	}
-	for(si = 0; di >= 0 && si < 12; di = NextInv()) {
-		if(GetCoordUse(di) == INVEN || GetCoordUse(di) == CONTAINED) {
-			C_0C9C_0D31(di, 248 + TIL2SCR(si & 3), 32 + TIL2SCR(si >> 2));
-			D_E70F[si++] = di;
+	/*the 4x3 grid*/
+	for(slot = 0; item >= 0 && slot < 12; item = NextInv()) {
+		if(GetCoordUse(item) == INVEN || GetCoordUse(item) == CONTAINED) {
+			DrawInvObject(item, 248 + TIL2SCR(slot & 3), 32 + TIL2SCR(slot >> 2));
+			InvenSlotObj[slot++] = item;
 		}
 	}
-	for( ;si < 12; si ++) {
-		D_E70F[si] = 0;
-		GR_2D(TIL_19A, 248 + TIL2SCR(si & 3), 32 + TIL2SCR(si >> 2));
+	for( ;slot < 12; slot ++) {
+		InvenSlotObj[slot] = 0;
+		GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, 248 + TIL2SCR(slot & 3), 32 + TIL2SCR(slot >> 2));
 	}
-	if(InvenSize > D_07CE + 12) {
+	/*scroll arrows*/
+	if(InvenSize > InvenScroll + 12) {
 		CON_gotoxy(8, 8);
 		CON_putch(0x19);
 	} else {
 		CON_gotoxy(8, 8);
 		CON_putch(' ');
 	}
-	if(D_07CE == 0) {
+	if(InvenScroll == 0) {
 		CON_gotoxy(8, 3);
 		CON_putch(' ');
 	} else {
 		CON_gotoxy(8, 3);
 		CON_putch(0x18);
 	}
-	bp_04 = D_E709;
-	if(bp_04 >= 0x100) {
+	/*the NPC carrying it all (InvenOwner may be a container)*/
+	owner = InvenOwner;
+	if(owner >= 0x100) {
 		do
-			bp_04 = GetAssoc(bp_04);
-		while(bp_04 >= 0x100);
+			owner = GetAssoc(owner);
+		while(owner >= 0x100);
 	}
-	/*display equiped weight*/
+	/*display equiped weight (capacity: strength)*/
 	CON_gotoxy(2, 9);
 	CON_printf(/*08AF*/"      ");
 	CON_gotoxy(2, 9);
-	CON_printf(/*08B6*/"%d%/%ds", C_155D_0CB6(WeightEquip), STREN[bp_04]);
-	/*display inventory weight*/
+	CON_printf(/*08B6*/"%d%/%ds", WeightToStones(WeightEquip), STREN[owner]);
+	/*display inventory weight (total, capacity: 2 x strength)*/
 	CON_gotoxy(11, 9);
 	CON_printf(/*08AF*/"      ");
 	CON_gotoxy(11, 9);
-	CON_printf(/*08B6*/"%d%/%ds", C_155D_0CB6(WeightInven + WeightEquip), STREN[bp_04] << 1);
+	CON_printf(/*08B6*/"%d%/%ds", WeightToStones(WeightInven + WeightEquip), STREN[owner] << 1);
 	/* */
-	CON_setClip(bp_02);
-	CON_mouseOn(bp_0a);
+	CON_setClip(savedClip);
+	CON_mouseOn(mouseState);
 }
 
 
-C_155D_1022(int objNum) {
-	int si, di;
+/*recompute Equipment[] and weights of objNum and redraw the
+  inventory panel*/
+/*C_155D_1022*/STAT_RefreshInventory(int objNum) {
+	int i, unused;
 
-	for(si = 0; si < 12; si ++)
-		D_E70F[si] = 0;
+	for(i = 0; i < 12; i ++)
+		InvenSlotObj[i] = 0;
 	if(objNum < 0x100) {
-		for(si = 0; si < 8; si ++)
-			Equipment[si] = 0;
+		for(i = 0; i < 8; i ++)
+			Equipment[i] = 0;
 	}
-	C_155D_07E0(objNum);
-	C_155D_0CF5();
+	STAT_ComputeEquipment(objNum);
+	STAT_DrawInventory();
 }
 
-/*character equipment view*/
-C_155D_1065(int __unused__) {
-	int si;
+/*character equipment view: of party member StatusMember, or of NPC
+  ShowNPCInven if not 0 (the parameter is ignored)*/
+/*C_155D_1065*/STAT_ShowInventory(int unusedArg) {
+	int mouseState;
 
-	D_07CE = 0;
-	si = CON_mouseOffAt(176, 6, 311, 103);
-	GR_06(D_2A54);
-	GR_12(168, 6, 312, 103);
-	CON_setClip(&D_B6B5[1]);
+	InvenScroll = 0;
+	mouseState = CON_mouseOffAt(176, 6, 311, 103);
+	GR_SET_COLOR(ColorPaper);
+	GR_FILL_RECT(168, 6, 312, 103);
+	CON_setClip(&TextWindows[1]);
 	if(!ShowNPCInven) {
-		CON_gotoxy((17 - strlen(Names[D_04B3])) / 2, 0);
-		CON_printf(/*0867*/"%s\n", Names[D_04B3]);
+		CON_gotoxy((17 - strlen(Names[StatusMember])) / 2, 0);
+		CON_printf(/*0867*/"%s\n", Names[StatusMember]);
 	}
-	C_2FC1_1EAF(192, 32);
+	DrawPaperDoll(192, 32);
 	CON_gotoxy(0, 9); CON_printf(/*08BE*/"E:");
 	CON_gotoxy(9, 9); CON_printf(/*08C1*/"I:");
 	if(!ShowNPCInven) {
-		if(D_04B3 > 0)
-			GR_2D(TIL_183, 176, 88);
-		GR_2D(TIL_180, 192, 88);
-		GR_2D(TIL_181, 208, 88);
-		if(PartySize - 1 > D_04B3)
-			GR_2D(TIL_184, 224, 88);
-		if(D_04B3)
-			GR_2D(TIL_187, 240, 88);
+		if(StatusMember > 0)
+			GR_PUT_TILE_SCREEN(TIL_BUTTON_NEXT_LEFT, 176, 88);
+		GR_PUT_TILE_SCREEN(TIL_BUTTON_PARTY, 192, 88);
+		GR_PUT_TILE_SCREEN(TIL_BUTTON_PORTRAIT, 208, 88);
+		if(PartySize - 1 > StatusMember)
+			GR_PUT_TILE_SCREEN(TIL_BUTTON_NEXT_RIGHT, 224, 88);
+		if(StatusMember)
+			GR_PUT_TILE_SCREEN(TIL_BUTTON_COMBAT_MODE, 240, 88);
 	}
 	if(!ShowNPCInven)
-		D_E709 = Party[D_04B3];
+		InvenOwner = Party[StatusMember];
 	else
-		D_E709 = ShowNPCInven;
-	Party_1Hand[D_04B3] = 0;
-	C_155D_1022(D_E709);
+		InvenOwner = ShowNPCInven;
+	Party_2Handed[StatusMember] = 0;
+	STAT_RefreshInventory(InvenOwner);
 	STAT_refreshComMode();
-	CON_setClip(&D_B6B5[3]);
-	CON_mouseOn(si);
+	CON_setClip(&TextWindows[3]);
+	CON_mouseOn(mouseState);
 }
 
-C_155D_120A(int __unused__) {
-	CON_setClip(&D_B6B5[1]);
-	if(D_07CE + 4 < InvenSize) {
-		D_07CE += 4;
-		C_155D_0CF5();
-		CON_setClip(&D_B6B5[3]);
+/*scroll the inventory down one row*/
+/*C_155D_120A*/STAT_InvenScrollDown(int unusedArg) {
+	CON_setClip(&TextWindows[1]);
+	if(InvenScroll + 4 < InvenSize) {
+		InvenScroll += 4;
+		STAT_DrawInventory();
+		CON_setClip(&TextWindows[3]);
 	}
 }
 
-C_155D_123E(int __unused__) {
-	CON_setClip(&D_B6B5[1]);
-	if(D_07CE >= 4) {
-		D_07CE -= 4;
-		C_155D_0CF5();
-		CON_setClip(&D_B6B5[3]);
+/*scroll the inventory up one row*/
+/*C_155D_123E*/STAT_InvenScrollUp(int unusedArg) {
+	CON_setClip(&TextWindows[1]);
+	if(InvenScroll >= 4) {
+		InvenScroll -= 4;
+		STAT_DrawInventory();
+		CON_setClip(&TextWindows[3]);
 	}
 }
 
-C_155D_1267() {
-	int si;
+/*mouse on the inventory grid or the owner's picture?
+  sets Selection (obj: object or -1, x: grid slot + 1 / 0 for a
+  contained owner / map position for an NPC owner); returns 1 if hit*/
+/*C_155D_1267*/STAT_PickInvenSlot() {
+	int slot;
 	if(
 		PointerX >= 248 && PointerX < 312 &&
 		PointerY >= 32 && PointerY < 80
 	) {
-		si = SCR2TIL(PointerX - 248);
-		si += SCR2TIL(PointerY - 32) << 2;
-		Selection.obj = D_E70F[si];
+		slot = SCR2TIL(PointerX - 248);
+		slot += SCR2TIL(PointerY - 32) << 2;
+		Selection.obj = InvenSlotObj[slot];
 		if(Selection.obj == 0)
 			Selection.obj = -1;
-		Selection.x = si + 1;
+		Selection.x = slot + 1;
 		return 1;
 	}
 	if(PointerX >= 272 && PointerX < 288 && PointerY >= 16 && PointerY < 32) {
-		if(D_E709 >= 0x100) {
+		if(InvenOwner >= 0x100) {
 			Selection.x = 0;
 		} else {
 			Selection.x = MapX;
 			Selection.y = MapY;
 		}
-		Selection.obj = D_E709;
+		Selection.obj = InvenOwner;
 		return 1;
 	}
 	Selection.obj = -1;
 	return 0;
 }
 
-C_155D_130E() {
+/*mouse on an equipment slot? sets Selection.x = slot and
+  Selection.obj = object (-1 if empty or taken by a two-handed weapon);
+  returns 1 if hit*/
+/*C_155D_130E*/STAT_PickEquipSlot() {
 	if(PointerX >= 200 && PointerX < 216 && PointerY >= 16 && PointerY < 32) {
 		Selection.x = 0;
 		Selection.obj = Equipment[SLOT_HEAD];
 	} else if(PointerX >= 176 && PointerX < 192 && PointerY >= 24 && PointerY < 72) {
+		/*left column: SLOT_NECK, SLOT_RHND, SLOT_RFNG*/
 		Selection.x = SCR2TIL(PointerY - 24) + 1;
 		Selection.obj = Equipment[Selection.x];
 	} else if(PointerX >= 224 && PointerX < 240 && PointerY >= 24 && PointerY < 72) {
+		/*right column: SLOT_CHST, SLOT_LHND, SLOT_LFNG*/
 		Selection.x = SCR2TIL(PointerY - 24) + 4;
 		Selection.obj = Equipment[Selection.x];
 	} else if(PointerX >= 200 && PointerX < 216 && PointerY >= 64 && PointerY < 80) {
-		Selection.x = 7;
+		Selection.x = SLOT_FEET;
 		Selection.obj = Equipment[SLOT_FEET];
 	} else {
 		Selection.obj = -1;
@@ -505,7 +565,8 @@ C_155D_130E() {
 	return 1;
 }
 
-C_155D_13F4(int objNum) {
+/*slot where objNum is equipped, or -1*/
+/*C_155D_13F4*/STAT_FindEquipSlot(int objNum) {
 	int i;
 
 	for(i = 0; i < 8; i++) {
@@ -517,7 +578,8 @@ C_155D_13F4(int objNum) {
 }
 
 /*uncalled?*/
-__155D_141B(int objTyp) {
+/*slot where an object of type objTyp is equipped, or -1*/
+/*__155D_141B*/STAT_FindEquipSlotByType(int objTyp) {
 	int i;
 
 	for(i = 0; i < 8; i++) {
@@ -528,16 +590,17 @@ __155D_141B(int objTyp) {
 	return -1;
 }
 
-/*"Ready"*/
-C_155D_144B() {
-	int slot, di;
-	int objTyp, strength, bp_02;
+/*"Ready": equip Selection.obj on the displayed party member
+  (equipment weight limit: strength, in stones)*/
+/*C_155D_144B*/STAT_Ready() {
+	int slot, owner;
+	int objTyp, strength, npcNum;
 
-	bp_02 = Party[D_04B3];
+	npcNum = Party[StatusMember];
 	objTyp = GetType(Selection.obj);
-	strength = STREN[bp_02];
+	strength = STREN[npcNum];
 	CON_printf(/*08C4*/"Ready-");
-	if(objTyp == OBJ_05A)
+	if(objTyp == OBJ_TORCH)
 		CON_printf(/*08CB*/"torch\n");
 	else
 		CON_printf(/*0867*/"%s\n", GetObjectString(Selection.obj));
@@ -554,7 +617,7 @@ C_155D_144B() {
 			} else {
 				slot = SLOT_RHND;
 				Equipment[SLOT_LHND] = 1;
-				Party_1Hand[D_04B3] = 1;
+				Party_2Handed[StatusMember] = 1;
 			}
 		} else if(slot == SLOT_RHND && Equipment[SLOT_RHND] && Equipment[SLOT_LHND] == 0) {
 			slot = SLOT_LHND;
@@ -569,42 +632,47 @@ C_155D_144B() {
 		if(Equipment[slot]) {
 			CON_printf(/*08F3*/"\nNo place to put!\n");
 		} else {
-			di = Selection.obj;
+			/*the NPC carrying the object*/
+			owner = Selection.obj;
 			do
-				di = GetAssoc(di);
-			while(di >= 0x100);
-			if(objTyp == OBJ_05A) {
+				owner = GetAssoc(owner);
+			while(owner >= 0x100);
+			if(objTyp == OBJ_TORCH) {
+				/*take one torch from the stack*/
 				if(SubQuan(Selection.obj, 1) == 0)
 					DeleteObj(Selection.obj);
-				Equipment[slot] = AddInvObj(OBJ_05A, EQUIP, 1, di);
+				Equipment[slot] = AddInvObj(OBJ_TORCH, EQUIP, 1, owner);
 			} else {
-				Equipment[slot] = InsertObj(Selection.obj, di, EQUIP);
+				Equipment[slot] = InsertObj(Selection.obj, owner, EQUIP);
 				InvenSize --;
 			}
-			C_155D_1022(Party[D_04B3]);
-			if(GetType(Selection.obj) == OBJ_102) {
-				SetInvisible(bp_02);
-				MagicalHalo(bp_02, 1);
-			} else if(GetType(Selection.obj) == OBJ_051) {
+			STAT_RefreshInventory(Party[StatusMember]);
+			if(GetType(Selection.obj) == OBJ_INVISIBILITY_RING) {
+				SetInvisible(npcNum);
+				MagicalHalo(npcNum, 1);
+			} else if(GetType(Selection.obj) == OBJ_STORM_CLOAK) {
 				SpellFx[13] = 20;
-				MagicalHalo(bp_02, 1);
+				MagicalHalo(npcNum, 1);
 			}
 		}
 	}
 	CON_printf(/*0906*/"\n%s:\n%>", Names[Active]);
 }
 
-C_155D_1666(int si/*bp08*/, int __unused__) {
-	int di;
+/*can equipped objNum be removed? returns 1 if not (amulet of
+  submission), 2 if it was a lit torch (now burnt out and deleted),
+  0 otherwise (npcNum is ignored)*/
+/*C_155D_1666*/STAT_CheckUnready(int objNum/*bp08*/, int npcNum) {
+	int objTyp;
 
-	if(GetCoordUse(si) == EQUIP) {
-		di = GetType(si);
-		if(di == OBJ_04C) {
-			CON_printf(/*090E*/"\n%s\n", D_0DDC[12]);
+	if(GetCoordUse(objNum) == EQUIP) {
+		objTyp = GetType(objNum);
+		if(objTyp == OBJ_AMULET_OF_SUBMISSION) {
+			CON_printf(/*090E*/"\n%s\n", SpellMessages[12]);
 			return 1;
 		}
-		if(di == OBJ_05A && GetFrame(si) == 1) {
-			DeleteObj(si);
+		if(objTyp == OBJ_TORCH && GetFrame(objNum) == 1) {
+			DeleteObj(objNum);
 			CON_printf(/*0862 + 3*/"\n");
 			CON_printf(BurnOutMsg);
 			return 2;
@@ -613,56 +681,58 @@ C_155D_1666(int si/*bp08*/, int __unused__) {
 	return 0;
 }
 
-/*stop equiped ring/cloak effect*/
+/*stop equiped ring/cloak effect of objNum worn by npcNum*/
 /*(the return value is not used)*/
-C_155D_16E7(int objNum, int di/*bp06*/) {
+/*C_155D_16E7*/STAT_StopEquipEffect(int objNum, int npcNum/*bp06*/) {
 	int objTyp;
 
 	if(GetCoordUse(objNum) == EQUIP) {
 		objTyp = GetType(objNum);
-		if(objTyp == OBJ_102) {
-			ClrInvisible(di);
-			MagicalHalo(di, 1);
+		if(objTyp == OBJ_INVISIBILITY_RING) {
+			ClrInvisible(npcNum);
+			MagicalHalo(npcNum, 1);
 			return 3;
 		}
-		if(objTyp == OBJ_051) {
+		if(objTyp == OBJ_STORM_CLOAK) {
 			SpellFx[13] = 0;
-			MagicalHalo(di, 1);
+			MagicalHalo(npcNum, 1);
 			return 3;
 		}
 	}
 	return 0;
 }
 
-/*"Unready"*/
-C_155D_1738() {
-	int si, di;
+/*"Unready": put equipped Selection.obj of the displayed party
+  member back in the inventory*/
+/*C_155D_1738*/STAT_Unready() {
+	int npcNum, result;
 	int objTyp;
 
-	di = 0;
+	result = 0;
 	if(Selection.obj == 1)
 		return;
 	CON_printf(/*0913*/"Unready-%s\n", GetObjectString(Selection.obj));
 	objTyp = GetType(Selection.obj);
-	si = Party[D_04B3];
-	di = C_155D_1666(Selection.obj, si);
-	if(di != 1) {
-		Equipment[C_155D_13F4(Selection.obj)] = 0;
-		if(di != 2) {
-			C_155D_16E7(Selection.obj, si);
+	npcNum = Party[StatusMember];
+	result = STAT_CheckUnready(Selection.obj, npcNum);
+	if(result != 1) {
+		Equipment[STAT_FindEquipSlot(Selection.obj)] = 0;
+		if(result != 2) {
+			STAT_StopEquipEffect(Selection.obj, npcNum);
 			if(STAT_GetEquipSlot(Selection.obj) == SLOT_2HND) {
-				Party_1Hand[D_04B3] = 0;
+				Party_2Handed[StatusMember] = 0;
 				Equipment[SLOT_LHND] = 0;
 			}
-			if(objTyp == OBJ_05A && Is_0010(FindInvType(si, OBJ_05A, 0))) {
+			/*a torch goes back on the stack of torches if any*/
+			if(objTyp == OBJ_TORCH && IsHeldByNPC(FindInvType(npcNum, OBJ_TORCH, 0))) {
 				DeleteObj(Selection.obj);
-				GiveObj(si, OBJ_05A, 1);
+				GiveObj(npcNum, OBJ_TORCH, 1);
 			} else {
 				SetCoordUse(Selection.obj, INVEN);
 				InvenSize ++;
 			}
 		}
 	}
-	C_155D_1022(Party[D_04B3]);
+	STAT_RefreshInventory(Party[StatusMember]);
 	CON_printf(/*0906*/"\n%s:\n%>", Names[Active]);
 }

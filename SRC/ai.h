@@ -23,10 +23,10 @@
 #define AI_GRAZE      0x0c
 #define AI_TANGLE     0x0d
 #define AI_IMMOBILE   0x0e
-/*looks like guard?*/
-#define AI_0F         0x0f
-/*looks like guard?*/
-#define AI_10         0x10
+/*walk east/west, turning back when blocked (egg sets dir E)*/
+#define AI_PATROL_EW         0x0f
+/*walk north/south, turning back when blocked (egg sets dir N)*/
+#define AI_PATROL_NS         0x10
 #define AI_ARREST     0x12
 #define AI_FEAR       0x13
 
@@ -34,12 +34,12 @@
 #define AI_FINDPATH   0x81
 #define AI_SEEKOBJ    0x82
 #define AI_ONPATH     0x83
-/*b1?*/
-#define AI_84         0x84
-/*b2?*/
-#define AI_85         0x85
-/*bl?*/
-#define AI_86         0x86
+/*on path, blocked once (waits)*/
+#define AI_PATH_BLOCKED1         0x84
+/*on path, blocked twice (waits)*/
+#define AI_PATH_BLOCKED2         0x85
+/*path not found / abandoned; reset to AI_FINDPATH when searches are idle*/
+#define AI_PATH_FAILED         0x86
 /*schedule modes*/
 #define AI_STAND_N    0x87
 #define AI_STAND_E    0x88
@@ -61,8 +61,8 @@
 #define AI_RINGBELL   0x98
 #define AI_BRAWL      0x99
 
-/*[NPC]RETREAT?*/
-#define AI_9A         0x9a
+/*low confidence: schedule-range mode run by COMBAT_AI_Retreat, treated like AI_SHY (flees, never fights back, not targeted beyond 5 squares); only from data*/
+#define AI_SCHED_SHY         0x9a
 #define AI_VIGILANTE  0x9b
 
 #endif

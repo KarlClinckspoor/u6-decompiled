@@ -4,10 +4,32 @@
  * reverse-coded by Ergonomy Joe in 2013
  */
 /*
-	talkdr:conversation engine module
+	talkdr: conversation engine module
+
+	Interpreter for the NPC conversation scripts stored (compressed) in
+	CONVERSE.A / CONVERSE.B and loaded into TalkBuf by LoadConversation().
+	A script is a byte stream: bytes < 0x80 are text that is printed as is,
+	bytes >= 0x80 are opcodes (OP_xxx below).
+	Script layout:
+	  OP_SCRIPT_MARK <npc num> <npc name> OP_DESC <description text...>
+	  OP_MAIN <statements...> then a loop of
+	  OP_ASKTOP / OP_GETxxx (input) followed by keyword blocks
+	  OP_KEY "kw1,kw2,..." OP_RES <answer statements> OP_ENDRES ...
+	Expressions are stored in postfix order and terminated by
+	OP_END_OF_FACTOR (or OP_LET_VALUE); they are evaluated by parse_factor()
+	on a small local stack of longs. Numeric constants are prefixed by
+	OP_BYTE / OP_WORD / OP_ADDRESS.
+	Variables: VarInt[] (#0..#9, #A..#Z) and VarStr[] ($0..$9, $A..$Z);
+	a letter variable 'X' lives at index 'X' - 0x37 (i.e. 'A' == 10).
+	Flags: TalkFlags[npc] holds 8 per-NPC script flags (OP_SET/OP_CLR/OP_TST).
+	TalkNpcs[0] is the NPC being talked to (the OP_NPC pseudo-number),
+	TalkNpcs[1] is the party member doing the talking.
+	TalkDriver() is the entry point (called from talk.c after the
+	variables have been initialized).
 */
 #include "u6.h"
 
+/*comparison operators (push 1/0)*/
 #define OP_SUP            0x81
 #define OP_SUPE           0x82
 #define OP_INF            0x83
@@ -15,6 +37,7 @@
 #define OP_DIF            0x85
 #define OP_EQU            0x86
 
+/*arithmetic/logical operators*/
 #define OP_ADD            0x90
 #define OP_SUB            0x91
 #define OP_MUL            0x92
@@ -41,11 +64,12 @@
 #define OP_TST            0xab
 
 #define OP_GOTO           0xb0
-#define OP_CALL           0xb1
+/*after an OP_ADDRESS operand: "no index expression follows"*/
+#define OP_NOINDEX           0xb1
 #define OP_VARINT         0xb2
 #define OP_VARSTR         0xb3
-/*read 16 bit value from array?*/
-#define OP__B4            0xb4
+/*read 16 bit value from an array: (array address, index)*/
+#define OP_DATA            0xb4
 #define OP_PRINTSTR       0xb5
 #define OP_LEAVE          0xb6
 #define OP_STRSEARCH      0xb7
@@ -53,10 +77,10 @@
 #define OP_GIVEOBJ        0xb9
 #define OP_TAKEOBJ        0xba
 #define OP_TEST_OBJ       0xbb
-/*push constant 100?*/
-#define OP__BC            0xbc
-/*push constant 100?*/
-#define OP__BD            0xbd
+/*stub: pops 2 operands, pushes constant 100*/
+#define OP_STUB_BC            0xbc
+/*stub: pops 2 operands, pushes constant 100*/
+#define OP_STUB_BD            0xbd
 #define OP_SHOW_INVENTORY 0xbe
 #define OP_SHOW_CONVERSE  0xbf
 #define OP_SELECT_OBJECT  0xc0
@@ -76,36 +100,38 @@
 
 #define OP_DELAY          0xd0
 
+/*constant prefixes*/
 #define OP_ADDRESS        0xd2
 #define OP_BYTE           0xd3
 #define OP_WORD           0xd4
-/*a parameter to OP_PRINTSTR; followed by VarStr*/
-#define OP__D5            0xd5
+/*a parameter to OP_PRINTSTR: print nothing*/
+#define OP_PRINT_NONE            0xd5
 #define OP_RESURRECT      0xd6
 #define OP_ISONSCREEN     0xd7
-/*$Y := ...?*/
-#define OP__D8            0xd8
+/*$Y := name of npc*/
+#define OP_SETNAME_Y            0xd8
 #define OP_HEAL           0xd9
 #define OP_WOUNDED        0xda
 #define OP_CURE           0xdb
-#define OP_POISONNED      0xdc
-/*get party member npc num?*/
-#define OP__DD            0xdd
+#define OP_POISONED      0xdc
+/*get party member npc num: (party index, any/onscreen only)*/
+#define OP_PARTYMEMBER            0xdd
 
-/*$Y := ...?"You"*/
-#define OP__DF            0xdf
+/*$Y := name of npc, or "you" for the avatar*/
+#define OP_SETNAME_Y_YOU            0xdf
 #define OP_ADDEXP         0xe0
 #define OP_ADDLVL         0xe1
 #define OP_ADDSTR         0xe2
 #define OP_ADDINT         0xe3
 #define OP_ADDDEX         0xe4
 
+/*pseudo npc number: "the npc being talked to"*/
 #define OP_NPC            0xeb
 
 #define OP_ENDRES         0xee
 #define OP_KEY            0xef
-/*OP__F0: start of input commands?*/
-#define OP__F0            0xf0
+/*OP_FIRST_SECTION: opcodes >= this stop parse_statement (section/input commands)*/
+#define OP_FIRST_SECTION            0xf0
 #define OP_DESC           0xf1
 #define OP_MAIN           0xf2
 #define OP_RES            0xf6
@@ -115,63 +141,73 @@
 #define OP_GETCHR         0xfa
 #define OP_GETINT         0xfb
 #define OP_GETDIGIT       0xfc
-#define OP__FF            0xff
+/*start of script (followed by npc num) / end of conversation*/
+#define OP_SCRIPT_MARK            0xff
 
 
 /*====---- ----====*/
-unsigned char __0988 = 0;/*in this module?*/
-unsigned char __0989 = 0;/*in this module?*/
+unsigned char Unused_0988 = 0;/*in this module?(unreferenced)*/
+unsigned char Unused_0989 = 0;/*in this module?(unreferenced)*/
 
+/*set by OP_LEAVE: end the conversation*/
 /*098A*/static unsigned char mustLeave = 0;
 
 /*098B*/unsigned char IsInConversation = 0;
 /*====---- ----====*/
 
-/*C_1703_0006*/static str_i_compare(unsigned char *bp0a, unsigned char *bp08, int bp06) {
-	unsigned char *di;
-	int si;
-	unsigned char bp_64[100];
+/*keyword match: returns 1 if the first <len> chars of <pattern> match
+(case insensitive, '?' is a wildcard) the start of any space separated
+word of <input>*/
+/*C_1703_0006*/static str_i_compare(unsigned char *pattern, unsigned char *input, int len) {
+	unsigned char *word;
+	int i;
+	unsigned char buf[100];
 
-	strcpy(bp_64, bp08);
-	for(di = strtok(bp_64, /*098C*/" "); di; di = strtok(0, /*098C*/" ")) {
-		for(si = 0; si < bp06; si ++) {
-			if(tolower(bp0a[si]) != tolower(di[si]) && bp0a[si] != '?')
+	strcpy(buf, input);
+	for(word = strtok(buf, /*098C*/" "); word; word = strtok(0, /*098C*/" ")) {
+		for(i = 0; i < len; i ++) {
+			if(tolower(pattern[i]) != tolower(word[i]) && pattern[i] != '?')
 				break;
 		}
-		if(si == bp06)
+		if(i == len)
 			return 1;
 	}
 	return 0;
 }
 
-/*C_1703_008A*/static mk_npcnum(int bp06) {
-	if(bp06 == OP_NPC)
-		return D_E796[0];
-	return bp06;
+/*translate the OP_NPC pseudo-number into the current npc's number*/
+/*C_1703_008A*/static mk_npcnum(int npc) {
+	if(npc == OP_NPC)
+		return TalkNpcs[0];
+	return npc;
 }
 
-/*get NPC name?*/
-static char *C_1703_00A0(int objNum) {
+/*get NPC name: loads the npc's script into ScratchBuf and copies the
+name (which follows OP_SCRIPT_MARK and the npc num, and ends with the first
+opcode byte) into TalkNpcName; returns TalkNpcName*/
+/*C_1703_00A0*/static char *TALK_GetNpcName(int objNum) {
 	int i;
 
 	if(LoadConversation(objNum, ScratchBuf)) {
 		for(i = 0; i < 50; i ++)
-			D_E764[i] = ((unsigned char far *)ScratchBuf + i)[2];
+			TalkNpcName[i] = ((unsigned char far *)ScratchBuf + i)[2];
 	} else {
-		D_E764[0] = 0;
+		TalkNpcName[0] = 0;
 	}
 	i = 0;
-	while(!(D_E764[i] & 0x80) && D_E764[i++]);
+	while(!(TalkNpcName[i] & 0x80) && TalkNpcName[i++]);
 	if(i == 0)
 		CON_printf(/*098E*/"\nUndefined.\n");
 	else if(objNum == 0x6e)/*patch for "Dr_ Cat"*/
-		D_E764[2] = '.';
-	D_E764[i] = 0;
+		TalkNpcName[2] = '.';
+	TalkNpcName[i] = 0;
 
-	return D_E764;
+	return TalkNpcName;
 }
 
-char *C_1703_0116(int objNum) {
+/*name of a character: party members use the party name table (Names[]),
+other npcs the name from their conversation script*/
+/*C_1703_0116*/char *TALK_GetCharName(int objNum) {
 	int i;
 
 	if(IsPlrControl(objNum)) {
@@ -180,13 +216,15 @@ char *C_1703_0116(int objNum) {
 				break;
 		return Names[i];
 	}
-	C_1703_00A0(objNum);
+	TALK_GetNpcName(objNum);
 
-	return D_E764;
+	return TalkNpcName;
 }
 
-/*is object onscreen?*/
-C_1703_0153(int objNum) {
+/*is object onscreen? (within the visible 9x9 part of the 11x11 view
+and not on a hidden/dark tile); party members are always "onscreen"
+while in a vehicle*/
+/*C_1703_0153*/IsNpcOnScreen(int objNum) {
 	int x, y, tile;
 
 	if(IN_VEHICLE && IsPlrControl(objNum))
@@ -197,29 +235,32 @@ C_1703_0153(int objNum) {
 	) {
 		x = GetX(objNum) - (MapX - 5);
 		y = GetY(objNum) - (MapY - 5);
-		if(Obj_11x11[y][x] || Tile_11x11[y][x] >= TIL_200)
+		/*objects displayed there, or an object tile*/
+		if(Obj_11x11[y][x] || Tile_11x11[y][x] >= TIL_LEATHER_HELM)
 			return 1;
 		tile = Tile_11x11[y][x];
-		return (tile != TIL_0FF && tile != TIL_1BC);
+		return (tile != TIL_HIDDEN && tile != TIL_DARKNESS);
 	}
 	return 0;
 }
 
-/*set #N -- number of nearby party members*/
-static C_1703_028B() {
-	int si, num;
+/*set #N -- number of nearby party members (not counting the speaker)*/
+/*C_1703_028B*/static TALK_SetNearbyPartyVar() {
+	int i, num;
 
 	num = 0;
-	for(si = 0; si < PartySize; si ++) {
-		if(C_1703_0153(Party[si]))
+	for(i = 0; i < PartySize; i ++) {
+		if(IsNpcOnScreen(Party[i]))
 			num ++;
 	}
 	VarInt['N' - 0x37] = num - 1;
 }
 
+/*add npc to the party
+returns 0:ok, 1:party is in a vehicle, 2:party is full*/
 /*C_1703_02B6*/JoinParty(int objNum) {
-	unsigned char *si;
-	int di;
+	unsigned char *name;
+	int nameLen;
 
 	if(IN_VEHICLE)
 		return 1;
@@ -227,143 +268,154 @@ static C_1703_028B() {
 		return 2;
 	PartySize ++;
 	Party[PartySize - 1] = objNum;
-	si = C_1703_00A0(objNum);
-	di = strlen(si);
-	if(di >= 14)
-		strncpy(Names[PartySize - 1], si, 13);
+	name = TALK_GetNpcName(objNum);
+	nameLen = strlen(name);
+	if(nameLen >= 14)
+		strncpy(Names[PartySize - 1], name, 13);
 	else
-		strcpy(Names[PartySize - 1], si);
+		strcpy(Names[PartySize - 1], name);
 	SetPlrControl(objNum);
 	if(GetAlignment(objNum) == NEUTRAL)
 		SetAlignment(objNum, GOOD);
 	NPCMode[objNum] = AI_FOLLOW;
 	NPCComMode[objNum] = AI_FRONT;
-	if(GetType(objNum) == OBJ_188)
-		SetType(objNum, OBJ_182);
+	/*a playing musician stops playing*/
+	if(GetType(objNum) == OBJ_MUSICIAN_SHORT_CAPE)
+		SetType(objNum, OBJ_MUSICIAN_LONG_CAPE);
 	return 0;
 }
 
+/*remove npc from the party; he drops his whole inventory at his feet
+returns 0:ok, 1:party is in a vehicle, 2:not in party*/
 /*C_1703_0398*/static LeaveParty(int objNum) {
-	int di;
-	int bp_04, bp_02;
+	int i;
+	int slot, invObj;
 
 	if(IN_VEHICLE)
 		return 1;
-	for(bp_04 = 0; bp_04 < PartySize; bp_04 ++)
-		if(Party[bp_04] == objNum)
+	for(slot = 0; slot < PartySize; slot ++)
+		if(Party[slot] == objNum)
 			break;
-	if(PartySize == bp_04)
+	if(PartySize == slot)
 		return 2;
-	for(di = bp_04; di < PartySize; di ++) {
-		Party[di] = Party[di + 1];
-		strcpy(Names[di], Names[di + 1]);
+	for(i = slot; i < PartySize; i ++) {
+		Party[i] = Party[i + 1];
+		strcpy(Names[i], Names[i + 1]);
 	}
 	PartySize --;
 	ClrPlrControl(objNum);
 	NPCMode[objNum] = AI_WANDER;
 	if(GetAlignment(objNum) == GOOD)
 		SetAlignment(objNum, NEUTRAL);
-	for(bp_02 = FindInv(objNum); bp_02 >= 0; bp_02 = FindInv(objNum)) {
-		MoveObj(bp_02, GetX(objNum), GetY(objNum), MapZ);
-		SetOkToGet(bp_02);
+	for(invObj = FindInv(objNum); invObj >= 0; invObj = FindInv(objNum)) {
+		MoveObj(invObj, GetX(objNum), GetY(objNum), MapZ);
+		SetOkToGet(invObj);
 	}
 	MoveObj(objNum, GetX(objNum), GetY(objNum), MapZ);
 	return 0;
 }
 
-/*is object owned by party onscreen?*/
-C_1703_04C6(int bp08, int bp06) {
-	int si;
+/*is object owned by party onscreen?
+returns the first onscreen party member carrying an object of type
+<objType> (and quality <objQual>, 0 = any), or -1*/
+/*C_1703_04C6*/FindPartyMemberWithObj(int objType, int objQual) {
+	int i;
 
-	for(si = 0; si < PartySize; si ++) {
-		if(C_1703_0153(Party[si]) && C_1944_0A43(Party[si], bp08, bp06) != -1)
-			return Party[si];
+	for(i = 0; i < PartySize; i ++) {
+		if(IsNpcOnScreen(Party[i]) && OBJ_FindInContainer(Party[i], objType, objQual) != -1)
+			return Party[i];
 	}
 	return -1;
 }
 
 /*this macro creates an "offset" into the current
-conversation file. though, D_E7A1 is always 0
+conversation file. though, TalkBase is always 0
 (initialized during the startup)*/
-#define MK_0000(i) (int)(i) - D_E7A1
+#define TALK_OFFSET(i) (int)(i) - TalkBase
 
 #define PARSE_U8 (TalkBuf[Talk_PC ++])
 #define READ_U16 (*(unsigned far *)(TalkBuf + Talk_PC))
 #define READ_S16 (*(int far *)(TalkBuf + Talk_PC))
 #define READ_U32 (*(unsigned long far *)(TalkBuf + Talk_PC))
 
+/*evaluate a postfix expression starting at Talk_PC, up to (and
+including) OP_END_OF_FACTOR/OP_LET_VALUE; returns its value.
+Constants are pushed; an operator pops its operands from the top of
+lstack and leaves its result in the lowest operand's slot.*/
 /*C_1703_050E*/static parse_factor() {
 	int sidx;/*stack index*/
-	long lstack[10];/*local "stack"?*/
-	long bp_6a;
-	int i, j, opcode, bp_60;
-	unsigned char cparam0, cparam1, bp_5b;
-	int bp_5a, bp_58;
+	long lstack[10];/*local "stack"*/
+	long arrayAddr;
+	int i, j, opcode, cmpLen;
+	unsigned char cparam0, cparam1, varIdx;
+	int isOperator, isString;
 	int iparam0, iparam1, iparam2;
 	unsigned char scratch[80];
-	int bp_02;
+	int inputStr;
 
 	sidx = 0;
 	i = 0;
 	j = 0;
-	bp_58 = 0;
+	isString = 0;
 	/*reset local stack*/
 	for(; sidx < 10; sidx ++)
 		lstack[sidx] = 0L;
 	sidx = 0;
 	opcode = PARSE_U8;
 	while(opcode != OP_END_OF_FACTOR && opcode != OP_LET_VALUE) {
-		bp_5a = 0;
+		isOperator = 0;
 		switch(opcode) {
 			case OP_ADDRESS: lstack[sidx] = READ_U32; Talk_PC += 4; break;
 			case OP_BYTE: lstack[sidx] = PARSE_U8; break;
 			case OP_WORD: lstack[sidx] = READ_U16; Talk_PC += 2; break;
 			default:
-				bp_5a = 1;
+				/*a raw byte: either an operator or a small constant*/
+				isOperator = 1;
 				lstack[sidx] = opcode;
 		}
-		if(bp_5a) {
+		if(isOperator) {
 			switch(lstack[sidx]) {
-				case OP_RND:
+				case OP_RND:/*random number in [min, max] (8 bits)*/
 					cparam0 = lstack[sidx - 2];
 					cparam1 = lstack[sidx - 1];
 					lstack[sidx - 2] = OSI_rand(cparam0, cparam1);
 					sidx -= 2;
 				break;
-				case OP_TEST_OBJ:
+				case OP_TEST_OBJ:/*(npc, object type)*/
 					iparam0 = mk_npcnum(lstack[sidx - 2]);
 					iparam1 = lstack[sidx - 1];
 					lstack[sidx - 2] = TestObj(iparam0, iparam1);
 					sidx -= 2;
 				break;
-				case OP_OWNS:
+				case OP_OWNS:/*(npc, object type, quality)*/
 					iparam0 = mk_npcnum(lstack[sidx - 3]);
 					iparam1 = lstack[sidx - 2];
 					iparam2 = lstack[sidx - 1];
-					if(C_1944_0A43(iparam0, iparam1, iparam2) != -1)
+					if(OBJ_FindInContainer(iparam0, iparam1, iparam2) != -1)
 						lstack[sidx - 3] = 1;
 					else
 						lstack[sidx - 3] = 0;
 					sidx -= 3;
 				break;
-				case OP_WEIGHT:
+				case OP_WEIGHT:/*(object type, quantity): weight in 1/10 units*/
 					iparam0 = lstack[sidx - 1];/*quantity*/
-					iparam1 = lstack[sidx - 2];/*obj num*/
+					iparam1 = lstack[sidx - 2];/*object type*/
 					iparam2 = TypeWeight[iparam1];
-					if(C_155D_063A(iparam1))
+					/*gold and reagents weigh less*/
+					if(IsWeightPer10Type(iparam1))
 						lstack[sidx - 2] = iparam0 * iparam2;
 					else
 						lstack[sidx - 2] = iparam0 * iparam2 * 10;
 					sidx -= 2;
 				break;
-				case OP_JOIN:
+				case OP_JOIN:/*(npc): see JoinParty for the result*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
 					lstack[sidx - 1] = JoinParty(iparam0);
 					sidx --;
 				break;
-				case OP_CANCARRY:
+				case OP_CANCARRY:/*(npc): remaining capacity (STR * 20 stones)*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
-					C_155D_07E0(iparam0);
+					STAT_ComputeEquipment(iparam0);
 					iparam1 = STREN[iparam0] * 200;
 					iparam2 = (WeightEquip + WeightInven) * 10;
 					if(iparam1 > iparam2)
@@ -372,33 +424,34 @@ conversation file. though, D_E7A1 is always 0
 						lstack[sidx - 1] = 0;
 					sidx --;
 				break;
-				case OP_LEAVEPARTY:
+				case OP_LEAVEPARTY:/*(npc): see LeaveParty for the result*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
 					lstack[sidx - 1] = LeaveParty(iparam0);
 					sidx --;
 				break;
-				case OP_TST:
+				case OP_TST:/*(npc, flag bit)*/
 					iparam0 = mk_npcnum(lstack[sidx - 2]);
 					iparam1 = lstack[sidx - 1];
 					lstack[sidx - 2] = (TalkFlags[iparam0] >> iparam1) & 1;
 					sidx -= 2;
 				break;
-				case OP_SELECT_OBJECT:
+				case OP_SELECT_OBJECT:/*let the player pick an item: pushes its number or 0x8001*/
 					CON_printf(/*099B*/"\n\nSelect item: ");
 					MouseMode = 1;
-					StatusDisplay = CMD_92;
+					StatusDisplay = CMD_STAT_EQUIP;
 					CON_getch();
 					if(Selection.obj != -1 && Selection.x != -1)
 						lstack[sidx] = Selection.obj;
 					else
 						lstack[sidx] = 0x8001;
 				break;
-				case OP_OWNER:
+				case OP_OWNER:/*(object): its owner (assoc field)*/
 					lstack[sidx - 1] = (int)GetAssoc(lstack[sidx - 1]);
+					/*patches the next operand of the script in place*/
 					TalkBuf[Talk_PC + 1] = mk_npcnum(TalkBuf[Talk_PC + 1]);
 					sidx --;
 				break;
-				case OP_WOUNDED:
+				case OP_WOUNDED:/*(npc)*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
 					if(MaxHP(iparam0) > HitPoints[iparam0])
 						lstack[sidx - 1] = 1;
@@ -406,12 +459,12 @@ conversation file. though, D_E7A1 is always 0
 						lstack[sidx - 1] = 0;
 					sidx --;
 				break;
-				case OP_POISONNED:
+				case OP_POISONED:/*(npc)*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
 					lstack[sidx - 1] = IsPoisoned(iparam0);
 					sidx --;
 				break;
-				case OP_ADDEXP:
+				case OP_ADDEXP:/*(npc, amount): new value, max 9999*/
 					iparam0 = mk_npcnum(lstack[sidx - 2]);
 					iparam1 = lstack[sidx - 1];
 					ExpPoints[iparam0] += iparam1;
@@ -420,14 +473,14 @@ conversation file. though, D_E7A1 is always 0
 					lstack[sidx - 2] = ExpPoints[iparam0];
 					sidx -= 2;
 				break;
-				case OP_ADDLVL:
+				case OP_ADDLVL:/*(npc, amount): new level*/
 					iparam0 = mk_npcnum(lstack[sidx - 2]);
 					iparam1 = lstack[sidx - 1];
 					Level[iparam0] += iparam1;
 					lstack[sidx - 2] = GetLevel(iparam0);
 					sidx -= 2;
 				break;
-				case OP_ADDSTR:
+				case OP_ADDSTR:/*(npc, amount): new value, max 30*/
 					iparam0 = mk_npcnum(lstack[sidx - 2]);
 					iparam1 = lstack[sidx - 1];
 					STREN[iparam0] += iparam1;
@@ -436,7 +489,7 @@ conversation file. though, D_E7A1 is always 0
 					lstack[sidx - 2] = STREN[iparam0];
 					sidx -= 2;
 				break;
-				case OP_ADDINT:
+				case OP_ADDINT:/*(npc, amount): new value, max 30*/
 					iparam0 = mk_npcnum(lstack[sidx - 2]);
 					iparam1 = lstack[sidx - 1];
 					INTEL[iparam0] += iparam1;
@@ -445,7 +498,7 @@ conversation file. though, D_E7A1 is always 0
 					lstack[sidx - 2] = INTEL[iparam0];
 					sidx -= 2;
 				break;
-				case OP_ADDDEX:
+				case OP_ADDDEX:/*(npc, amount): new value, max 30*/
 					iparam0 = mk_npcnum(lstack[sidx - 2]);
 					iparam1 = lstack[sidx - 1];
 					DEXTE[iparam0] += iparam1;
@@ -454,9 +507,9 @@ conversation file. though, D_E7A1 is always 0
 					lstack[sidx - 2] = DEXTE[iparam0];
 					sidx -= 2;
 				break;
-				case OP__DD:/*get party member npc num?*/
+				case OP_PARTYMEMBER:/*get party member npc num (0 if none)*/
 					iparam0 = lstack[sidx - 2];/*party member index*/
-					iparam1 = lstack[sidx - 1];/*if 0, membert must be onScreen*/
+					iparam1 = lstack[sidx - 1];/*if 0, member must be onScreen*/
 					if(iparam0 < PartySize) {
 						if(iparam1) {
 							lstack[sidx - 2] = Party[iparam0];
@@ -466,7 +519,7 @@ conversation file. though, D_E7A1 is always 0
 						/*party's onscreen members list*/
 						j = 0;
 						for(i = 0; i < PartySize; i ++) {
-							if(C_1703_0153(Party[i]))
+							if(IsNpcOnScreen(Party[i]))
 								scratch[j++] = i;
 						}
 						for(cparam0 = j; cparam0 < PartySize; cparam0 ++)
@@ -481,26 +534,26 @@ conversation file. though, D_E7A1 is always 0
 					lstack[sidx - 2] = 0;
 					sidx -= 2;
 				break;
-				case OP_ISONSCREEN:
+				case OP_ISONSCREEN:/*(npc)*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
-					lstack[sidx - 1] = C_1703_0153(iparam0);
+					lstack[sidx - 1] = IsNpcOnScreen(iparam0);
 					sidx --;
 				break;
-				case OP_WHOSGOT:
+				case OP_WHOSGOT:/*(object type, quality): onscreen party member carrying it, or 0x8001*/
 					iparam0 = lstack[sidx - 2];
 					iparam1 = lstack[sidx - 1];
-					i = C_1703_04C6(iparam0, iparam1);
+					i = FindPartyMemberWithObj(iparam0, iparam1);
 					if(i == -1)
 						lstack[sidx - 2] = 0x8001;
 					else
 						lstack[sidx - 2] = i;
 					sidx -= 2;
 				break;
-				case OP_ISINPARTY:
+				case OP_ISINPARTY:/*(npc): in party, onscreen and able to act*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
 					if(
 						IsPlrControl(iparam0) &&
-						C_1703_0153(iparam0) &&
+						IsNpcOnScreen(iparam0) &&
 						!IsDead(iparam0) &&
 						!IsAsleep(iparam0) &&
 						!IsParalyzed(iparam0)
@@ -510,41 +563,42 @@ conversation file. though, D_E7A1 is always 0
 						lstack[sidx - 1] = 0;
 					sidx --;
 				break;
-				case OP_HORSED:
+				case OP_HORSED:/*(npc)*/
 					iparam0 = mk_npcnum(lstack[sidx - 1]);
-					if(GetType(iparam0) == OBJ_1AF)
+					if(GetType(iparam0) == OBJ_MOUNTED_HORSE)
 						lstack[sidx - 1] = 1;
 					else
 						lstack[sidx - 1] = 0;
 					sidx --;
 				break;
-				case OP_OBJTYPE:
+				case OP_OBJTYPE:/*(object)*/
 					lstack[sidx - 1] = GetType(lstack[sidx - 1]);
 					sidx --;
 				break;
-				case OP__BC:/*constant 100?*/
-				case OP__BD:/*constant 100?*/
+				case OP_STUB_BC:/*constant 100?*/
+				case OP_STUB_BD:/*constant 100?*/
 					lstack[sidx - 2] = 100;
 					sidx -= 2;
 				break;
-				case OP__B4:/*read a 16bit value from array?*/
-					bp_6a = lstack[sidx - 2];/*integer variable*/
-					bp_5b = lstack[sidx - 1];/*array index*/
-					D_E7A7 = Talk_PC;
-					Talk_PC = (bp_5b << 1) + MK_0000(bp_6a);
+				case OP_DATA:/*read a 16bit value from array*/
+					arrayAddr = lstack[sidx - 2];/*array address*/
+					varIdx = lstack[sidx - 1];/*array index*/
+					TalkSavedPC = Talk_PC;
+					Talk_PC = (varIdx << 1) + TALK_OFFSET(arrayAddr);
 					lstack[sidx - 2] = READ_S16;
-					Talk_PC = D_E7A7;
+					Talk_PC = TalkSavedPC;
 					sidx -= 2;
 				break;
 				case OP_VARINT:/*# var*/
-					bp_5b = lstack[sidx - 1];
-					lstack[sidx - 1] = (unsigned)VarInt[bp_5b];
+					varIdx = lstack[sidx - 1];
+					lstack[sidx - 1] = (unsigned)VarInt[varIdx];
 					sidx --;
 				break;
-				case OP_VARSTR:/*$ string*/
-					bp_5b = lstack[sidx - 1];
-					lstack[sidx - 1] = (int)VarStr[bp_5b];
-					bp_58 = 1;
+				case OP_VARSTR:/*$ string: pushes a pointer*/
+					varIdx = lstack[sidx - 1];
+					lstack[sidx - 1] = (int)VarStr[varIdx];
+					/*from now on, OP_EQU compares strings*/
+					isString = 1;
 					sidx --;
 				break;
 				case OP_ADD:
@@ -581,7 +635,7 @@ conversation file. though, D_E7A1 is always 0
 					sidx -= 2;
 				break;
 				case OP_EQU:
-					if(bp_58) {
+					if(isString) {
 						if(stricmp((char *)lstack[sidx - 1], (char *)lstack[sidx - 2]) == 0)
 							lstack[sidx - 2] = 1;
 						else
@@ -594,6 +648,7 @@ conversation file. though, D_E7A1 is always 0
 					}
 					sidx -= 2;
 				break;
+				/*relational operators compare unsigned*/
 				case OP_SUP:
 					if((unsigned long)lstack[sidx - 2] > (unsigned long)lstack[sidx - 1])
 						lstack[sidx - 2] = 1;
@@ -630,11 +685,14 @@ conversation file. though, D_E7A1 is always 0
 					sidx -= 2;
 				break;
 				case OP_STRSEARCH:
-					bp_5b = lstack[sidx - 1];/*string variable*/
-					bp_6a = lstack[sidx - 2];/*array variable*/
-					bp_02 = VarStr[bp_5b];
-					D_E7A7 = Talk_PC;
-					Talk_PC = MK_0000(bp_6a);
+					/*(array of strings, $var): index of the first entry whose
+					first 4 chars match a word of $var (see str_i_compare),
+					or the number of entries if none*/
+					varIdx = lstack[sidx - 1];/*string variable*/
+					arrayAddr = lstack[sidx - 2];/*array variable*/
+					inputStr = VarStr[varIdx];
+					TalkSavedPC = Talk_PC;
+					Talk_PC = TALK_OFFSET(arrayAddr);
 					for(i = 0; (opcode = PARSE_U8) != OP_ENDSEARCH; ) {
 						Talk_PC --;
 						i ++;
@@ -642,25 +700,27 @@ conversation file. though, D_E7A1 is always 0
 							scratch[j] = opcode;
 						scratch[j] = 0;
 						if(strlen(scratch) >= 4)
-							bp_60 = 4;
+							cmpLen = 4;
 						else
-							bp_60 = strlen(scratch);
-						if(str_i_compare(scratch, bp_02, bp_60))
+							cmpLen = strlen(scratch);
+						if(str_i_compare(scratch, inputStr, cmpLen))
 							break;
 					}
 					if(opcode == OP_ENDSEARCH)
 						lstack[sidx - 2] = i;
 					else
 						lstack[sidx - 2] = i - 1;
-					Talk_PC = D_E7A7;
+					Talk_PC = TalkSavedPC;
 					sidx -= 2;
 				break;
 				case OP_VALSEARCH:
-					bp_5b = lstack[sidx - 1];/*integer variable*/
-					bp_6a = lstack[sidx - 2];/*array variable*/
-					iparam1 = VarInt[bp_5b];
-					D_E7A7 = Talk_PC;
-					Talk_PC = MK_0000(bp_6a);
+					/*(array of 16bit values, #var): index of the entry equal
+					to #var, or 0x8001 if none*/
+					varIdx = lstack[sidx - 1];/*integer variable*/
+					arrayAddr = lstack[sidx - 2];/*array variable*/
+					iparam1 = VarInt[varIdx];
+					TalkSavedPC = Talk_PC;
+					Talk_PC = TALK_OFFSET(arrayAddr);
 					for(i = 0; (opcode = TalkBuf[Talk_PC]) != OP_ENDSEARCH; Talk_PC += 2) {
 						i ++;
 						iparam0 = READ_S16;
@@ -671,7 +731,7 @@ conversation file. though, D_E7A1 is always 0
 						lstack[sidx - 2] = 0x8001;
 					else
 						lstack[sidx - 2] = i - 1;
-					Talk_PC = D_E7A7;
+					Talk_PC = TalkSavedPC;
 					sidx -= 2;
 				break;
 			}
@@ -684,41 +744,51 @@ conversation file. though, D_E7A1 is always 0
 	return lstack[0];
 }
 
-/*read U32 address?long goto?*/
-static unsigned long C_1703_1494(int bp06) {
-	int si;
-	unsigned long bp_08, bp_04;
+/*resolve an OP_ADDRESS operand (Talk_PC points just after OP_ADDRESS):
+reads the U32 address; if OP_NOINDEX follows it is a plain address,
+otherwise an index expression follows and selects an element of the
+array (isStringArray: skip <index> NUL-terminated strings; else skip
+<index> 16bit words).
+Leaves Talk_PC on the data and returns the PC where the caller must
+resume afterwards (for word arrays, back on the OP_LET_VALUE that
+parse_factor consumed)*/
+/*C_1703_1494*/static unsigned long TALK_ResolveAddress(int isStringArray) {
+	int index;
+	unsigned long resumePC, address;
 
-	bp_04 = READ_U32;
+	address = READ_U32;
 	Talk_PC += 4;
-	if(PARSE_U8 != OP_CALL) {
+	if(PARSE_U8 != OP_NOINDEX) {
 		Talk_PC --;
-		si = parse_factor();
-		bp_08 = Talk_PC;
-		Talk_PC = MK_0000(bp_04);
-		if(bp06) {
-			while(si > 0)
+		index = parse_factor();
+		resumePC = Talk_PC;
+		Talk_PC = TALK_OFFSET(address);
+		if(isStringArray) {
+			while(index > 0)
 				if(PARSE_U8 == 0)
-					si --;
+					index --;
 		} else {
-			Talk_PC += si << 1;
-			bp_08 -= 1;
+			Talk_PC += index << 1;
+			resumePC -= 1;
 		}
 	} else {
-		bp_08 = Talk_PC;
-		Talk_PC = MK_0000(bp_04);
+		resumePC = Talk_PC;
+		Talk_PC = TALK_OFFSET(address);
 	}
-	return bp_08;
+	return resumePC;
 }
 
+/*execute one opcode (already read) of a statement;
+objNum is the npc being talked to.
+returns 0:ok, 1:syntax error, -1:unknown opcode*/
 /*C_1703_153B*/static execute_op(unsigned char opcode, int objNum) {
-	int si, di;
-	unsigned long bp_1a;
-	int bp_16, bp_14;
-	int *bp_12;
-	int bp_10, bp_0e, bp_0c, bp_0a, bp_08;
-	int far *bp_06;
-	char *bp_02;
+	int tmp, varIdx;
+	unsigned long gotoAddr;
+	int ch, varType;
+	int *pVarInt;
+	int arg0, arg1, arg2, arg3, count;
+	int far *pArrayElem;
+	char *pStr;
 
 	switch(opcode) {
 		case OP_ENDIF:
@@ -727,213 +797,222 @@ static unsigned long C_1703_1494(int bp06) {
 			mustLeave = 1;
 		break;
 		case OP_PRINTSTR:
-			bp_16 = PARSE_U8;
-			if(bp_16 == OP_ADDRESS) {/*constant string[address]*/
-				D_E7A7 = C_1703_1494(1);
-				while(bp_16 = PARSE_U8)
-					CON_putch(bp_16);
-				Talk_PC = D_E7A7;
-			} else if(bp_16 != OP__D5) {/*VarStr*/
-				di = PARSE_U8;
-				bp_14 = PARSE_U8;
-				if(bp_14 != OP_VARSTR)
+			ch = PARSE_U8;
+			if(ch == OP_ADDRESS) {/*constant string[address]*/
+				TalkSavedPC = TALK_ResolveAddress(1);
+				while(ch = PARSE_U8)
+					CON_putch(ch);
+				Talk_PC = TalkSavedPC;
+			} else if(ch != OP_PRINT_NONE) {/*VarStr: <x> <index> OP_VARSTR <x>*/
+				varIdx = PARSE_U8;
+				varType = PARSE_U8;
+				if(varType != OP_VARSTR)
 					return 1;
-				CON_printf(VarStr[di]);
+				CON_printf(VarStr[varIdx]);
 				Talk_PC ++;
 			}
 		break;
 		case OP_LET:
-			di = PARSE_U8;
-			if(di == OP_ADDRESS) {
-				D_E7A7 = C_1703_1494(0);
-				bp_06 = (int far *)(TalkBuf + Talk_PC);
-				Talk_PC = D_E7A7;
-				bp_14 = 0;
+			/*destination: OP_ADDRESS (array element) or <index> OP_VARINT/OP_VARSTR*/
+			varIdx = PARSE_U8;
+			if(varIdx == OP_ADDRESS) {
+				TalkSavedPC = TALK_ResolveAddress(0);
+				pArrayElem = (int far *)(TalkBuf + Talk_PC);
+				Talk_PC = TalkSavedPC;
+				varType = 0;
 			} else {
-				bp_14 = PARSE_U8;
+				varType = PARSE_U8;
 			}
 			if(PARSE_U8 != OP_LET_VALUE)
 				return 1;
-			if(bp_14 == 0) {
-				*bp_06 = parse_factor();
-			} else if(bp_14 == OP_VARINT) {
-				bp_12 = VarInt + di;
-				*bp_12 = parse_factor();
+			if(varType == 0) {
+				*pArrayElem = parse_factor();
+			} else if(varType == OP_VARINT) {
+				pVarInt = VarInt + varIdx;
+				*pVarInt = parse_factor();
 			} else {/*String affectation*/
-				bp_02 = VarStr[di];
-				if((bp_16 = PARSE_U8) == OP_ADDRESS) {
-					D_E7A7 = C_1703_1494(1);
-					for(si = 0; bp_16 = PARSE_U8; si ++)
-						bp_02[si] = bp_16;
-					bp_02[si] = 0;
-					Talk_PC = D_E7A7;
+				pStr = VarStr[varIdx];
+				if((ch = PARSE_U8) == OP_ADDRESS) {
+					/*from a constant string*/
+					TalkSavedPC = TALK_ResolveAddress(1);
+					for(tmp = 0; ch = PARSE_U8; tmp ++)
+						pStr[tmp] = ch;
+					pStr[tmp] = 0;
+					Talk_PC = TalkSavedPC;
 				} else {
-					di = bp_16;
-					bp_14 = PARSE_U8;
-					if(bp_14 != OP_VARSTR)
+					/*from another string variable*/
+					varIdx = ch;
+					varType = PARSE_U8;
+					if(varType != OP_VARSTR)
 						return 1;
-					strcpy(bp_02, VarStr[di]);
+					strcpy(pStr, VarStr[varIdx]);
 				}
 			}
 		break;
 		case OP_IF:
-			si = parse_factor();
-			if(si == -1)
+			tmp = parse_factor();
+			if(tmp == -1)
 				return 1;
-			if(si == 0) {
-				for(bp_16 = PARSE_U8; bp_16 != OP_ELSE && bp_16 != OP_ENDIF; bp_16 = PARSE_U8) {
-					if(bp_16 == OP_GOTO)
+			if(tmp == 0) {
+				/*false: skip to the matching OP_ELSE/OP_ENDIF
+				(no nesting; skips the operands that may contain those bytes)*/
+				for(ch = PARSE_U8; ch != OP_ELSE && ch != OP_ENDIF; ch = PARSE_U8) {
+					if(ch == OP_GOTO)
 						Talk_PC +=4;
-					else if(bp_16 == OP_BYTE)
+					else if(ch == OP_BYTE)
 						Talk_PC ++;
-					else if(bp_16 == OP_WORD)
+					else if(ch == OP_WORD)
 						Talk_PC += 2;
 				}
 			}
 		break;
 		case OP_ELSE:
-				for(bp_16 = PARSE_U8; bp_16 != OP_ENDIF; bp_16 = PARSE_U8) {
-					if(bp_16 == OP_GOTO)
+				/*end of the "true" part: skip to OP_ENDIF*/
+				for(ch = PARSE_U8; ch != OP_ENDIF; ch = PARSE_U8) {
+					if(ch == OP_GOTO)
 						Talk_PC +=4;
-					else if(bp_16 == OP_BYTE)
+					else if(ch == OP_BYTE)
 						Talk_PC ++;
-					else if(bp_16 == OP_WORD)
+					else if(ch == OP_WORD)
 						Talk_PC += 2;
 				}
 		break;
 		case OP_GOTO:
-			bp_1a = READ_U32;
-			Talk_PC = MK_0000(bp_1a);
+			gotoAddr = READ_U32;
+			Talk_PC = TALK_OFFSET(gotoAddr);
 		break;
 		case OP_GIVEOBJ: case OP_TAKEOBJ:
-			bp_10 = mk_npcnum(parse_factor());
-			bp_0e = parse_factor();
-			bp_0c = parse_factor();
-			bp_0a = parse_factor();
+			/*(npc, object type, quality, quantity)*/
+			arg0 = mk_npcnum(parse_factor());
+			arg1 = parse_factor();
+			arg2 = parse_factor();
+			arg3 = parse_factor();
 			if(opcode == OP_TAKEOBJ)
-				TakeObj(bp_10, bp_0e, QualQuan(bp_0c, bp_0a));
+				TakeObj(arg0, arg1, QualQuan(arg2, arg3));
 			else
-				GiveObj(bp_10, bp_0e, QualQuan(bp_0c, bp_0a));
+				GiveObj(arg0, arg1, QualQuan(arg2, arg3));
 		break;
 		case OP_WAIT:
 			PromptCh = 1;
 			CON_getch();
 			PromptCh = 5;
 		break;
-		case OP_SETMODE:
-			bp_10 = mk_npcnum(parse_factor());
-			bp_0e = parse_factor();
-			NPCMode[bp_10] = bp_0e;
-			if(bp_0e == AI_SLEEP) {
-				SetAsleep(bp_10);
-				SetTypeUnconscious(bp_10);
+		case OP_SETMODE:/*(npc, AI mode)*/
+			arg0 = mk_npcnum(parse_factor());
+			arg1 = parse_factor();
+			NPCMode[arg0] = arg1;
+			if(arg1 == AI_SLEEP) {
+				SetAsleep(arg0);
+				SetTypeUnconscious(arg0);
 			}
-			if(bp_0e != AI_PLAY && GetType(bp_10) == OBJ_188)
-				SetType(bp_10, OBJ_182);
+			if(arg1 != AI_PLAY && GetType(arg0) == OBJ_MUSICIAN_SHORT_CAPE)
+				SetType(arg0, OBJ_MUSICIAN_LONG_CAPE);
 		break;
-		case OP_MOVEOBJ:
-			bp_10 = mk_npcnum(parse_factor());
-			bp_0e = parse_factor();
-			InsertObj(bp_10, bp_0e, INVEN);
+		case OP_MOVEOBJ:/*(object, new owner npc): put in npc's inventory*/
+			arg0 = mk_npcnum(parse_factor());
+			arg1 = parse_factor();
+			InsertObj(arg0, arg1, INVEN);
 		break;
-		case OP_TRANSFEROBJ:
-			bp_10 = parse_factor();
-			bp_0e = parse_factor();
-			bp_0c = mk_npcnum(parse_factor());
-			bp_0a = mk_npcnum(parse_factor());
-			InsertObj(FindInvType(bp_0c, bp_10, bp_0e), bp_0a, INVEN);
+		case OP_TRANSFEROBJ:/*(object type, quality, from npc, to npc)*/
+			arg0 = parse_factor();
+			arg1 = parse_factor();
+			arg2 = mk_npcnum(parse_factor());
+			arg3 = mk_npcnum(parse_factor());
+			InsertObj(FindInvType(arg2, arg0, arg1), arg3, INVEN);
 		break;
-		case OP_ADDKARMA:
-			bp_10 = parse_factor();
-			KARMA += bp_10;
+		case OP_ADDKARMA:/*max 99*/
+			arg0 = parse_factor();
+			KARMA += arg0;
 			if(KARMA > 99)
 				KARMA = 99;
 		break;
-		case OP_SUBKARMA:
-			bp_10 = parse_factor();
-			if(KARMA > bp_10)
-				KARMA -= bp_10;
+		case OP_SUBKARMA:/*min 0*/
+			arg0 = parse_factor();
+			if(KARMA > arg0)
+				KARMA -= arg0;
 			else
 				KARMA = 0;
 		break;
-		case OP_DELAY:
-			bp_10 = parse_factor();
-			for(bp_08 = 0; bp_08 < bp_10 * 20; bp_08 ++)
-				OtherAnimations();
+		case OP_DELAY:/*(n): n * 20 animation frames*/
+			arg0 = parse_factor();
+			for(count = 0; count < arg0 * 20; count ++)
+				DisplayTick();
 		break;
-		case OP_SET: case OP_CLR:
-			bp_10 = mk_npcnum(parse_factor());
-			bp_0e = parse_factor();
+		case OP_SET: case OP_CLR:/*(npc, flag bit)*/
+			arg0 = mk_npcnum(parse_factor());
+			arg1 = parse_factor();
 			if(opcode == OP_SET)
-				TalkFlags[bp_10] |= 1 << bp_0e;
+				TalkFlags[arg0] |= 1 << arg1;
 			else
-				TalkFlags[bp_10] &= ~(1 << bp_0e);
+				TalkFlags[arg0] &= ~(1 << arg1);
 		break;
-		case OP_RESURRECT:
-			bp_10 = mk_npcnum(parse_factor());
-			for(bp_0e = Link[bp_10]; bp_0e >= 0; bp_0e = Link[bp_0e])
-				if(GetType(bp_0e) == OBJ_153)
+		case OP_RESURRECT:/*(npc): raise the dead body in npc's inventory*/
+			arg0 = mk_npcnum(parse_factor());
+			for(arg1 = Link[arg0]; arg1 >= 0; arg1 = Link[arg1])
+				if(GetType(arg1) == OBJ_DEAD_BODY)
 					break;
-			C_1944_1A42(bp_0e);
+			SPELL_ReviveNPC(arg1);
 		break;
-		case OP_HEAL:
-			bp_10 = mk_npcnum(parse_factor());
-			HitPoints[bp_10] = MaxHP(bp_10);
+		case OP_HEAL:/*(npc): full hit points*/
+			arg0 = mk_npcnum(parse_factor());
+			HitPoints[arg0] = MaxHP(arg0);
 		break;
-		case OP_CURE:
-			bp_10 = mk_npcnum(parse_factor());
-			ClrPoisoned(bp_10);
+		case OP_CURE:/*(npc)*/
+			arg0 = mk_npcnum(parse_factor());
+			ClrPoisoned(arg0);
 		break;
-		case OP__D8:/*set var $Y to ...?*/
-			bp_10 = mk_npcnum(parse_factor());
-			VarStr['Y' - 0x37] = C_1703_0116(bp_10);
+		case OP_SETNAME_Y:/*set var $Y to the npc's name*/
+			arg0 = mk_npcnum(parse_factor());
+			VarStr['Y' - 0x37] = TALK_GetCharName(arg0);
 		break;
-		case OP__DF:/*set var $Y to ...?*/
-			bp_10 = mk_npcnum(parse_factor());
-			if(bp_10 == 1)
+		case OP_SETNAME_Y_YOU:/*set var $Y to the npc's name ("you" for the avatar)*/
+			arg0 = mk_npcnum(parse_factor());
+			if(arg0 == 1)
 				VarStr['Y' - 0x37] = /*09D7*/"you";
 			else
-				VarStr['Y' - 0x37] = C_1703_0116(bp_10);
+				VarStr['Y' - 0x37] = TALK_GetCharName(arg0);
 		break;
 		case OP_REST:
-			for(bp_08 = 0; bp_08 < PartySize; bp_08 ++)
-				if(C_1703_0153(Party[bp_08]))
-					C_3200_0467(bp_08, 0);
-			C_2FC1_19A1();
+			/*the onscreen party sleeps (and heals) until 5 o'clock*/
+			for(count = 0; count < PartySize; count ++)
+				if(IsNpcOnScreen(Party[count]))
+					HealPartyMember(count, 0);
+			ResetMapView();
 			AllowNPCTeleport = 1;
 			if(Time_H == 5)
-				C_0A33_1355(60);
+				PassTime(60);
 			while(Time_H != 5)
-				C_0A33_1355(60);
+				PassTime(60);
 			AllowNPCTeleport = 0;
 			ScreenFade = 1;
-			C_1100_0306();
-			OtherAnimations();
+			VIS_UpdateView();
+			DisplayTick();
 		break;
 		case OP_SHOW_INVENTORY:
-			bp_10 = parse_factor();
+			/*(1: the active party member, else the npc talked to)*/
+			arg0 = parse_factor();
 			ShowNPCInven = 0;
-			NPC_1Hand = 0;
-			if(bp_10 == 1) {
-				D_04B3 = Active;
+			NPC_2Handed = 0;
+			if(arg0 == 1) {
+				StatusMember = Active;
 			} else if(IsPlrControl(objNum)) {
-				for(si = 0; si < 0x10; si ++)
-					if(Party[si] == objNum) {
-						D_04B3 = si;
+				for(tmp = 0; tmp < 0x10; tmp ++)
+					if(Party[tmp] == objNum) {
+						StatusMember = tmp;
 						break;
 					}
 			} else {
 				ShowNPCInven = objNum;
 			}
-			C_155D_1065(objNum);
+			STAT_ShowInventory(objNum);
 		break;
 		case OP_SHOW_CONVERSE:
-			bp_10 = mk_npcnum(parse_factor());
-			C_27A1_02D9(bp_10);/*display character's portrait*/
+			arg0 = mk_npcnum(parse_factor());
+			ShowPortraitAndInventory(arg0);/*display character's portrait*/
 		break;
-		case OP_GETHORSE:
-			bp_10 = mk_npcnum(parse_factor());
-			C_27A1_5431(bp_10, MapX, MapY, OBJ_MakeDirFrame(OBJ_1AF, GetDirection(bp_10)), 0);
+		case OP_GETHORSE:/*(npc): mount a horse*/
+			arg0 = mk_npcnum(parse_factor());
+			MountHorse(arg0, MapX, MapY, OBJ_MakeDirFrame(OBJ_MOUNTED_HORSE, GetDirection(arg0)), 0);
 		break;
 		default:
 			CON_printf(/*09DB*/"Unknown command.\n");
@@ -942,13 +1021,15 @@ static unsigned long C_1703_1494(int bp06) {
 	return 0;
 }
 
+/*execute statements (printing text bytes) until an input/section
+opcode, 0, OP_ENDRES or OP_LEAVE; Talk_PC is left on the stop opcode*/
 static /*C_1703_1C45*/parse_statement(int objNum) {
 	unsigned char opcode;
 
 	opcode = PARSE_U8;
 	while(
 		opcode != OP_ASKTOP &&
-		opcode < OP__F0 && opcode != 0 &&
+		opcode < OP_FIRST_SECTION && opcode != 0 &&
 		opcode != OP_GETSTR && opcode != OP_GET &&
 		opcode != OP_ENDRES
 	) {
@@ -960,8 +1041,9 @@ static /*C_1703_1C45*/parse_statement(int objNum) {
 				break;
 			}
 		} else if(opcode == OP_KEY) {
-			if(D_E79C == 0) {
-				C_1703_1D01(objNum);
+			/*only the first matching KEY block of an input answers*/
+			if(TalkAnswered == 0) {
+				TALK_MatchKeywords(objNum);
 			} else {
 				while(opcode != OP_ENDRES)
 					opcode = PARSE_U8;
@@ -976,79 +1058,87 @@ static /*C_1703_1C45*/parse_statement(int objNum) {
 	Talk_PC --;
 }
 
-/*KEY/RES*/
-static C_1703_1D01(int objNum) {
-	int si, di;
-	int bp_02;
+/*KEY/RES: Talk_PC is just after OP_KEY. Compares each comma separated
+keyword (TalkKeyword) with the player's input (TalkInput; "*" matches anything);
+on a match, runs the answer after OP_RES (and sets TalkAnswered), otherwise
+skips to the next OP_KEY/OP_ENDRES/OP_SCRIPT_MARK*/
+/*C_1703_1D01*/static TALK_MatchKeywords(int objNum) {
+	int op, len;
+	int moreKeys;
 
-	bp_02 = 1;
-	if(D_E732[0] == 0)
-		strcpy(D_E732, /*0A0F*/"bye");
-	while(bp_02) {
-		bp_02 = 0;
-		for(di = 0; (D_E728[di] = PARSE_U8) != ',' && D_E728[di] != OP_RES; di ++);
-		if(D_E728[di] == ',')
-			bp_02 = 1;
+	moreKeys = 1;
+	if(TalkInput[0] == 0)
+		strcpy(TalkInput, /*0A0F*/"bye");
+	while(moreKeys) {
+		moreKeys = 0;
+		for(len = 0; (TalkKeyword[len] = PARSE_U8) != ',' && TalkKeyword[len] != OP_RES; len ++);
+		if(TalkKeyword[len] == ',')
+			moreKeys = 1;
 		else
 			Talk_PC --;
-		D_E728[di] = 0;
-		if(str_i_compare(D_E728, D_E732, strlen(D_E728)) || D_E728[0] == '*') {
+		TalkKeyword[len] = 0;
+		if(str_i_compare(TalkKeyword, TalkInput, strlen(TalkKeyword)) || TalkKeyword[0] == '*') {
 			while(PARSE_U8 != OP_RES);
 			CON_printf(/*098E + 0Bh*/"\n");
-			D_E79C = 1;
+			TalkAnswered = 1;
 			parse_statement(objNum);
 			return;
 		}
 	}
+	/*no match: skip the answer*/
 	do {
-		si = PARSE_U8;
-		if(si == OP_GOTO)
+		op = PARSE_U8;
+		if(op == OP_GOTO)
 			Talk_PC += 4;
-		else if(si == OP_BYTE)
+		else if(op == OP_BYTE)
 			Talk_PC += 1;
-		else if(si == OP_WORD)
+		else if(op == OP_WORD)
 			Talk_PC += 2;
-	} while(si != OP_KEY && si != OP_ENDRES && si != OP__FF);
-	if(si == OP_KEY || si == OP__FF)
+	} while(op != OP_KEY && op != OP_ENDRES && op != OP_SCRIPT_MARK);
+	if(op == OP_KEY || op == OP_SCRIPT_MARK)
 		Talk_PC --;
 }
 
-/*C_1703_1E23*/TalkDriver(int objNum_0, int objNum_1) {
-	int si, di;
-	int opcode, dir, bp_06, bp_04, objTyp;
+/*conversation entry point: <speaker> (a party member) talks to <npcObj>.
+Checks whether the npc can answer, loads its script, prints the
+description, runs the main section, then loops reading the player's
+input and running the matching keyword answers until OP_LEAVE/OP_SCRIPT_MARK*/
+/*C_1703_1E23*/TalkDriver(int speaker, int npcObj) {
+	int idx, number;
+	int opcode, dir, savedStatus, savedMember, objTyp;
 
-	D_E796[1] = objNum_0;
-	D_E796[0] = objNum_1;
-	if(IsPlrControl(D_E796[0]) && !C_1703_0153(D_E796[0])) {
+	TalkNpcs[1] = speaker;
+	TalkNpcs[0] = npcObj;
+	if(IsPlrControl(TalkNpcs[0]) && !IsNpcOnScreen(TalkNpcs[0])) {
 		CON_printf(/*0A13*/"\nNot on screen.\n");
 		return;
 	}
-	if(D_2CC3 != -1 && D_2CC3 != 0) {
+	if(SoloMember != -1 && SoloMember != 0) {
 		CON_printf(/*0A24*/"\nNot in solo mode.\n");
 		return;
 	}
-	objTyp = GetType(objNum_1);
-	/*status or shrine*/
-	if(objTyp == OBJ_18D || objTyp == OBJ_18E || objTyp == OBJ_18F || objTyp == OBJ_189)
-		D_E796[0] = GetQual(objNum_1);
+	objTyp = GetType(npcObj);
+	/*statue or shrine: its quality is the npc number of the script to use*/
+	if(objTyp == OBJ_STATUE_OF_MONDAIN || objTyp == OBJ_STATUE_OF_MINAX || objTyp == OBJ_STATUE_OF_EXODUS || objTyp == OBJ_SHRINE)
+		TalkNpcs[0] = GetQual(npcObj);
 
-	if(D_E796[0] == 0 || D_E796[0] >= 0xe0) {
-		if(IsDead(D_E796[0]) && SeanceFlag) {
+	if(TalkNpcs[0] == 0 || TalkNpcs[0] >= 0xe0) {
+		if(IsDead(TalkNpcs[0]) && SeanceFlag) {
 			CON_printf(/*0A38*/"\nYou hear a deep moan.\n");
 			return;
 		}
 	}
 
-	if(D_E796[0] == objNum_1) {
+	if(TalkNpcs[0] == npcObj) {
 		if(
-			(IsDead(D_E796[0]) && !SeanceFlag) ||
-			IsAsleep(D_E796[0]) || IsParalyzed(D_E796[0]) ||
-			NPCMode[D_E796[0]] == AI_VIGILANTE ||
-			NPCMode[D_E796[0]] == AI_FEAR ||
-			NPCMode[D_E796[0]] == AI_RETREAT ||
-			NPCMode[D_E796[0]] == AI_ARREST ||
-			GetAlignment(D_E796[0]) == EVIL ||
-			GetAlignment(D_E796[0]) == CHAOTIC
+			(IsDead(TalkNpcs[0]) && !SeanceFlag) ||
+			IsAsleep(TalkNpcs[0]) || IsParalyzed(TalkNpcs[0]) ||
+			NPCMode[TalkNpcs[0]] == AI_VIGILANTE ||
+			NPCMode[TalkNpcs[0]] == AI_FEAR ||
+			NPCMode[TalkNpcs[0]] == AI_RETREAT ||
+			NPCMode[TalkNpcs[0]] == AI_ARREST ||
+			GetAlignment(TalkNpcs[0]) == EVIL ||
+			GetAlignment(TalkNpcs[0]) == CHAOTIC
 		) {
 			CON_printf(/*0A50*/"\n\nNo response\n");
 			return;
@@ -1058,44 +1148,47 @@ static C_1703_1D01(int objNum) {
 		CON_printf(/*0A50+1*/"\nNo response\n");
 		return;
 	}
-	if(D_E796[1] == D_E796[0]) {
+	if(TalkNpcs[1] == TalkNpcs[0]) {
 		CON_printf(/*0A5F*/"\nTalking to yourself?\n");
 		return;
 	}
 
+	/*face the npc*/
 	dir = MkDirection(PointerX, PointerY);
 	if(dir != -1) {
-		C_1E0F_0664(Party[Active], dir);
-		C_1100_0306();
+		UpdateMoveFrame(Party[Active], dir);
+		VIS_UpdateView();
 	}
 
+	/*temporary npcs (>= 0xe0) only talk if guard, wisp or gargoyle*/
 	if(
-		D_E796[0] == 0 ||
-		(D_E796[0] >= 0xe0 && objTyp != OBJ_17E && objTyp != OBJ_175 && objTyp != OBJ_16B && objTyp != OBJ_16A) ||
-		!LoadConversation(D_E796[0], TalkBuf)
+		TalkNpcs[0] == 0 ||
+		(TalkNpcs[0] >= 0xe0 && objTyp != OBJ_GUARD && objTyp != OBJ_WISP && objTyp != OBJ_GARGOYLE && objTyp != OBJ_WINGED_GARGOYLE) ||
+		!LoadConversation(TalkNpcs[0], TalkBuf)
 	) {
 		CON_printf(/*0A76*/"\nFunny, no response.\n");
 		return;
 	}
-	C_1703_028B();/*compute #N*/
+	TALK_SetNearbyPartyVar();/*compute #N*/
 	Talk_PC = 0;
-	/*skip OP__FF ncpnum*/
-	si = 2;
+	/*skip OP_SCRIPT_MARK ncpnum*/
+	idx = 2;
 	/*get the npc name: $N*/
-	while((opcode = TalkBuf[si++]) != OP_DESC)
-		VarStr['N' - 0x37][si - 3] = opcode;
-	VarStr['N' - 0x37][si - 3] = 0;
+	while((opcode = TalkBuf[idx++]) != OP_DESC)
+		VarStr['N' - 0x37][idx - 3] = opcode;
+	VarStr['N' - 0x37][idx - 3] = 0;
 	/* */
 	IsInConversation = 1;
-	bp_06 = StatusDisplay;
-	bp_04 = D_04B3;
+	savedStatus = StatusDisplay;
+	savedMember = StatusMember;
 	if(!SeanceFlag) {
-		if(GetType(objNum_1) != OBJ_189)
-			C_27A1_02D9(objNum_1);/*display character's portrait*/
+		if(GetType(npcObj) != OBJ_SHRINE)
+			ShowPortraitAndInventory(npcObj);/*display character's portrait*/
 		CON_printf(/*0A8C*/"\n\nYou see ");
 		while(PARSE_U8 != OP_DESC);
-		D_E79D = Talk_PC;
-		parse_statement(D_E796[0]);
+		/*remember the description for "look"*/
+		TalkDescPC = Talk_PC;
+		parse_statement(TalkNpcs[0]);
 	}
 	CON_printf(/*098E + 0Bh*/"\n");
 	while(PARSE_U8 != OP_MAIN);
@@ -1103,76 +1196,78 @@ static C_1703_1D01(int objNum) {
 	opcode = PARSE_U8;
 	if(opcode != OP_ASKTOP) {
 		Talk_PC --;
-		parse_statement(D_E796[0]);
+		parse_statement(TalkNpcs[0]);
 	} else {
 		Talk_PC --;
 	}
 
+	/*main loop: get some input, then run the keyword blocks*/
 	while(!mustLeave) {
-		D_E7A7 = Talk_PC;
+		TalkSavedPC = Talk_PC;
 		opcode = PARSE_U8;
 		if(opcode == OP_ASKTOP) {
 			CON_printf(/*0A97*/"\nyou say:");
-			CON_gets(D_E732, 50);
+			CON_gets(TalkInput, 50);
 			CON_printf(/*098E + 0Bh*/"\n");
-			D_E79C = 0;
-		} else if(opcode == OP_GETSTR) {
-			CON_gets(D_E732, 50);
-			si = PARSE_U8;
+			TalkAnswered = 0;
+		} else if(opcode == OP_GETSTR) {/*<index> OP_VARSTR*/
+			CON_gets(TalkInput, 50);
+			idx = PARSE_U8;
 			if(PARSE_U8 != OP_VARSTR)
 				break;
-			strcpy(VarStr[si], D_E732);
+			strcpy(VarStr[idx], TalkInput);
 			CON_printf(/*0AA1*/"\n\n");
-			D_E79C = 0;
-		} else if(opcode == OP_GETINT) {
-			CON_gets(D_E732, 50);
-			si = PARSE_U8;
+			TalkAnswered = 0;
+		} else if(opcode == OP_GETINT) {/*<index> OP_VARINT*/
+			CON_gets(TalkInput, 50);
+			idx = PARSE_U8;
 			if(PARSE_U8 != OP_VARINT)
 				break;
-			di = C_27A1_0205(D_E732, 0);
-			VarInt[si] = (di == -1 || di == -2)?0:di;
+			number = ParseNumberInput(TalkInput, 0);
+			VarInt[idx] = (number == -1 || number == -2)?0:number;
 			CON_printf(/*0AA1*/"\n\n");
-			D_E79C = 0;
-		} else if(opcode == OP_GETDIGIT) {
+			TalkAnswered = 0;
+		} else if(opcode == OP_GETDIGIT) {/*<index> OP_VARINT*/
 			do {
-				D_E732[0] = CON_getch();
-				D_E732[1] = 0;
-				di = C_27A1_0205(D_E732, 0);
-				if(D_E732[0] == '\r' || D_E732[0] == 27)
-					di = 0;
-			} while(di == -1 || di == -2);
-			si = PARSE_U8;
+				TalkInput[0] = CON_getch();
+				TalkInput[1] = 0;
+				number = ParseNumberInput(TalkInput, 0);
+				if(TalkInput[0] == '\r' || TalkInput[0] == 27)
+					number = 0;
+			} while(number == -1 || number == -2);
+			idx = PARSE_U8;
 			if(PARSE_U8 != OP_VARINT)
 				break;
-			VarInt[si] = di;
-			CON_printf(/*0AA4*/"%d\n\n", di);
-			D_E79C = 0;
+			VarInt[idx] = number;
+			CON_printf(/*0AA4*/"%d\n\n", number);
+			TalkAnswered = 0;
 		} else if(opcode == OP_GETCHR) {
-			D_E732[0] = CON_getch();
-			D_E732[1] = 0;
-			CON_printf(/*0AA9*/"%s\n\n", D_E732);
-			D_E79C = 0;
+			TalkInput[0] = CON_getch();
+			TalkInput[1] = 0;
+			CON_printf(/*0AA9*/"%s\n\n", TalkInput);
+			TalkAnswered = 0;
 		} else if(opcode == OP_WAIT) {
 			CON_getch();
 		} else if(opcode == OP_GET) {/*OP_GET c0 .. cn OP_KEY -- GET [...]*/
-			for(si = 0; (opcode = PARSE_U8) != OP_KEY; si ++)
-				D_E728[si] = opcode;
+			/*wait for one of the allowed keys*/
+			for(idx = 0; (opcode = PARSE_U8) != OP_KEY; idx ++)
+				TalkKeyword[idx] = opcode;
 			Talk_PC --;
-			D_E728[si] = 0;
+			TalkKeyword[idx] = 0;
 			do {
 				opcode = CON_getch();
-				for(si = 0; D_E728[si] && toupper(D_E728[si]) != opcode; si++);
-			} while(D_E728[si] == 0);
+				for(idx = 0; TalkKeyword[idx] && toupper(TalkKeyword[idx]) != opcode; idx++);
+			} while(TalkKeyword[idx] == 0);
 			if(opcode >= ' ')
 				CON_printf(/*0AAE*/"%c", opcode);
-			D_E732[0] = opcode;
-			D_E732[1] = 0;
+			TalkInput[0] = opcode;
+			TalkInput[1] = 0;
 			CON_printf(/*098E + 0Bh*/"\n");
-			D_E79C = 0;
+			TalkAnswered = 0;
 		} else if(opcode == OP_KEY) {
 			CON_printf(/*0AB1*/"\nCommand for input key expected.");
 			break;
-		} else if(opcode == OP__FF) {
+		} else if(opcode == OP_SCRIPT_MARK) {
 			break;
 		} else if(opcode == OP_ENDRES) {
 			/**/
@@ -1181,26 +1276,28 @@ static C_1703_1D01(int objNum) {
 			break;
 		}
 		/*$Z is the last player's input*/
-		VarStr['Z' - 0x37] = D_E732;
+		VarStr['Z' - 0x37] = TalkInput;
 
-		if(stricmp(D_E732, /*0AEA*/"look") == 0) {
+		if(stricmp(TalkInput, /*0AEA*/"look") == 0) {
+			/*replay the description, then resume*/
 			CON_printf(/*0A8C + 2*/"You see ");
-			Talk_PC = D_E79D;
-			parse_statement(D_E796[0]);
-			Talk_PC = D_E7A7;
+			Talk_PC = TalkDescPC;
+			parse_statement(TalkNpcs[0]);
+			Talk_PC = TalkSavedPC;
 		} else {
-			parse_statement(D_E796[0]);
+			parse_statement(TalkNpcs[0]);
 		}
 	}
 	mustLeave = 0;
 	IsInConversation = 0;
-	if(PartySize == D_04B3) {
-		D_04B3 = 0;
-		D_07CC = 0;
-		StatusDisplay = CMD_91;
+	/*restore the status display (the displayed member may have left)*/
+	if(PartySize == StatusMember) {
+		StatusMember = 0;
+		PartyListTop = 0;
+		StatusDisplay = CMD_STAT_PARTY;
 	} else {
-		StatusDisplay = bp_06;
-		D_04B3 = bp_04;
+		StatusDisplay = savedStatus;
+		StatusMember = savedMember;
 	}
 	StatusDirty ++;
 }

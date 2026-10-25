@@ -9,7 +9,7 @@
 /*====---- start of grounds ----====*/
 
 #define TIL_001	0x001
-#define TIL_002	0x002
+#define TIL_SWAMP_0	0x002
 #define TIL_003	0x003
 #define TIL_004	0x004
 #define TIL_005	0x005
@@ -29,118 +29,118 @@
 
 #define TIL_06F	0x06f
 
-#define TIL_090	0x090
+#define TIL_WALL_FIRST	0x090
 
 #define TIL_0D6	0x0d6
 
-#define TIL_0DC	0x0dc
+#define TIL_LAVA_0	0x0dc
 #define TIL_0DD	0x0dd
 #define TIL_0DE	0x0de
 #define TIL_0DF	0x0df
 
 #define TIL_0FC	0x0fc
 /*Hidden*/
-#define TIL_0FF	0x0ff
+#define TIL_HIDDEN	0x0ff
 
-#define TIL_100	0x100
-#define TIL_101	0x101
+#define TIL_WALL_CORNERS	0x100
+#define TIL_HIT	0x101
 
 
-#define TIL_13C	0x13c
+#define TIL_SUNDIAL_NIGHT	0x13c
 
 /*Sundial #0*/
-#define TIL_148	0x148
+#define TIL_SUNDIAL	0x148
 
 /*Outside #0*/
-#define TIL_160	0x160
+#define TIL_OUTSIDE	0x160
 
 /*Sun #0*/
-#define TIL_169	0x169
+#define TIL_SUN_0	0x169
 /*Sun #1*/
-#define TIL_16A	0x16a
+#define TIL_SUN_1	0x16a
 /*Sun #2*/
-#define TIL_16B	0x16b
+#define TIL_SUN_2	0x16b
 /*Cursor direction*/
-#define TIL_16C	0x16c
+#define TIL_CURSOR_DIRECTION	0x16c
 /*Cursor select*/
-#define TIL_16D	0x16d
+#define TIL_CURSOR_SELECT	0x16d
 
 /*Equip up left*/
-#define TIL_170	0x170
+#define TIL_EQUIP_UP_LEFT	0x170
 /*Equip up right*/
-#define TIL_171	0x171
+#define TIL_EQUIP_UP_RIGHT	0x171
 /*Equip down left*/
-#define TIL_172	0x172
+#define TIL_EQUIP_DOWN_LEFT	0x172
 /*Equip down right*/
-#define TIL_173	0x173
+#define TIL_EQUIP_DOWN_RIGHT	0x173
 /*Underground left*/
-#define TIL_174	0x174
+#define TIL_UNDERGROUND_LEFT	0x174
 /*Underground middle*/
-#define TIL_175	0x175
+#define TIL_UNDERGROUND_MIDDLE	0x175
 /*Underground right*/
-#define TIL_176	0x176
+#define TIL_UNDERGROUND_RIGHT	0x176
 
-#define TIL_17C	0x17C
+#define TIL_POISON_MISSILE	0x17C
 #define TIL_17D	0x17D
-#define TIL_17E	0x17E
+#define TIL_FIRE_MISSILE	0x17E
 #define TIL_17F	0x17F
 /*Button party*/
-#define TIL_180	0x180
+#define TIL_BUTTON_PARTY	0x180
 /*Button portrait*/
-#define TIL_181	0x181
+#define TIL_BUTTON_PORTRAIT	0x181
 /*Button bag*/
-#define TIL_182	0x182
+#define TIL_BUTTON_BAG	0x182
 /*Button next left*/
-#define TIL_183	0x183
+#define TIL_BUTTON_NEXT_LEFT	0x183
 /*Button next right*/
-#define TIL_184	0x184
+#define TIL_BUTTON_NEXT_RIGHT	0x184
 /*Slot 0*/
-#define TIL_185	0x185
+#define TIL_SLOT_TWO_HANDED	0x185
 
-#define TIL_187	0x187
+#define TIL_BUTTON_COMBAT_MODE	0x187
 /*Missile #0*/
-#define TIL_188	0x188
+#define TIL_MISSILE_0	0x188
 /*Missile #1*/
-#define TIL_189	0x189
+#define TIL_MISSILE_1	0x189
 /*Missile #2*/
-#define TIL_18A	0x18a
+#define TIL_MISSILE_2	0x18a
 /*Missile #3*/
-#define TIL_18B	0x18b
+#define TIL_MISSILE_3	0x18b
 /*Missile #4*/
-#define TIL_18C	0x18c
+#define TIL_MISSILE_4	0x18c
 /*Missile #5*/
-#define TIL_18D	0x18d
+#define TIL_MISSILE_5	0x18d
 /*Missile #6*/
-#define TIL_18E	0x18e
+#define TIL_MISSILE_6	0x18e
 /*Missile #7*/
-#define TIL_18F	0x18f
+#define TIL_MISSILE_7	0x18f
 /*Button attack*/
-#define TIL_190	0x190
+#define TIL_BUTTON_ATTACK	0x190
 
 /*Button floppy*/
-#define TIL_19A	0x19a
+#define TIL_SLOT_FRAME	0x19a
 /*Slot empty*/
-#define TIL_19B	0x19b
+#define TIL_SLOT_EMPTY	0x19b
 
-#define TIL_19E	0x19e
-#define TIL_19F	0x19f
+#define TIL_BUTTON_COMBAT_OFF	0x19e
+#define TIL_BUTTON_COMBAT_ON	0x19f
 
 /*Frame #0*/
-#define TIL_1B0	0x1b0
+#define TIL_FRAME_0	0x1b0
 /*Frame #1*/
-#define TIL_1B1	0x1b1
+#define TIL_FRAME_1	0x1b1
 /*Frame #2*/
-#define TIL_1B2	0x1b2
+#define TIL_FRAME_2	0x1b2
 /*Frame #3*/
-#define TIL_1B3	0x1b3
+#define TIL_FRAME_3	0x1b3
 /*Frame #4*/
-#define TIL_1B4	0x1b4
+#define TIL_FRAME_4	0x1b4
 /*Frame #5*/
-#define TIL_1B5	0x1b5
+#define TIL_FRAME_5	0x1b5
 /*Frame #6*/
-#define TIL_1B6	0x1b6
+#define TIL_FRAME_6	0x1b6
 /*Frame #7*/
-#define TIL_1B7	0x1b7
+#define TIL_FRAME_7	0x1b7
 /*lens related?*/
 #define TIL_1B8	0x1b8
 /*lens related?*/
@@ -150,330 +150,330 @@
 /*lens related?*/
 #define TIL_1BB	0x1bb
 /*Darkness?*/
-#define TIL_1BC	0x1bc
+#define TIL_DARKNESS	0x1bc
 
 /*====---- start of items ----====*/
 /*Leather Helm*/
-#define TIL_200	0x200
+#define TIL_LEATHER_HELM	0x200
 
 /*Magic Helm*/
-#define TIL_207	0x207
+#define TIL_MAGIC_HELM	0x207
 /*Wooden Shield*/
-#define TIL_208	0x208
+#define TIL_WOODEN_SHIELD	0x208
 
 /*Magic Shield*/
-#define TIL_20F	0x20f
+#define TIL_MAGIC_SHIELD	0x20f
 /*Cloth Armor*/
-#define TIL_210	0x210
+#define TIL_CLOTH_ARMOR	0x210
 
 /*Magic Armor*/
-#define TIL_216	0x216
+#define TIL_MAGIC_ARMOR	0x216
 /*Spiked Collar*/
-#define TIL_217	0x217
+#define TIL_SPIKED_COLLAR	0x217
 /*Guild Belt*/
-#define TIL_218	0x218
+#define TIL_GUILD_BELT	0x218
 /*Gargoyle Belt*/
-#define TIL_219	0x219
+#define TIL_GARGOYLE_BELT	0x219
 /*Leather Boots*/
-#define TIL_21A	0x21a
+#define TIL_LEATHER_BOOTS	0x21a
 /*Swamp Boots*/
-#define TIL_21B	0x21b
+#define TIL_SWAMP_BOOTS	0x21b
 
 /*Sling*/
-#define TIL_220	0x220
+#define TIL_SLING	0x220
 /*Club*/
-#define TIL_221	0x221
+#define TIL_CLUB	0x221
 /*Main Gauche*/
-#define TIL_222	0x222
+#define TIL_MAIN_GAUCHE	0x222
 /*Spear*/
-#define TIL_223	0x223
+#define TIL_SPEAR	0x223
 /*Throwing Axe*/
-#define TIL_224	0x224
+#define TIL_THROWING_AXE	0x224
 /*Dagger*/
-#define TIL_225	0x225
+#define TIL_DAGGER	0x225
 /*Mace*/
-#define TIL_226	0x226
+#define TIL_MACE	0x226
 /*Morning Star*/
-#define TIL_227	0x227
+#define TIL_MORNING_STAR	0x227
 /*Bow*/
-#define TIL_228	0x228
+#define TIL_BOW	0x228
 /*Crossbow*/
-#define TIL_229	0x229
+#define TIL_CROSSBOW	0x229
 /*Sword*/
-#define TIL_22A	0x22a
+#define TIL_SWORD	0x22a
 /*2-handed Hammer*/
-#define TIL_22B	0x22b
+#define TIL_TWO_HANDED_HAMMER	0x22b
 
 /*Halberd*/
-#define TIL_22E	0x22e
+#define TIL_HALBERD	0x22e
 /*Glass Sword*/
-#define TIL_22F	0x22f
+#define TIL_GLASS_SWORD	0x22f
 /*Boomerang*/
-#define TIL_230	0x230
+#define TIL_BOOMERANG	0x230
 /*Triple Crossbow*/
-#define TIL_231	0x231
+#define TIL_TRIPLE_CROSSBOW	0x231
 /*Force Field*/
-#define TIL_232	0x232
+#define TIL_FORCE_FIELD	0x232
 
 /*Web*/
-#define TIL_234	0x234
+#define TIL_WEB	0x234
 /*Magic Bow*/
-#define TIL_235	0x235
+#define TIL_MAGIC_BOW	0x235
 /*Arrow*/
-#define TIL_236	0x236
+#define TIL_ARROW	0x236
 /*Bolt*/
-#define TIL_237	0x237
+#define TIL_BOLT	0x237
 /*Spellbook*/
-#define TIL_238	0x238
+#define TIL_SPELLBOOK	0x238
 /*Spell*1*/
-#define TIL_239	0x239
+#define TIL_SPELL	0x239
 
 /*Vortex Cube*/
-#define TIL_23D	0x23d
+#define TIL_VORTEX_CUBE	0x23d
 
 /*moonstone #0*/
-#define TIL_248	0x248
+#define TIL_MOONSTONE_0	0x248
 /*moonstone #1*/
-#define TIL_249	0x249
+#define TIL_MOONSTONE_1	0x249
 /*moonstone #2*/
-#define TIL_24A	0x24a
+#define TIL_MOONSTONE_2	0x24a
 /*moonstone #3*/
-#define TIL_24B	0x24b
+#define TIL_MOONSTONE_3	0x24b
 /*moonstone #4*/
-#define TIL_24C	0x24c
+#define TIL_MOONSTONE_4	0x24c
 /*moonstone #5*/
-#define TIL_24D	0x24d
+#define TIL_MOONSTONE_5	0x24d
 /*moonstone #6*/
-#define TIL_24E	0x24e
+#define TIL_MOONSTONE_6	0x24e
 /*moonstone #7*/
-#define TIL_24F	0x24f
+#define TIL_MOONSTONE_7	0x24f
 /*Ankh Amulet*/
-#define TIL_250	0x250
+#define TIL_ANKH_AMULET	0x250
 /*Snake Amulet*/
-#define TIL_251	0x251
+#define TIL_SNAKE_AMULET	0x251
 /*Amulet of Submission*/
-#define TIL_252	0x252
+#define TIL_AMULET_OF_SUBMISSION	0x252
 /*Gem*/
-#define TIL_253	0x253
+#define TIL_GEM	0x253
 /*Staff*/
-#define TIL_254	0x254
+#define TIL_STAFF	0x254
 /*Lightning Wand*/
-#define TIL_255	0x255
+#define TIL_LIGHTNING_WAND	0x255
 /*Fire Wand*/
-#define TIL_256	0x256
+#define TIL_FIRE_WAND	0x256
 /*Storm Cloak*/
-#define TIL_257	0x257
+#define TIL_STORM_CLOAK	0x257
 /*Ring*/
-#define TIL_258	0x258
+#define TIL_RING	0x258
 /*Flask of Oil*/
-#define TIL_259	0x259
+#define TIL_FLASK_OF_OIL	0x259
 /*red gate left*/
-#define TIL_25A	0x25a
+#define TIL_RED_GATE_LEFT	0x25a
 /*red gate right*/
-#define TIL_25B	0x25b
+#define TIL_RED_GATE_RIGHT	0x25b
 /*moongate left*/
-#define TIL_25C	0x25c
+#define TIL_MOONGATE_LEFT	0x25c
 /*moongate right*/
-#define TIL_25D	0x25d
+#define TIL_MOONGATE_RIGHT	0x25d
 
 /*Orb of the Moons*/
-#define TIL_25F	0x25f
+#define TIL_ORB_OF_THE_MOONS	0x25f
 
 /*Torch*/
-#define TIL_262	0x262
+#define TIL_TORCH	0x262
 /*Torch(lit)*/
-#define TIL_263	0x263
-#define TIL_264	0x264
+#define TIL_TORCH_LIT	0x263
+#define TIL_ZU_YLEM	0x264
 
 /*Checst(magical lock)*/
-#define TIL_26E	0x26e
+#define TIL_CHEST_MAGIC_LOCKED	0x26e
 
 /*Scythe*/
-#define TIL_270	0x270
+#define TIL_SCYTHE	0x270
 /*Pitchfork*/
-#define TIL_271	0x271
+#define TIL_PITCHFORK	0x271
 /*Rake*/
-#define TIL_272	0x272
+#define TIL_RAKE	0x272
 /*Pick*/
-#define TIL_273	0x273
+#define TIL_PICK	0x273
 /*Shovel*/
-#define TIL_274	0x274
+#define TIL_SHOVEL	0x274
 /*Hoe*/
-#define TIL_275	0x275
+#define TIL_HOE	0x275
 
 /*Rolling Pin*/
-#define TIL_279	0x279
+#define TIL_ROLLING_PIN	0x279
 
-#define TIL_27D	0x27d
-#define TIL_27E	0x27e
-#define TIL_27F	0x27f
+#define TIL_CLEAVER	0x27d
+#define TIL_KNIFE	0x27e
+#define TIL_KNIFE_1	0x27f
 /*Wine*/
-#define TIL_280	0x280
-#define TIL_281	0x281
+#define TIL_WINE	0x280
+#define TIL_MEAD	0x281
 
 /*Tunic*/
-#define TIL_28C	0x28c
+#define TIL_TUNIC	0x28c
 
 /*Dress*/
-#define TIL_28E	0x28e
+#define TIL_DRESS	0x28e
 
 /*Pants*/
-#define TIL_29D	0x29d
+#define TIL_PANTS	0x29d
 
 /*Decorative Sword #0*/
-#define TIL_2A2	0x2a2
+#define TIL_DECORATIVE_SWORD_0	0x2a2
 /*Decorative Sword #1*/
-#define TIL_2A3	0x2a3
+#define TIL_DECORATIVE_SWORD_1	0x2a3
 
 /*Crystal Ball*/
-#define TIL_2B6	0x2b6
+#define TIL_CRYSTAL_BALL	0x2b6
 
 /*Lute*/
-#define TIL_2B9	0x2b9
+#define TIL_LUTE	0x2b9
 
 /*Spikes*/
-#define TIL_2DB	0x2db
+#define TIL_SPIKES	0x2db
 /*Trap*/
-#define TIL_2DC	0x2dc
+#define TIL_TRAP	0x2dc
 
 /*Brazier #2*/
-#define TIL_31E 0x31e
+#define TIL_BRAZIER_2 0x31e
 /*Brazier #3*/
-#define TIL_31F 0x31f
+#define TIL_BRAZIER_3 0x31f
 
 /*Fan*/
-#define TIL_326 0x326
+#define TIL_FAN 0x326
 
 /*Rune of Honesty*/
-#define TIL_368 0x368
+#define TIL_RUNE_OF_HONESTY 0x368
 /*Rune of Compassion*/
-#define TIL_369 0x369
+#define TIL_RUNE_OF_COMPASSION 0x369
 /*Rune of Valor*/
-#define TIL_36A 0x36a
+#define TIL_RUNE_OF_VALOR 0x36a
 /*Rune of Justice*/
-#define TIL_36B 0x36b
+#define TIL_RUNE_OF_JUSTICE 0x36b
 /*Rune of Sacrifice*/
-#define TIL_36C 0x36c
+#define TIL_RUNE_OF_SACRIFICE 0x36c
 /*Rune of Honor*/
-#define TIL_36D 0x36d
+#define TIL_RUNE_OF_HONOR 0x36d
 /*Rune of Spirituality*/
-#define TIL_36E 0x36e
+#define TIL_RUNE_OF_SPIRITUALITY 0x36e
 /*Rune of Humility*/
-#define TIL_36F 0x36f
+#define TIL_RUNE_OF_HUMILITY 0x36f
 
 /*Campfire*/
-#define TIL_37A 0x37a
+#define TIL_CAMPFIRE 0x37a
 
 /*Protection Ring*/
-#define TIL_37D 0x37d
+#define TIL_PROTECTION_RING 0x37d
 /*Regeneration Ring*/
-#define TIL_37E 0x37e
+#define TIL_REGENERATION_RING 0x37e
 /*Invisibility Ring*/
-#define TIL_37F 0x37f
+#define TIL_INVISIBILITY_RING 0x37f
 
 /*Potion #0*/
-#define TIL_3A8 0x3a8
+#define TIL_POTION_0 0x3a8
 /*Potion #1*/
-#define TIL_3A9 0x3a9
+#define TIL_POTION_1 0x3a9
 /*Potion #2*/
-#define TIL_3AA 0x3aa
+#define TIL_POTION_2 0x3aa
 /*Potion #3*/
-#define TIL_3AB 0x3ab
+#define TIL_POTION_3 0x3ab
 /*Potion #4*/
-#define TIL_3AC 0x3ac
+#define TIL_POTION_4 0x3ac
 /*Potion #5*/
-#define TIL_3AD 0x3ad
+#define TIL_POTION_5 0x3ad
 /*Potion #6*/
-#define TIL_3AE 0x3ae
+#define TIL_POTION_6 0x3ae
 /*Potion #7*/
-#define TIL_3AF 0x3af
+#define TIL_POTION_7 0x3af
 
-#define TIL_3F1 0x3f1
-#define TIL_3F2 0x3f2
+#define TIL_CRANK 0x3f1
+#define TIL_LOG_SAW 0x3f2
 
-#define TIL_3FC 0x3fc
-#define TIL_3FD 0x3fd
-#define TIL_3FE 0x3fe
+#define TIL_CHAIN 0x3fc
+#define TIL_LIGHTSOURCE 0x3fd
+#define TIL_HEATSOURCE 0x3fe
 
 /*Oaken Door south magic lock[left]*/
-#define TIL_40C 0x40c
+#define TIL_OAKEN_DOOR_MAGIC_S_L 0x40c
 /*Oaken Door south magic lock[right]*/
-#define TIL_40D 0x40d
+#define TIL_OAKEN_DOOR_MAGIC_S_R 0x40d
 /*Oaken Door east magic lock[up]*/
-#define TIL_40E 0x40e
+#define TIL_OAKEN_DOOR_MAGIC_E_U 0x40e
 /*Oaken Door east magic lock[down]*/
-#define TIL_40F 0x40f
+#define TIL_OAKEN_DOOR_MAGIC_E_D 0x40f
 
 /*Windowed Door south magic lock[left]*/
-#define TIL_41C 0x41c
+#define TIL_WINDOWED_DOOR_MAGIC_S_L 0x41c
 /*Windowed Door south magic lock[right]*/
-#define TIL_41D 0x41d
+#define TIL_WINDOWED_DOOR_MAGIC_S_R 0x41d
 /*Windowed Door east magic lock[up]*/
-#define TIL_41E 0x41e
+#define TIL_WINDOWED_DOOR_MAGIC_E_U 0x41e
 /*Windowed Door east magic lock[down]*/
-#define TIL_41F 0x41f
+#define TIL_WINDOWED_DOOR_MAGIC_E_D 0x41f
 
 /*Cedar Door south magic lock[left]*/
-#define TIL_42C 0x42c
+#define TIL_CEDAR_DOOR_MAGIC_S_L 0x42c
 /*Cedar Door south magic lock[right]*/
-#define TIL_42D 0x42d
+#define TIL_CEDAR_DOOR_MAGIC_S_R 0x42d
 /*Cedar Door east magic lock[up]*/
-#define TIL_42E 0x42e
+#define TIL_CEDAR_DOOR_MAGIC_E_U 0x42e
 /*Cedar Door east magic lock[down]*/
-#define TIL_42F 0x42f
+#define TIL_CEDAR_DOOR_MAGIC_E_D 0x42f
 
 /*Steel Door south magic lock[left]*/
-#define TIL_43C 0x43c
+#define TIL_STEEL_DOOR_MAGIC_S_L 0x43c
 /*Steel Door south magic lock[right]*/
-#define TIL_43D 0x43d
+#define TIL_STEEL_DOOR_MAGIC_S_R 0x43d
 /*Steel Door east magic lock[up]*/
-#define TIL_43E 0x43e
+#define TIL_STEEL_DOOR_MAGIC_E_U 0x43e
 /*Steel Door east magic lock[down]*/
-#define TIL_43F 0x43f
+#define TIL_STEEL_DOOR_MAGIC_E_D 0x43f
 
-#define TIL_464	0x464
-#define TIL_465	0x465
+#define TIL_COOK_FIRE_2	0x464
+#define TIL_COOK_FIRE_3	0x465
 
-#define TIL_46A	0x46a
-#define TIL_46B	0x46b
+#define TIL_COOK_FIRE_8	0x46a
+#define TIL_COOK_FIRE_9	0x46b
 
-#define TIL_484	0x484
-#define TIL_485	0x485
+#define TIL_SILVER_HORN	0x484
+#define TIL_SILVER_HORN_1	0x485
 
 /*Fire Field*/
-#define TIL_48C	0x48c
+#define TIL_FIRE_FIELD	0x48c
 /*Poison Field*/
-#define TIL_48D	0x48d
+#define TIL_POISON_FIELD	0x48d
 /*Protection Field*/
-#define TIL_48E	0x48e
+#define TIL_PROTECTION_FIELD	0x48e
 /*Sleep Field*/
-#define TIL_48F	0x48f
+#define TIL_SLEEP_FIELD	0x48f
 
-#define TIL_4A9	0x4a9
+#define TIL_BOOKSTAND_1	0x4a9
 
-#define TIL_4DC	0x4dc
-#define TIL_4DD	0x4dd
+#define TIL_SIGN_4	0x4dc
+#define TIL_SIGN_5	0x4dd
 
 /*Tangle Vine #0*/
-#define TIL_5B2	0x5b2
+#define TIL_TANGLE_VINE_0	0x5b2
 /*Tangle Vine #1*/
-#define TIL_5B3	0x5b3
+#define TIL_TANGLE_VINE_1	0x5b3
 /*Tangle Vine #2*/
-#define TIL_5B4	0x5b4
+#define TIL_TANGLE_VINE_2	0x5b4
 /*Tangle Vine #3*/
-#define TIL_5B5	0x5b5
+#define TIL_TANGLE_VINE_3	0x5b5
 /*Tangle Vine #4*/
-#define TIL_5B6	0x5b6
+#define TIL_TANGLE_VINE_4	0x5b6
 /*Tangle Vine #5*/
-#define TIL_5B7	0x5b7
+#define TIL_TANGLE_VINE_5	0x5b7
 
 /*broken lens #0*/
-#define TIL_6D0	0x6d0
+#define TIL_BROKEN_LENS_0	0x6d0
 /*lens #0*/
-#define TIL_6D1	0x6d1
+#define TIL_LENS_0	0x6d1
 /*broken lens #1*/
-#define TIL_6D2	0x6d2
+#define TIL_BROKEN_LENS_1	0x6d2
 /*lens #1*/
-#define TIL_6D3	0x6d3
+#define TIL_LENS_1	0x6d3
 
 #endif

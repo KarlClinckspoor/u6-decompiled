@@ -13,27 +13,27 @@ extern char far LightlyMsg[];
 extern char far BarelyMsg[];
 extern char far WoundedMsg[];
 extern char far GrazedMsg[];
-extern char far KiledMsg[];
+extern char far KilledMsg[];/*typo*/
 extern char far ShipCannonMsg[];
 extern char far BareHandsMsg[];
 extern char far WithMsg[];
 extern char far OutOfArrowsMsg[];
 extern char far OutOfBoltsMsg[];
-extern char far D_356A_00A3[];
+/*356A:00A3*/extern char far AttackSelfPassMsg[];/*"pass." when the attack target is oneself*/
 extern char far NothingMsg[];
 extern char far AttackWithMsg[];
 extern char far AttackMsg[];
 extern char far WhatMsg[];
 extern char far PartyModeMsg[];
-extern char far D_356A_00DF[];
+/*356A:00DF*/extern char far FailsToRespondMsg[];/*"`%s fails to respond." (solo mode refused)*/
 extern char far SoloModeMsg[];
 extern char far ExitToDOSMsg[];
 extern char far SaveMsg[];
-extern char far D_356A_0121[];
-extern char far D_356A_0128[];
+/*356A:0121*/extern char far PassMsg[];/*"Pass!" command*/
+/*356A:0128*/extern char far ShaminoHearsMsg[];/*"Shamino says, I hear something to the %s!"*/
 extern char far GlassSwordMsg[];
 extern char far InterferenceMsg[];
-extern char far D_356A_0181[];
+/*356A:0181*/extern char far ArghMsg[];/*"%s: ARGH!" npc dragged under*/
 extern char far RegurgitatedMsg[];
 extern char far DraggedUnderMsg[];
 extern char far PoisonedMsg[];
@@ -47,23 +47,23 @@ extern char far BreakOffMsg[];
 extern char far OutOfRangeMsg[];
 extern char far ArrestMsg[];
 extern char far GotoJailMsg[];
-extern char far D_356A_02D9[];
+/*356A:02D9*/extern char far DefendThyselfMsg[];/*"No ... Then defend thyself, rogue!" refusing arrest*/
 extern char far StealMsg[];
 extern char far NotOnShipMsg[];
-extern char far D_356A_032D[];
-extern char far D_356A_0354[];
-extern char far D_356A_0382[];
+/*356A:032D*/extern char far DarknessEngulfsMsg[];/*"An unending darkness engulfs thee..." avatar death*/
+/*356A:0354*/extern char far KalLorMsg[];/*"A voice in the darkness intones, KAL LOR!"*/
+/*356A:0382*/extern char far NoSacredQuestMsg[];/*"Thou art not upon a Sacred Quest! Passage denied!"*/
 extern char far NoWindMsg[];
 extern char far NotInBookMsg[];
 extern char far BrokenMsg[];
 extern char far RingVanishedMsg[];
 extern char far NotInCombatMsg[];
-extern char far D_356A_044A[];
-extern char far D_356A_045F[];
-extern char far D_356A_0493[];
+/*356A:044A*/extern char far YellsForHelpMsg[];/*"`%s yells for help!"*/
+/*356A:045F*/extern char far ShaminoThisIsMsg[];/*"Shamino says, This is the " (dungeon name follows)*/
+/*356A:0493*/extern char far MustBePartyModeMsg[];/*"You must be in party mode to enter."*/
 extern char far NotAllHereMsg[];
 extern char far NotInSoloMsg[];
-extern char far D_356A_047B[];
+/*356A:047B*/extern char far StuckInWebMsg[];/*"`%s is stuck in a web!"*/
 extern char far DateMsg[];
 extern char far SoundOnMsg[];
 extern char far SoundOffMsg[];

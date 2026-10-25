@@ -1,9 +1,16 @@
+/*
+	OSI sound library: OSI_playNote.
+	(the build uses the assembly version SOUND5.ASM in OSISND.LIB; the
+	original was most likely this C code)
+*/
 #include "u6.h"
 
-/*C_33E3_0008*/OSI_playNote(int bp08, int bp06) {
+/*play a PC speaker tone "frequency" (if sound is on) for "duration"
+  delay units (OSI_sDelay speed table entry 1, calibrated on CpuSpeed)*/
+/*C_33E3_0008*/OSI_playNote(int frequency, int duration) {
 	if((char)SoundFlag)
-		OSI_sound(bp08);
-	OSI_sDelay(1, bp06);
+		OSI_sound(frequency);
+	OSI_sDelay(1, duration);
 	OSI_nosound();
 }
 

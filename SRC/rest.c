@@ -5,6 +5,21 @@
  */
 /*
 	module REST/REPAIR
+
+	The "Rest" command (REST_Command) and its helpers.
+	Before resting the game checks that the party is in the wilderness
+	(no building walls in view, not wading), that no hostile NPC is in the
+	loaded area, that no stranger stands within 5 tiles, that the party is
+	not in solo mode and that there is free room around the leader.
+	On a ship, "rest" repairs the hull instead (REST_RepairHull).
+	Otherwise a campfire is lit, the party gathers around it, a musician
+	(if any) plays a tune while everybody eats one piece of food from the
+	edible list (EdibleTypes), then everybody except the chosen guard falls
+	unconscious for 1-9 hours.  Every 10 game minutes there is a small
+	chance of a night encounter (wolves, snakes, rats or gremlins spawned
+	just outside the view).  An uninterrupted rest of 4+ hours, when
+	NextSleep allows it, heals the party (HealPartyMember, also used by the
+	inn keepers' OP_REST conversation opcode).
 */
 #include "u6.h"
 
@@ -12,53 +27,64 @@
 #include <math.h>
 
 /*edible items*/
-int D_2CCE[] = {
-	OBJ_080,OBJ_081,
-	OBJ_082,OBJ_083,
-	OBJ_084,OBJ_085,
-	OBJ_087,OBJ_05F,
-	OBJ_0B8,OBJ_060,
-	OBJ_109,OBJ_0B4,
-	OBJ_0D1,OBJ_0D2
+/*2CCE*/int EdibleTypes[] = {
+	OBJ_LOAF_OF_BREAD,OBJ_PORTION_OF_MEAT,
+	OBJ_ROLLS,OBJ_CAKE,
+	OBJ_CHEESE,OBJ_HAM,
+	OBJ_HORSE_CHOPS,OBJ_BUNCH_OF_GRAPES,
+	OBJ_JAR_OF_HONEY,OBJ_BUTTER,
+	OBJ_FISH,OBJ_BUCKET_OF_MILK,
+	OBJ_MEAT_RIB,OBJ_RIBS
 };
 
+/*returns 1 if objType is one of the 14 edible types of EdibleTypes*/
 static /*C_3200_000E*/IsEdible(int objType) {
-	int si;
+	int i;
 
-	for(si = 0; si < 14; si ++) {
-		if(D_2CCE[si] == objType)
+	for(i = 0; i < 14; i ++) {
+		if(EdibleTypes[i] == objType)
 			return 1;
 	}
 	return 0;
 }
 
+/*look for food in the inventory of party member objNum only;
+  if found, one unit of that food type is consumed (TakeObj) and 1 is returned*/
 static /*C_3200_0035*/TryEatExclusive(int objNum) {
-	int si, di;
+	int item, itemType;
 
-	for(si = Link[objNum]; si >= 0 && GetCoordUse(si) != LOCXYZ && C_1184_1D2E(si, objNum); si = Link[si]) {
-		di = GetType(si);
-		if(IsEdible(di)) {
-			TakeObj(objNum, di, 1);
+	/*walk the objects linked after objNum as long as they are
+	  (recursively) contained in objNum's inventory*/
+	for(item = Link[objNum]; item >= 0 && GetCoordUse(item) != LOCXYZ && OBJ_IsInside(item, objNum); item = Link[item]) {
+		itemType = GetType(item);
+		if(IsEdible(itemType)) {
+			TakeObj(objNum, itemType, 1);
 			return 1;
 		}
 	}
 	return 0;
 }
 
+/*party member #partyNum eats: first from his own pack,
+  else from the first party member who has some food.
+  returns 1 if something was eaten*/
 static /*C_3200_0094*/TryEat(int partyNum) {
-	int si;
+	int i;
 
 	if(TryEatExclusive(Party[partyNum]))
 		return 1;
-	for(si = 0; si < PartySize; si ++) {
-		if(TryEatExclusive(Party[si]))
+	for(i = 0; i < PartySize; i ++) {
+		if(TryEatExclusive(Party[i]))
 			return 1;
 	}
 	return 0;
 }
 
-/*check wilderness*/
-static C_3200_00D3() {
+/*check wilderness:
+  returns 1 (=NOT in the wilderness) if a wall tile with a wall-side bit
+  (TERRAIN_WALL_W..80, i.e. a building wall) is in the 11x11 view, or if
+  the party stands on a wet tile without being in a vehicle*/
+/*C_3200_00D3*/static REST_NotInWilderness() {
 	int x, y, numTile;
 
 	for(x = MapX - 5; x <= MapX + 5; x ++) {
@@ -73,72 +99,83 @@ static C_3200_00D3() {
 	return 0;
 }
 
-/*check no foes near*/
-static C_3200_0160() {
-	int si, di;
-	int bp_04, bp_02;
+/*check foes near:
+  returns 1 if a hostile (EVIL or CHAOTIC) NPC is on this level inside the
+  39x39 tiles square starting at the 8-aligned corner 16 tiles up-left of
+  the party (roughly the loaded 40x40 area)*/
+/*C_3200_0160*/static REST_FoesNear() {
+	int objNum, coordMask;
+	int areaX0, areaY0;
 
+	/*map width: 256 underground, 1024 on the surface*/
 	if(MapZ)
-		di = 0xff;
+		coordMask = 0xff;
 	else
-		di = 0x3ff;
-	bp_04 = (MapX - 0x10) & 0x3f8;
-	bp_02 = (MapY - 0x10) & 0x3f8;
-	for(si = 0; si < 0x100; si ++) {
+		coordMask = 0x3ff;
+	areaX0 = (MapX - 0x10) & 0x3f8;
+	areaY0 = (MapY - 0x10) & 0x3f8;
+	for(objNum = 0; objNum < 0x100; objNum ++) {
 		if(
-			ObjShapeType[si] != 0 &&
-			(GetAlignment(si) == EVIL || GetAlignment(si) == CHAOTIC) &&
-			((GetX(si) - bp_04) & di) < 39 &&
-			((GetY(si) - bp_02) & di) < 39 &&
-			GetZ(si) == MapZ
+			ObjShapeType[objNum] != 0 &&
+			(GetAlignment(objNum) == EVIL || GetAlignment(objNum) == CHAOTIC) &&
+			((GetX(objNum) - areaX0) & coordMask) < 39 &&
+			((GetY(objNum) - areaY0) & coordMask) < 39 &&
+			GetZ(objNum) == MapZ
 		) return 1;
 	}
 	return 0;
 }
 
-/*check no one near*/
-static C_3200_0226() {
-	int si;
+/*check others near:
+  returns 1 if a non party NPC (horses excepted) is within 5 tiles*/
+/*C_3200_0226*/static REST_OthersNear() {
+	int objNum;
 
-	for(si = 0; si < 0x100; si ++) {
+	for(objNum = 0; objNum < 0x100; objNum ++) {
 		if(
-			ObjShapeType[si] != 0 &&
-			!IsPlrControl(si) &&
-			CLOSE_ENOUGH(5, GetX(si), GetY(si), MapX, MapY) &&
-			GetZ(si) == MapZ &&
-			GetType(si) != OBJ_1AE
+			ObjShapeType[objNum] != 0 &&
+			!IsPlrControl(objNum) &&
+			CLOSE_ENOUGH(5, GetX(objNum), GetY(objNum), MapX, MapY) &&
+			GetZ(objNum) == MapZ &&
+			GetType(objNum) != OBJ_HORSE
 		) return 1;
 	}
 	return 0;
 }
 
-/*check enough room*/
-static C_3200_02C4() {
-	int si, di;
+/*check room:
+  returns 1 (=NOT enough room) if one of the 3x3 tiles centered on the
+  party is not passable for the active party member*/
+/*C_3200_02C4*/static REST_NoRoom() {
+	int dx, dy;
 
-	for(si = 0; si < 3; si ++) {
-		for(di = 0; di < 3; di ++) {
-			if(!C_1E0F_000F(Party[Active], MapX + si - 1, MapY + di - 1))
+	for(dx = 0; dx < 3; dx ++) {
+		for(dy = 0; dy < 3; dy ++) {
+			if(!CanMoveTo(Party[Active], MapX + dx - 1, MapY + dy - 1))
 				return 1;
 		}
 	}
 	return 0;
 }
 
+/*spawn 1-8 hostile monsters of a random type (wolf, snake, giant rat or
+  gremlin) just outside the 11x11 view, on a random side.
+  returns 1 if at least one monster could be placed*/
 static /*C_3200_0309*/HasNightEncounter() {
 	int objNum, objType, numMonsters, i, tries;
 	int pos, incr, x, y, ret;
 
 	ret = 0;
 	switch(OSI_rand(0, 3)) {
-		case 0: objType = OBJ_15F; break;
-		case 1: objType = OBJ_166; break;
-		case 2: objType = OBJ_156; break;
-		case 3: objType = OBJ_161; break;
+		case 0: objType = OBJ_WOLF; break;
+		case 1: objType = OBJ_SNAKE; break;
+		case 2: objType = OBJ_GIANT_RAT; break;
+		case 3: objType = OBJ_GREMLIN; break;
 	}
 	numMonsters = OSI_rand(1, 8);
 	for(i = 0; i < numMonsters; i ++) {
 		objNum = EGG_generate(objType, 0, 0, MapZ);
+		/*up to 8 tries to find a passable spot*/
 		for(tries = 0; tries < 8; tries ++) {
 			pos = OSI_rand(0, 3);
 			incr = OSI_rand(0, 10);
@@ -148,7 +185,7 @@ static /*C_3200_0309*/HasNightEncounter() {
 				case 2: x = MapX + 7;        y = MapY + incr - 6; break;/*right*/
 				case 3: x = MapX + incr - 6; y = MapY + 6; break;/*down*/
 			}
-			if(C_1E0F_000F(objNum, x, y))
+			if(CanMoveTo(objNum, x, y))
 				break;
 		}
 		if(tries != 8) {
@@ -163,101 +200,110 @@ static /*C_3200_0309*/HasNightEncounter() {
 	return ret;
 }
 
-/*restore health*/
-C_3200_0467(int bp08, int bp06) {
-	int si, di, bp_02;
+/*restore health of party member #partyIdx:
+  heals a random amount between 1/2 and all of the missing hit points
+  (capped at MaxHP) and fully restores magic points.
+  verbose: print "<name> has healed."
+  (also called by the OP_REST conversation opcode, i.e. inns)*/
+/*C_3200_0467*/HealPartyMember(int partyIdx, int verbose) {
+	int npc, missingHP, healAmount;
 
-	si = Party[bp08];
-	di = MaxHP(si) - HitPoints[si];
-	if(di) {
-		if(di == 1)
-			di = 2;
-		bp_02 = OSI_rand(0, di / 2) + (di / 2);
-		if(HitPoints[si] + bp_02 < MaxHP(si))
-			HitPoints[si] += bp_02;
+	npc = Party[partyIdx];
+	missingHP = MaxHP(npc) - HitPoints[npc];
+	if(missingHP) {
+		if(missingHP == 1)
+			missingHP = 2;
+		healAmount = OSI_rand(0, missingHP / 2) + (missingHP / 2);
+		if(HitPoints[npc] + healAmount < MaxHP(npc))
+			HitPoints[npc] += healAmount;
 		else
-			HitPoints[si] = MaxHP(si);
-		if(bp06) {
-			CON_printf(Names[bp08]);
+			HitPoints[npc] = MaxHP(npc);
+		if(verbose) {
+			CON_printf(Names[partyIdx]);
 			CON_printf(/*2D02*/" has healed.\n");
 		}
 	}
-	MAGIC[si] = MaxMagic(si);
+	MAGIC[npc] = MaxMagic(npc);
 }
 
-/*repair hull*/
-static C_3200_0514() {
-	int si, di;
+/*repair hull: "rest" aboard a ship adds 5% to the hull strength
+  (the ship's HitPoints, max 100) and lets 5 minutes pass*/
+/*C_3200_0514*/static REST_RepairHull() {
+	int ship, unused;
 
-	si = Party[Active];
-	if(HitPoints[si] + 5 >= 100)
-		HitPoints[si] = 100;
+	ship = Party[Active];
+	if(HitPoints[ship] + 5 >= 100)
+		HitPoints[ship] = 100;
 	else
-		HitPoints[si] += 5;
-	C_0A33_1355(5);
-	CON_printf(/*2D10*/"\nHull Strength: %d%%\n", HitPoints[si]);
+		HitPoints[ship] += 5;
+	PassTime(5);
+	CON_printf(/*2D10*/"\nHull Strength: %d%%\n", HitPoints[ship]);
 }
 
-/*index/orientation
+/*places around the campfire for party members #0..#7:
+  CampOfsX/CampOfsY = x/y offset from the fire, CampFacing = direction the member
+  faces (0=N 2=E 4=S 6=W), i.e. everybody looks at the fire.
+  layout (member index/direction, y grows downwards):
 +---+---+---+
-|5/0|1/0|6/6|
+|7/2|0/4|4/4|
 +---+---+---+
 |3/2|   |2/6|
 +---+---+---+
-|7/2|0/4|4/4|
+|5/0|1/0|6/6|
 +---+---+---+*/
-char D_2CEA[] = { 0, 0, 1,-1, 1,-1, 1,-1};
-char D_2CF2[] = {-1, 1, 0, 0,-1, 1, 1,-1};
-char D_2CFA[] = { 4, 0, 6, 2, 4, 0, 6, 2};
+/*2CEA*/char CampOfsX[] = { 0, 0, 1,-1, 1,-1, 1,-1};
+/*2CF2*/char CampOfsY[] = {-1, 1, 0, 0,-1, 1, 1,-1};
+/*2CFA*/char CampFacing[] = { 4, 0, 6, 2, 4, 0, 6, 2};
 
-/*"rest"*/
-C_3200_055D() {
-	int i, di;
+/*"rest" command*/
+/*C_3200_055D*/REST_Command() {
+	int i, npc;
 	struct coord xyz;
 	int ch, sleepTime, campFire;
-	int someoneCannotMove, cannotMove, bp_10, noMeal, guardNum;
-	int bp_0a, guardMode, bp_06, wakeReason, bp_02;
+	int someoneCannotMove, cannotMove, gatherTries, noMeal, guardNum;
+	int eaterIdx, guardMode, mouseState, wakeReason, wasSelectMode;
 
 	someoneCannotMove = 1;
-	bp_10 = 20;
-	guardNum = 0x100;
-	wakeReason = 0;
+	gatherTries = 20;
+	guardNum = 0x100;/*>= 0x100: no guard*/
+	wakeReason = 0;/*0:none, 1:guard heard something, 2:ambushed without guard*/
 	CON_printf(/*2D26*/"Rest");
-	bp_02 = (char)SelectMode;
+	wasSelectMode = (char)SelectMode;
 	if(InCombat) {
 		CON_printf(/*2D2B*/"-Not while in Combat!\n");
 		return;
 	}
-	if(IN_VEHICLE && GetType(Party[Active]) != OBJ_19C) {
+	if(IN_VEHICLE && GetType(Party[Active]) != OBJ_SHIP) {
 		CON_printf(/*2D42*/"-Can not be repaired!\n");
 		return;
 	}
-	if(C_3200_00D3()) {
+	if(REST_NotInWilderness()) {
 		CON_printf(/*2D59*/"-Only in the wilderness!\n");
 		return;
 	}
-	if(C_3200_0160()) {
+	if(REST_FoesNear()) {
 		CON_printf(/*2D73*/"-Not while foes are near!\n");
 		return;
 	}
-	if(C_3200_0226()) {
+	if(REST_OthersNear()) {
 		CON_printf(/*2D8E*/"-Not while others are near!\n");
 		return;
 	}
-	if(D_2CC3 != -1) {
+	if(SoloMember != -1) {
 		CON_printf(/*2DAB*/"-Not in solo mode!\n");
 		return;
 	}
-	if(C_3200_02C4()) {
+	if(REST_NoRoom()) {
 		CON_printf(/*2DBF*/"-Not enough room!\n");
 		return;
 	}
 	if(IN_VEHICLE) {
-		C_3200_0514();
+		/*on a ship*/
+		REST_RepairHull();
 		return;
 	}
 	for(i = 0; i < PartySize; i ++) {
-		if(GetType(Party[i]) == OBJ_1AF) {
+		if(GetType(Party[i]) == OBJ_MOUNTED_HORSE) {
 			CON_printf(/*2DD2*/"-Dismount first!\n");
 			return;
 		}
@@ -272,23 +318,25 @@ C_3200_055D() {
 	CON_printf(/*2DF9*/"%c\n", ch);
 	sleepTime = ch - '0';
 
+	/*choose a guard: either by party number key, or with the cursor
+	  (when the command was issued in cursor selection mode)*/
 	if(PartySize != 1) {
 		CON_printf(/*2DFD*/"Who will guard? ");
 		MouseMode = 1;
-		if(bp_02) {
+		if(wasSelectMode) {
 			SelectRange = 7;
-			C_0C9C_1AE5(0);
+			DrawSlotCursor(0);
 			SelectMode = 1;
 		}
 		ch = CON_getch();
-		if(!bp_02 && ch >= '1' && ch < PartySize + '0') {
+		if(!wasSelectMode && ch >= '1' && ch < PartySize + '0') {
 			Selection.obj = Party[ch - '1'];
-			ch = CMD_8E;
+			ch = CMD_TARGET;
 			Selection.x = GetX(Selection.obj);
 		}
 		SelectMode = 0;
-		OtherAnimations();
-		if(ch != CMD_8E || Selection.obj == -1 || Selection.x == -1 || Selection.obj >= 0x100 || !IsPlrControl(Selection.obj)) {
+		DisplayTick();
+		if(ch != CMD_TARGET || Selection.obj == -1 || Selection.x == -1 || Selection.obj >= 0x100 || !IsPlrControl(Selection.obj)) {
 			CON_printf(/*2E0E*/"none\n");
 		} else {
 			CON_printf((char *)GetObjectString(Selection.obj));
@@ -297,81 +345,86 @@ C_3200_055D() {
 		}
 	}
 
-	bp_06 = CON_mouseOffAt(0, 0, 311, 191);
+	mouseState = CON_mouseOffAt(0, 0, 311, 191);
 
+	/*light a campfire on the party's tile*/
 	SetCoordXYZ(xyz, MapX, MapY, MapZ);
-	campFire = AddObj(0, xyz, OBJ_0FD, 1, 1);
+	campFire = AddObj(0, xyz, OBJ_CAMPFIRE, 1, 1);
 	SetLocal(campFire);
 	ShowObjects();
 
-	while(someoneCannotMove && bp_10) {
+	/*gather around the fire (at most 20 steps)*/
+	while(someoneCannotMove && gatherTries) {
 		someoneCannotMove = 0;
-		bp_10 --;
+		gatherTries --;
 		for(i = 0; i < PartySize; i ++) {
-			di = Party[i];
-			cannotMove = TryMoveTo(di, MapX + D_2CEA[i], MapY + D_2CF2[i]);
+			npc = Party[i];
+			cannotMove = TryMoveTo(npc, MapX + CampOfsX[i], MapY + CampOfsY[i]);
 			if(!cannotMove)
-				C_1E0F_0664(di, D_2CFA[i]);
+				UpdateMoveFrame(npc, CampFacing[i]);
 			if(cannotMove)
 				someoneCannotMove = 1;
 		}
 		ShowObjects();
-		OtherAnimations();
+		DisplayTick();
 	}
 
 	CON_printf(/*2E14*/"\nMealtime!\n");
 
 	/*a bard plays a tune*/
 	for(i = 0; i < PartySize; i ++) {
-		di = Party[i];
-		if(GetType(di) == OBJ_182) {
-			SetType(di, OBJ_188);
-			C_1E0F_0664(di, D_2CFA[i]);
+		npc = Party[i];
+		if(GetType(npc) == OBJ_MUSICIAN_LONG_CAPE) {
+			SetType(npc, OBJ_MUSICIAN_SHORT_CAPE);
+			UpdateMoveFrame(npc, CampFacing[i]);
 			CON_printf(Names[i]);
 			CON_printf(/*2E20*/" plays a tune.\n");
 			break;
 		}
 	}
 	ShowObjects();
-	/*check food during melody*/
+	/*check food during melody: member #(i/4) eats every 4th iteration;
+	  the loop lasts as long as the song plays (at least one iteration).
+	  noMeal = index of the first member without food*/
 	i = 0;
 	MUS_SongIndex = 0;
 	noMeal = -1;
 	for(; MUS_SongIndex || (MUS_SongIndex == 0 && i == 0); i ++) {
 		if(!(i & 3)) {
-			bp_0a = i / 4;
-			if(bp_0a < PartySize) {
-				CON_printf(Names[bp_0a]);
-				if(TryEat(bp_0a)) {
+			eaterIdx = i / 4;
+			if(eaterIdx < PartySize) {
+				CON_printf(Names[eaterIdx]);
+				if(TryEat(eaterIdx)) {
 					CON_printf(/*2E30*/" has food.\n");
 				} else {
 					CON_printf(/*2E3C*/" has no food.\n");
 					if(noMeal == -1)
-						noMeal = bp_0a;
+						noMeal = eaterIdx;
 				}
 			}
 		}
-		D_033E = 1;
-		OtherAnimations();
+		IdleAnimTick = 1;
+		DisplayTick();
 		PaletteAnimation();
 		ServeMouse
 	}
 	if(noMeal == -1)
 		noMeal = PartySize;
 
-	if(StatusDisplay == CMD_92)
-		C_155D_0CF5();
+	if(StatusDisplay == CMD_STAT_EQUIP)
+		STAT_DrawInventory();
 
 	/*the bard stops playing*/
 	for(i = 0; i < PartySize; i ++) {
-		di = Party[i];
-		if(GetType(di) == OBJ_188) {
-			SetType(di, OBJ_182);
-			C_1E0F_0664(di, D_2CFA[i]);
+		npc = Party[i];
+		if(GetType(npc) == OBJ_MUSICIAN_SHORT_CAPE) {
+			SetType(npc, OBJ_MUSICIAN_LONG_CAPE);
+			UpdateMoveFrame(npc, CampFacing[i]);
 			break;
 		}
 	}
 
+	/*everybody but the guard falls asleep*/
 	for(i = 0; i < PartySize; i ++) {
 		if(Party[i] != guardNum) {
 			SetTypeUnconscious(Party[i]);
@@ -382,6 +435,7 @@ C_3200_055D() {
 		}
 	}
 	ShowObjects();
+	/*the guard stays in place (AI_GRAZE) during the night*/
 	if(guardNum < 0x100) {
 		guardMode = NPCMode[guardNum];
 		NPCMode[guardNum] = AI_GRAZE;
@@ -391,14 +445,16 @@ C_3200_055D() {
 	for(i = 0; i < sleepTime * 6; i ++) {
 		/*"guard"'s ai*/
 		if(guardNum < 0x100)
-			C_1E0F_3E6A(guardNum);
+			NPC_TakeTurn(guardNum);
 
-		C_0A33_1355(10);
+		PassTime(10);
 		ShowObjects();
-		D_033E = 1;
-		OtherAnimations();
+		IdleAnimTick = 1;
+		DisplayTick();
 		PaletteAnimation();
 		ServeMouse
+		/*encounter check: only when (i & 5) == 0, i.e. i%8 is 0 or 2,
+		  then 1 chance in 64*/
 		if(
 			!(i & 5)/*strange*/ &&
 			OSI_rand(1, 64) == 1 &&
@@ -414,10 +470,12 @@ C_3200_055D() {
 		}
 	}
 
+	/*put out the campfire*/
 	SetFrame(campFire, 0);
 	ShowObjects();
 
-	/*everyone is waking?*/
+	/*wake up: everybody gets his shape back, unless ambushed without
+	  a guard (the party then stays asleep); movement points are reset*/
 	for(i = 0; i < PartySize; i ++) {
 		if(wakeReason < 2) {
 			if(Party[i] != guardNum)
@@ -431,12 +489,14 @@ C_3200_055D() {
 	if(guardNum < 0x100)
 		NPCMode[guardNum] = guardMode;
 
-	/*could rest?*/
+	/*could rest? 4+ hours, NextSleep elapsed and not interrupted:
+	  heal the members before the first one without food (note: members
+	  after a hungry one are not healed either), except the guard*/
 	if(sleepTime >= 4 && NextSleep == 0 && wakeReason == 0) {
 		for(i = 0; i < noMeal; i ++) {
-			di = Party[i];
-			if(di != guardNum)
-				C_3200_0467(i, 1);
+			npc = Party[i];
+			if(npc != guardNum)
+				HealPartyMember(i, 1);
 		}
 		NextSleep = 12;
 	}
@@ -444,9 +504,9 @@ C_3200_055D() {
 	MapX = GetX(Party[Active]);
 	MapY = GetY(Party[Active]);
 	ShowObjects();
-	C_101C_054C();
-	OtherAnimations();
-	CON_mouseOn(bp_06);
-	if(StatusDisplay == CMD_91)
+	MAP_LoadAround();
+	DisplayTick();
+	CON_mouseOn(mouseState);
+	if(StatusDisplay == CMD_STAT_PARTY)
 		StatusDirty ++;
 }

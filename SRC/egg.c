@@ -5,6 +5,20 @@
  */
 /*
 	creature generation "EGGs" module
+
+	An egg (OBJ_EGG) is an invisible map object whose inventory holds the
+	"embryos": one object per creature type to spawn, quantity = maximum
+	number of creatures, quality = their combat mode (NPCMode), "mutant"
+	status bit = two-headed (giant scorpion & co). The egg's own quantity
+	is the percentage chance to hatch and its quality encodes
+	when (quality / 10: 0 always, 1 day, 2 night) and the alignment of the
+	creatures (quality % 10: 0 class default, else (q - 1) << 5, i.e.
+	1 neutral, 2 evil, 3 good, 4 chaotic).
+	Eggs hatch when their area is loaded (EGG_hatchArea), once until the
+	HATCHED status bit is cleared. EGG_generate creates one monster with random
+	attributes from its class tables (monsdata.c), its extra map parts
+	(multi-tile monsters) and its random possessions.
+	Also holds GetMonsterClass(), the type -> monster class lookup.
 */
 #include "u6.h"
 
@@ -12,31 +26,38 @@
 #include <math.h>
 
 /*28A0*/int ForceHatching = 0;
-static unsigned char D_28A2 = 0;
+/*next segment index of the silver serpent being built (stored in the
+  quality of every segment)*/
+/*28A2*/static unsigned char SerpentSegIndex = 0;
 
-__2E2D_0003(int bp0c, int bp0a, int bp08, int bp06) {
+/*uncalled?*/
+/*same as COMBAT_range(), but returns 8 when too far*/
+/*__2E2D_0003*/EGG_CombatRange(int x0, int y0, int x1, int y1) {
 	int delta_x, delta_y;
 
-	delta_x = abs(bp08 - bp0c);
-	delta_y = abs(bp06 - bp0a);
+	delta_x = abs(x1 - x0);
+	delta_y = abs(y1 - y0);
 	if(delta_x > 7 || delta_y > 7)
 		return 8;
-	return D_196C[delta_x][delta_y];
+	return RangeTable[delta_x][delta_y];
 }
 
+/*monster class (index in the monsdata.c tables) of an object type;
+  -1 if the type is not a creature*/
 /*C_2E2D_004B*/GetMonsterClass(int objType) {
-	int si, di;
+	int i, cls;
 
-	di = -1;
-	for(si = 0; D_3522_0000[si]; si ++) {
-		if(D_3522_0000[si] == objType) {
-			di = si;
+	cls = -1;
+	for(i = 0; MonsterTypes[i]; i ++) {
+		if(MonsterTypes[i] == objType) {
+			cls = i;
 			break;
 		}
 	}
-	return di;
+	return cls;
 }
 
+/*random value in [val - val/2, val + val/2] (triangular distribution)*/
 static /*C_2E2D_0088*/mkRandom(int val) {
 	int half = val >> 1;
 	if(half)
@@ -44,82 +65,93 @@ static /*C_2E2D_0088*/mkRandom(int val) {
 	return val;
 }
 
-static unsigned D_28A3[] = {OBJ_081,OBJ_085,OBJ_080};
+/*food found in monster loot*/
+/*28A3*/static unsigned LootFoodTypes[] = {OBJ_PORTION_OF_MEAT,OBJ_HAM,OBJ_LOAF_OF_BREAD};
 
-/*generate monster posessions?*/
-static C_2E2D_00BE(int objNum, int objClass) {
-	int i, j;
-	int objNum_1, numWeapons;
-	int objNum_2;
-	unsigned char valu8;
-	unsigned char far *ptr;
+/*generate monster posessions: the class list (MonsterInvLists at offset
+  MonsterInvIndex[class]) is 4 zero-terminated byte lists:
+  spells (given as invisible equipped charges), weapons, armours and
+  treasures; the n-th entry of the last 3 lists is given with a
+  1 in 2^n chance. OBJ_SPELL in the treasure list means "random loot"
+  (gold, food, potion)*/
+/*C_2E2D_00BE*/static EGG_GivePossessions(int objNum, int objClass) {
+	int oneIn, j;
+	int newObj, numWeapons;
+	int chestObj;
+	unsigned char itemType;
+	unsigned char far *pList;
 
-	ptr = &(D_3522_0342[D_3522_02C2[objClass]]);
+	pList = &(MonsterInvLists[MonsterInvIndex[objClass]]);
 	/*spells*/
-	while(valu8 = *ptr++) {
-		objNum_1 = AddInvObj(OBJ_150, LOCAL | EQUIP, QualQuan(valu8, 1), objNum);
-		SetInvisible(objNum_1);
+	while(itemType = *pList++) {
+		newObj = AddInvObj(OBJ_CHARGE, LOCAL | EQUIP, QualQuan(itemType, 1), objNum);
+		SetInvisible(newObj);
 	}
 	/*weapons*/
-	for(i = 2; valu8 = *ptr++; i <<= 1) {
-		if(OSI_rand(1, i) == 1) {
-			if(valu8  == OBJ_024 || valu8 == OBJ_025 || valu8 == OBJ_026)
+	for(oneIn = 2; itemType = *pList++; oneIn <<= 1) {
+		if(OSI_rand(1, oneIn) == 1) {
+			/*throwing weapons come by 6 to 12*/
+			if(itemType  == OBJ_SPEAR || itemType == OBJ_THROWING_AXE || itemType == OBJ_DAGGER)
 				numWeapons = OSI_rand(6, 12);
 			else
 				numWeapons = 1;
 			for(j = 0; j < numWeapons; j ++) {
-				objNum_1 = AddInvObj(valu8, LOCAL | EQUIP | OWNED, 0, objNum);
-				if(objNum_1 >= 0) {
-					if(valu8 == OBJ_029 || valu8 == OBJ_036)
-						AddInvObj(OBJ_037, LOCAL | INVEN | OWNED, OSI_rand(12, 24), objNum);
-					if(valu8 == OBJ_02A || valu8 == OBJ_032)
-						AddInvObj(OBJ_038, LOCAL | INVEN | OWNED, OSI_rand(12, 24), objNum);
+				newObj = AddInvObj(itemType, LOCAL | EQUIP | OWNED, 0, objNum);
+				if(newObj >= 0) {
+					if(itemType == OBJ_BOW || itemType == OBJ_MAGIC_BOW)
+						AddInvObj(OBJ_ARROW, LOCAL | INVEN | OWNED, OSI_rand(12, 24), objNum);
+					if(itemType == OBJ_CROSSBOW || itemType == OBJ_TRIPLE_CROSSBOW)
+						AddInvObj(OBJ_BOLT, LOCAL | INVEN | OWNED, OSI_rand(12, 24), objNum);
 				}
 			}
 		}
 	}
 	/*armors*/
-	for(i = 2; valu8 = *ptr++; i <<= 1) {
-		if(OSI_rand(1, i) == 1)
-			AddInvObj(valu8, LOCAL | EQUIP | OWNED, 1, objNum);
+	for(oneIn = 2; itemType = *pList++; oneIn <<= 1) {
+		if(OSI_rand(1, oneIn) == 1)
+			AddInvObj(itemType, LOCAL | EQUIP | OWNED, 1, objNum);
 	}
 	/*treasures*/
-	for(i = 2; valu8 = *ptr++; i <<= 1) {
-		if(OSI_rand(1, i) == 1) {
-			if(valu8 == OBJ_062) {
-				objNum_2 = AddInvObj(valu8, LOCAL | CONTAINED | OWNED, OSI_rand(1, 100), objNum);
-				if(objNum_2 >= 0) {
-					SetFrame(objNum_2, 1);
-					if(OSI_rand(0, 1) != 0 && !IsMonster_AC(objClass))
-						AddInvObj(OBJ_151, LOCAL | CONTAINED | OWNED, QualQuan(SPELL_16, 0), objNum_2);
+	for(oneIn = 2; itemType = *pList++; oneIn <<= 1) {
+		if(OSI_rand(1, oneIn) == 1) {
+			if(itemType == OBJ_OPEN_CHEST) {/*a closed chest, maybe trapped*/
+				chestObj = AddInvObj(itemType, LOCAL | CONTAINED | OWNED, OSI_rand(1, 100), objNum);
+				if(chestObj >= 0) {
+					SetFrame(chestObj, 1);
+					if(OSI_rand(0, 1) != 0 && !IsMonsterAcidSlug(objClass))
+						AddInvObj(OBJ_EFFECT, LOCAL | CONTAINED | OWNED, QualQuan(SPELL_TRAP, 0), chestObj);
 					if(OSI_rand(0, 3) != 0)
-						AddInvObj(OBJ_058, LOCAL | CONTAINED | OWNED, OSI_rand(1, 100), objNum_2);
+						AddInvObj(OBJ_GOLD, LOCAL | CONTAINED | OWNED, OSI_rand(1, 100), chestObj);
 					if(OSI_rand(0, 3) != 0)
-						AddInvObj(D_28A3[OSI_rand(0, 2)], LOCAL | CONTAINED | OWNED, OSI_rand(1, 10), objNum_2);
+						AddInvObj(LootFoodTypes[OSI_rand(0, 2)], LOCAL | CONTAINED | OWNED, OSI_rand(1, 10), chestObj);
 					if(OSI_rand(0, 3) == 0)
-						AddInvObj(OBJ_05A, LOCAL | CONTAINED | OWNED, OSI_rand(1, 6), objNum_2);
+						AddInvObj(OBJ_TORCH, LOCAL | CONTAINED | OWNED, OSI_rand(1, 6), chestObj);
 					if(OSI_rand(0, 10) == 0)
-						AddInvObj(OBJ_04D, LOCAL | CONTAINED | OWNED, OSI_rand(1, 4), objNum_2);
+						AddInvObj(OBJ_GEM, LOCAL | CONTAINED | OWNED, OSI_rand(1, 4), chestObj);
 				}
-			} else if(valu8 == OBJ_03A) {
-				if(OSI_rand(0, 3) != 0 && !IsMonster_13(objClass))
-					AddInvObj(OBJ_058, LOCAL | INVEN | OWNED, OSI_rand(1, 100), objNum);
+			} else if(itemType == OBJ_SPELL) {
+				if(OSI_rand(0, 3) != 0 && !IsMonsterWingedGargoyle(objClass))
+					AddInvObj(OBJ_GOLD, LOCAL | INVEN | OWNED, OSI_rand(1, 100), objNum);
 				if(OSI_rand(0, 3) == 0)
-					AddInvObj(D_28A3[OSI_rand(0, 2)], LOCAL | INVEN | OWNED, OSI_rand(1, 10), objNum);
+					AddInvObj(LootFoodTypes[OSI_rand(0, 2)], LOCAL | INVEN | OWNED, OSI_rand(1, 10), objNum);
 				if(OSI_rand(0, 3) == 0)
-					AddInvObj(TypeFrame(OBJ_113, OSI_rand(0, 7)), LOCAL | INVEN | OWNED, 1, objNum);
-			} else if(valu8 == OBJ_058) {
-				AddInvObj(valu8, LOCAL | INVEN | OWNED, OSI_rand(1, 30) + OSI_rand(1, 30), objNum);
+					AddInvObj(TypeFrame(OBJ_POTION, OSI_rand(0, 7)), LOCAL | INVEN | OWNED, 1, objNum);
+			} else if(itemType == OBJ_GOLD) {
+				AddInvObj(itemType, LOCAL | INVEN | OWNED, OSI_rand(1, 30) + OSI_rand(1, 30), objNum);
 			} else {
-				AddInvObj(valu8, LOCAL | INVEN | OWNED, 1, objNum);
+				AddInvObj(itemType, LOCAL | INVEN | OWNED, 1, objNum);
 			}
 		}
 	}
 }
 
+/*create a creature of type objType (bit 15: mutant/two-headed) at x,y,z:
+  attributes from its class (mkRandom'ized), level from HP, alignment
+  from the class, AI_ASSAULT, extra parts of multi-tile monsters and its
+  possessions. returns the new actor number (< 0 if none was free)*/
 /*C_2E2D_0499*/EGG_generate(int objType, int x, int y, int z) {
-	int objNum, di;
-	int objClass, bp_04, isMutant;
+	int objNum, partObj;
+	int objClass, dir, isMutant;
 
 	isMutant = 0;
 	if(objType & 0x8000) {
@@ -131,12 +163,12 @@ static C_2E2D_00BE(int objNum, int objClass) {
 		return objNum;
 	objClass = GetMonsterClass(objType);
 	if(objClass >= 0) {
-		STREN[objNum] = mkRandom(D_3522_0082[objClass]);
-		DEXTE[objNum] = mkRandom(D_3522_00C2[objClass]);
-		INTEL[objNum] = mkRandom(D_3522_0102[objClass]);
-		HitPoints[objNum] = mkRandom(D_3522_01C2[objClass]);
+		STREN[objNum] = mkRandom(MonsterStr[objClass]);
+		DEXTE[objNum] = mkRandom(MonsterDex[objClass]);
+		INTEL[objNum] = mkRandom(MonsterInt[objClass]);
+		HitPoints[objNum] = mkRandom(MonsterHP[objClass]);
 		Level[objNum] = (HitPoints[objNum] + 29) / 30;
-		NPCStatus[objNum] = D_3522_0202[objClass];
+		NPCStatus[objNum] = MonsterAlignment[objClass];
 	} else {
 		STREN[objNum] =
 		DEXTE[objNum] =
@@ -151,62 +183,73 @@ static C_2E2D_00BE(int objNum, int objClass) {
 	NPCMode[objNum] =
 	NPCComMode[objNum] = AI_ASSAULT;
 
-	if(objType == OBJ_16A || objType == OBJ_1A8) {
+	if(objType == OBJ_WINGED_GARGOYLE || objType == OBJ_CYCLOPS) {
 		SetFrame(objNum, 0x13);
-	} else if(objType >= OBJ_1AA) {
+	} else if(objType >= OBJ_GIANT_SCORPION) {
+		/*2-tile monsters: second part at x+1*/
 		SetFrame(objNum, 6);
 		if(isMutant)
-			di = AddMapObj(TypeFrame(objType, 2), 1, 0, x + 1, y, z);
+			partObj = AddMapObj(TypeFrame(objType, 2), 1, 0, x + 1, y, z);
 		else
-			di = AddMapObj(TypeFrame(objType, 0xe), 1, 0, x + 1, y, z);
-		if(di >= 0) 
-			ClrLocal(di);
-	} else if(objType == OBJ_19B) {
+			partObj = AddMapObj(TypeFrame(objType, 0xe), 1, 0, x + 1, y, z);
+		if(partObj >= 0) 
+			ClrLocal(partObj);
+	} else if(objType == OBJ_DRAGON) {
 		/*body*/
 		SetFrame(objNum, 0);
 		/*head*/
-		di = AddMapObj(TypeFrame(OBJ_19B, 8), 1, 0, x, y - 1, z);
-		if(di >= 0)
-			ClrLocal(di);
+		partObj = AddMapObj(TypeFrame(OBJ_DRAGON, 8), 1, 0, x, y - 1, z);
+		if(partObj >= 0)
+			ClrLocal(partObj);
 		/*tail*/
-		di = AddMapObj(TypeFrame(OBJ_19B, 0x10), 1, 0, x, y + 1, z);
-		if(di >= 0) 
-			ClrLocal(di);
+		partObj = AddMapObj(TypeFrame(OBJ_DRAGON, 0x10), 1, 0, x, y + 1, z);
+		if(partObj >= 0) 
+			ClrLocal(partObj);
 		/*left wing*/
-		di = AddMapObj(TypeFrame(OBJ_19B, 0x18), 1, 0, x - 1, y, z);
-		if(di >= 0) 
-			ClrLocal(di);
+		partObj = AddMapObj(TypeFrame(OBJ_DRAGON, 0x18), 1, 0, x - 1, y, z);
+		if(partObj >= 0) 
+			ClrLocal(partObj);
 		/*right wing*/
-		di = AddMapObj(TypeFrame(OBJ_19B, 0x20), 1, 0, x + 1, y, z);
-		if(di >= 0) 
-			ClrLocal(di);
-	} else if(objType == OBJ_176) {
-		for(bp_04 = 0; bp_04 < 8; bp_04 ++) {
-			di = AddMapObj(OBJ_1A9 + (bp_04 << 12), 1, 0, x + DirIncrX[bp_04], y + DirIncrY[bp_04], z);
-			if(di >= 0) 
-				ClrLocal(di);
+		partObj = AddMapObj(TypeFrame(OBJ_DRAGON, 0x20), 1, 0, x + 1, y, z);
+		if(partObj >= 0) 
+			ClrLocal(partObj);
+	} else if(objType == OBJ_HYDRA) {
+		/*8 bodies around the head; frame = direction << 2 (see COMBAT_getHead)*/
+		for(dir = 0; dir < 8; dir ++) {
+			partObj = AddMapObj(OBJ_HYDRA_BODY + (dir << 12), 1, 0, x + DirIncrX[dir], y + DirIncrY[dir], z);
+			if(partObj >= 0) 
+				ClrLocal(partObj);
 		}
 	}
 
-	C_2E2D_00BE(objNum, objClass);
+	EGG_GivePossessions(objNum, objClass);
 
 	return objNum;
 }
 
-/*silver serpent related*/
-static char D_28A9[] = {0xD,0xA,0xB,0xC};/*curves*/
-static char D_28AD[] = {0x1,0x3,0x5,0x7};/*tails*/
-static char D_28B1[] = {0, -1, -1, 0};
-static char D_28B5[] = {1,  1,  0, 0};
+/*silver serpent related: the body is coiled in a 2x2 square, segment n
+  is put at (x + SerpentSegDX[n & 3], y + SerpentSegDY[n & 3]) with frame SerpentBodyFrames[n & 3],
+  the last one gets the tail frame SerpentTailFrames[n & 3]*/
+/*28A9*/static char SerpentBodyFrames[] = {0xD,0xA,0xB,0xC};/*curves*/
+/*28AD*/static char SerpentTailFrames[] = {0x1,0x3,0x5,0x7};/*tails*/
+/*28B1*/static char SerpentSegDX[] = {0, -1, -1, 0};/*x offset*/
+/*28B5*/static char SerpentSegDY[] = {1,  1,  0, 0};/*y offset*/
 /*__28B9	db 0*/
 
+/*try to hatch an egg (see the module header). The first creature
+  appears on the egg, the others are scattered around it (not on
+  screen unless the egg is "local" or ForceHatching is set). Gargoyles
+  only graze when a gargoyle is in the party or the avatar wears the
+  amulet of submission. When hostile creatures appear off-screen,
+  Shamino may say where he hears something. The egg is then marked
+  hatched (and invisible) whatever the result*/
 /*C_2E2D_0760*/EGG_hatches(int egg_objNum) {
-	int si;
-	int bp_24, bp_22, bp_20, objTyp, typParam, num_monsters;
-	int bp_18, bp_16, x, y, embryo_objNum, align_l5;
-	int bp_0c, bp_0a, isFirstBorn, npcMod, forceGarglGraze, onScreenNotOk;
+	int monster;
+	int i, seg, quan, objTyp, typParam, numMonsters;
+	int partObj, prevPart, x, y, embryo_objNum, alignment;
+	int dir, hostileOffscreen, isFirstBorn, npcMod, forceGarglGraze, onScreenNotOk;
 	
-	bp_16 = 0;
+	prevPart = 0;
 	npcMod = AI_MOTIONLESS;
 	forceGarglGraze = 0;
 
@@ -222,28 +265,29 @@ static char D_28B5[] = {1,  1,  0, 0};
 		(GetQual(egg_objNum) / 10 == 2/*NIGHT*/) &&
 		(Time_H > 5 && Time_H < 19)
 	) return;
-	/*???*/
+	/*creatures of a non-local egg must appear off-screen*/
 	if(IsLocal(egg_objNum))
 		onScreenNotOk = 0;
 	else
 		onScreenNotOk = !ForceHatching;
 	/*Gargoyles/amulet of submission*/
-	for(bp_24 = 0; bp_24 < PartySize; bp_24 ++) {
-		bp_16 = GetType(Party[bp_24]);
-		if(bp_16 == OBJ_16B || bp_16 == OBJ_16A) {
+	for(i = 0; i < PartySize; i ++) {
+		prevPart = GetType(Party[i]);/*here: just a temporary*/
+		if(prevPart == OBJ_GARGOYLE || prevPart == OBJ_WINGED_GARGOYLE) {
 			forceGarglGraze = 1;
 			break;
 		}
-		if(FindInvType(1, OBJ_04C, -1) >= 0)
+		/*NB: always tests the avatar (object 1), once per party member*/
+		if(FindInvType(1, OBJ_AMULET_OF_SUBMISSION, -1) >= 0)
 			forceGarglGraze = 1;
 	}
 	/* */
 	if(!IsHatched(egg_objNum)) {
 		/*Quality of egg: alignment of monsters*/
-		align_l5 = ((GetQual(egg_objNum) % 10) - 1) << 5;
+		alignment = ((GetQual(egg_objNum) % 10) - 1) << 5;
 		/*Quantity of egg: percent chance of hatching*/
 		if(OSI_rand(1, 100) <= GetQuan(egg_objNum)) {
-			bp_0a = 0;
+			hostileOffscreen = 0;
 			isFirstBorn = 1;
 			/*Contents of egg: "embryos"*/
 			for(embryo_objNum = FindInv(egg_objNum); embryo_objNum >= 0; embryo_objNum = NextInv()) {
@@ -253,110 +297,115 @@ static char D_28B5[] = {1,  1,  0, 0};
 				if(IsMutant(embryo_objNum))
 					typParam |= 0x8000;
 				/*Quantity of embryo: number of monsters in party*/
-				num_monsters = GetQuan(embryo_objNum);
+				numMonsters = GetQuan(embryo_objNum);
 				if(GetQuan(egg_objNum) != 100)
-					num_monsters = OSI_rand(1, num_monsters);
-				if(objTyp == OBJ_19D)
-					num_monsters = 1;
+					numMonsters = OSI_rand(1, numMonsters);
+				if(objTyp == OBJ_SILVER_SERPENT)
+					numMonsters = 1;
 				/* */
-				if((objTyp == OBJ_16B || objTyp == OBJ_16A) && forceGarglGraze)
+				if((objTyp == OBJ_GARGOYLE || objTyp == OBJ_WINGED_GARGOYLE) && forceGarglGraze)
 					npcMod = AI_GRAZE;
 				/* */
-				for(bp_24 = 0; bp_24 < num_monsters; bp_24 ++) {
-					if(objTyp < OBJ_156 && objTyp != OBJ_062) {
+				for(i = 0; i < numMonsters; i ++) {
+					if(objTyp < OBJ_GIANT_RAT && objTyp != OBJ_OPEN_CHEST) {
+						/*not a creature: plain object*/
 						if(QuanType(objTyp))
-							bp_20 = 1;
+							quan = 1;
 						else
-							bp_20 = 0;
-						si = AddMapObj(objTyp, 1, bp_20, GetX(egg_objNum), GetY(egg_objNum), MapZ);
+							quan = 0;
+						monster = AddMapObj(objTyp, 1, quan, GetX(egg_objNum), GetY(egg_objNum), MapZ);
 					} else {
-						si = EGG_generate(typParam, GetX(egg_objNum), GetY(egg_objNum), MapZ);
-						if(si >= 0) {
+						monster = EGG_generate(typParam, GetX(egg_objNum), GetY(egg_objNum), MapZ);
+						if(monster >= 0) {
 							if(GetQual(egg_objNum) % 10)
-								SetAlignment(si, align_l5);
-							if(Is_ATKPLR(si) && !IsLocal(egg_objNum))
-								bp_0a = 1;
+								SetAlignment(monster, alignment);
+							if(Is_ATKPLR(monster) && !IsLocal(egg_objNum))
+								hostileOffscreen = 1;
 						}
 					}
-					if(si < 0)
+					if(monster < 0)
 						continue;
 					/**/
 					if(!isFirstBorn) {
-						if(!COMBAT_TryTeleport(si, onScreenNotOk))
-							DeleteObj(si);
+						if(!COMBAT_TryTeleport(monster, onScreenNotOk))
+							DeleteObj(monster);
 					} else {
 						isFirstBorn = 0;
 					}
 					/* */
-					if(objTyp == OBJ_19D) {/*Silver serpent*/
-						D_28A2 = 0;
-						SetFrame(si, 0);/*head*/
-						SetQual(si, D_28A2 ++);
-						x = GetX(si);
-						y = GetY(si);
-						for(bp_22 = 0; bp_22 <= GetQuan(embryo_objNum); bp_22 ++) {
-							bp_18 = AddMapObj(
-								TypeFrame(OBJ_19D, D_28A9[bp_22 & 3]),
+					if(objTyp == OBJ_SILVER_SERPENT) {/*Silver serpent*/
+						/*embryo quantity = number of body segments;
+						  segment quantity = head, quality = index*/
+						SerpentSegIndex = 0;
+						SetFrame(monster, 0);/*head*/
+						SetQual(monster, SerpentSegIndex ++);
+						x = GetX(monster);
+						y = GetY(monster);
+						for(seg = 0; seg <= GetQuan(embryo_objNum); seg ++) {
+							partObj = AddMapObj(
+								TypeFrame(OBJ_SILVER_SERPENT, SerpentBodyFrames[seg & 3]),
 								1,
-								QualQuan(D_28A2 ++, si),
-								D_28B1[bp_22 & 3] + x, D_28B5[bp_22 & 3] + y, MapZ
+								QualQuan(SerpentSegIndex ++, monster),
+								SerpentSegDX[seg & 3] + x, SerpentSegDY[seg & 3] + y, MapZ
 							);
-							if(bp_18 < 0) {
-								if(bp_22)
-									SetFrame(bp_16, D_28AD[(bp_22 - 1) & 3]);
+							if(partObj < 0) {
+								if(seg)
+									SetFrame(prevPart, SerpentTailFrames[(seg - 1) & 3]);
 								else
-									DeleteObj(si);
+									DeleteObj(monster);
 								break;
 							}
-							ClrLocal(bp_18);
-							bp_16 = bp_18;
-							if(GetQuan(embryo_objNum) == bp_22)
-								SetFrame(bp_18, D_28AD[bp_22 & 3]);
+							ClrLocal(partObj);
+							prevPart = partObj;
+							if(GetQuan(embryo_objNum) == seg)
+								SetFrame(partObj, SerpentTailFrames[seg & 3]);
 						}
-					} else if(objTyp == OBJ_16D) {/*Tangle vine(vine)*/
-						SetFrame(si, 0);
-						x = GetX(si);
-						y = GetY(si);
-						for(bp_22 = 0; bp_22 < 8; bp_22 += 2) {
-							bp_18 = EGG_generate(OBJ_16E, DirIncrX[bp_22] + x, DirIncrY[bp_22] + y, MapZ);
-							if(bp_18 < 0)
+					} else if(objTyp == OBJ_TANGLE_VINE_POD) {/*Tangle vine(vine)*/
+						/*4 vine actors around the pod*/
+						SetFrame(monster, 0);
+						x = GetX(monster);
+						y = GetY(monster);
+						for(seg = 0; seg < 8; seg += 2) {
+							partObj = EGG_generate(OBJ_TANGLE_VINE_VINE, DirIncrX[seg] + x, DirIncrY[seg] + y, MapZ);
+							if(partObj < 0)
 								continue;
-							SetDirection(bp_18, bp_22);
-							SetFrame(bp_18, (bp_22 & 2)?0:1);
-							SetAlignment(bp_18, GetAlignment(si));
-							NPCComMode[bp_18] = 
-							NPCMode[bp_18] = AI_TANGLE;
+							SetDirection(partObj, seg);
+							SetFrame(partObj, (seg & 2)?0:1);
+							SetAlignment(partObj, GetAlignment(monster));
+							NPCComMode[partObj] = 
+							NPCMode[partObj] = AI_TANGLE;
 						}
 					}
-					if(si >= 0x100)
+					if(monster >= 0x100)
 						continue;
 					/*Quality of embryo: combat strategy for monsters*/
 					if(npcMod == AI_MOTIONLESS)
 						npcMod = GetQual(embryo_objNum);
-					NPCComMode[si] = 
-					NPCMode[si] = npcMod;
+					NPCComMode[monster] = 
+					NPCMode[monster] = npcMod;
 
-					if(npcMod == AI_0F)
-						SetDirection(si, 2);
-					else if(npcMod == AI_10)
-						SetDirection(si, 0);
+					if(npcMod == AI_PATROL_EW)
+						SetDirection(monster, 2);/*east*/
+					else if(npcMod == AI_PATROL_NS)
+						SetDirection(monster, 0);/*north*/
 
-					if((objTyp == OBJ_16B || objTyp == OBJ_16A) && NPCMode[si] == AI_BERSEK) {
-						STREN[si] <<= 1;
-						DEXTE[si] <<= 1;
-						INTEL[si] <<= 1;
+					if((objTyp == OBJ_GARGOYLE || objTyp == OBJ_WINGED_GARGOYLE) && NPCMode[monster] == AI_BERSEK) {
+						STREN[monster] <<= 1;
+						DEXTE[monster] <<= 1;
+						INTEL[monster] <<= 1;
 					}
 				}
 			}
-			if(!D_17B6 && bp_0a) {
+			/*"Shamino hears something to the <dir>"*/
+			if(!EnemyWarningGiven && hostileOffscreen) {
 				x = GetX(egg_objNum) - MapX;
 				y = GetY(egg_objNum) - MapY;
-				bp_0c = MkDirection((x << 4) + D_04CA, (y << 4) + D_04CB);
+				dir = MkDirection((x << 4) + DirOriginX, (y << 4) + DirOriginY);
 				if(OSI_rand(0, 3) && SHAMINO_COMMENT) {
-					CON_printf(D_356A_0128, DirNames[bp_0c]);
+					CON_printf(ShaminoHearsMsg, DirNames[dir]);
 					PromptFlag = 1;
 				}
-				D_17B6 = 1;
+				EnemyWarningGiven = 1;
 			}
 		}
 	}
@@ -364,19 +413,23 @@ static char D_28B5[] = {1,  1,  0, 0};
 	SetInvisible(egg_objNum);
 }
 
+/*hatch the eggs of the current level in the loaded 40x40 area: the
+  ones out of sight (more than 8 tiles away), local ones, or all of them
+  with ForceHatching*/
 /*C_2E2D_0DFE*/EGG_hatchArea() {
-	int objNum, x, y, bp_02;
+
+	int objNum, x, y, objTyp;
 
 	if(IsArmageddon)
 		return;
-	D_28A2 = 0;
+	SerpentSegIndex = 0;
 	x = AreaX;
 	y = AreaY;
 	for(objNum = SearchArea(x, y, x + 39, y + 39); objNum >= 0; objNum = NextArea()) {
 		x = GetX(objNum);
 		y = GetY(objNum);
-		bp_02 = GetType(objNum);
-		if(bp_02 != OBJ_14F || GetZ(objNum) != MapZ)
+		objTyp = GetType(objNum);
+		if(objTyp != OBJ_EGG || GetZ(objNum) != MapZ)
 			continue;
 		if(ForceHatching || !CLOSE_ENOUGH(8, x, y, MapX, MapY) || IsLocal(objNum))
 			EGG_hatches(objNum);

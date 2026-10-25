@@ -4,149 +4,223 @@
  * reverse-coded by Ergonomy Joe in 2013
  */
 /*
-	OBJECT.C module
+	OBJECT.C module -- object list management
+
+	All objects live in parallel arrays indexed by an object number:
+	ObjStatus[], ObjPos[] (packed x/y/z or container number), ObjShapeType[]
+	(type | frame << 10), Amount[] (quantity | quality << 8) and Link[].
+	  0x000-0x0FF  NPCs/monsters (0x00-0xDF fixed NPCs, 0xE0-0xFF temporary
+	               monster slots, kept on their own free list FreeMonsterHead/FreeMonsterCount)
+	  0x100        head of the main object list (never a real object)
+	  0x101-0xBFF  ordinary objects (free list FreeObjHead/FreeObjCount)
+	Link[] chains every object that is currently loaded into ONE singly linked
+	list starting at Link[0x100]. Map objects are sorted by (y, x) (the 20 low
+	bits of struct coord); the contents of an NPC or of a container follow
+	their owner immediately in the chain (owner's "subtree"). MapObjPtr[][]
+	caches, for every tile of the 40x40 area around the party, the first
+	object of the chain at that tile so that searches need not walk the
+	whole list (OBJ_FindListPos).
+
+	Only the 2x2 outdoor areas (128x128 tiles each, 8x8 areas on the
+	surface) near the party, or the current dungeon level, are kept in the
+	list. The rest is stored in "savegame\objblkXY" files (X = 'A'+column,
+	Y = 'A'+row; dungeon level z is "objblk<'A'+z-1>i"). Areas left behind
+	are written to ".tmp" copies (OBJ_UnloadArea/OBJ_UnloadDungeon) and those are
+	renamed over the real files when the game is saved (OBJ_CommitBlocks).
+
+	The module also offers the location/inventory/area iterators
+	(FindLoc/NextLoc, FindInv/NextInv, FindInvType/NextInvType,
+	SearchArea/NextArea), object creation/deletion/moving, inventory
+	give/take helpers, support for multi-object creatures (silver serpent,
+	dragon, hydra, 2-tile monsters, ship), and the building of the 11x11
+	per-tile object display stacks (ShowObject/ShowObjects).
 */
 #include "u6.h"
 
-static int D_0654 = 0;
-int D_0656 = 0;
-int D_0658 = 0;/*related to FindLoc*/
-static int D_065A = 0;/*related to "Amulet of submission"*/
-int D_065C[8*8 + 5] = {0};/*has tmp file?*/
-int D_06E6 = 0;
-int D_06E8[4] = {-1, -1, -1, -1};
-int D_06F0 = -1;/*mask:__________yyyxxx?*/
-int D_06F2 = -1;
-static int D_06F4 = -1;
-static int D_06F6 = 0;
-static struct coord D_06F8 = {0, 0, 0};
-int D_06FB = -1;
-int D_06FD = -1;
-int D_06FF = -1;
-int D_0701 = -1;/*Quality*/
-int D_0703 = -1;
-int D_0705 = -1;
-int D_0707 = -1;
+/*musician was near the party at the previous ShowObjects()*/
+/*0654*/static int MusicianWasNear = 0;
+/*when set, NextInv/NextInvType skip equipped (EQUIP) items*/
+/*0656*/int InvSkipEquipped = 0;
+/*set by FindLoc/NextLoc: which part of a multi-tile object covers the
+  searched tile (0 = the object's own tile, 1 = the tile left of/above it,
+  2/3 = the upper/upper-left part of a 2x2 tile); callers use
+  TILE_FRAME(obj) - LocPartOffset to get the tile actually covering the location*/
+/*0658*/int LocPartOffset = 0;
+/*set while the "Amulet of submission" may be moved (InsertObj refuses it otherwise)*/
+/*065A*/static int AllowSubmissionMove = 0;
+/*[0..63] outdoor areas, [64..68] dungeon levels 1..5: a ".tmp" objblk file
+  newer than the saved one exists*/
+/*065C*/int ObjBlkTmpPending[8*8 + 5] = {0};
+/*when set, MoveObj applies terrain effects (ApplyTerrainEffects) to moved NPCs;
+  cleared while teleporting the party etc.*/
+/*06E6*/int MoveAppliesTerrain = 0;
+/*ids (yyyxxx) of the up to 4 outdoor areas currently loaded, -1 = free slot*/
+/*06E8*/int LoadedAreas[4] = {-1, -1, -1, -1};
+/*id (yyyxxx) of the top-left area of the loaded 2x2 window, -1 = none*/
+/*06F0*/int LoadedWindowArea = -1;
+/*z level currently loaded (0 = surface), -1 = none*/
+/*06F2*/int LoadedZ = -1;
+/*FindLoc/NextLoc state: current list position, "already jumped to the
+  next row" flag and the searched location*/
+/*06F4*/static int LocCursor = -1;
+/*06F6*/static int LocOnNextRow = 0;
+/*06F8*/static struct coord LocTarget = {0, 0, 0};
+/*FindInv/NextInv/FindInvType/NextInvType state: current list position,
+  owner, type and quality (-1 = any)*/
+/*06FB*/int InvCursor = -1;
+/*06FD*/int InvOwner = -1;
+/*06FF*/int InvType = -1;
+/*0701*/int InvQuality = -1;/*Quality*/
+/*SearchArea/NextArea state: current list position and end position*/
+/*0703*/int AreaCursor = -1;
+/*0705*/int AreaEnd = -1;
+/*last content object moved out by DeleteObj (-1 if none); lets a caller
+  that is walking Link[] continue from there*/
+/*0707*/int LastSpilledObj = -1;
 
+/*objblk file names; characters [15] and [16] are patched with the area letters*/
 /*0709*/static char __Sav_file[] = "savegame\\objblkaa";
 /*071B*/static char __Tmp_file[] = "savegame\\objblkaa.tmp";
 /*0731*/static char __Bak_file[] = "savegame\\objblkaa.bak";
 
-unsigned char D_0747[] = {~TERRAIN_FLAG_80,0,~TERRAIN_FLAG_40,0,~TERRAIN_FLAG_20,0,~TERRAIN_FLAG_10};
-unsigned char D_074E[] = {0x00,0x07,0x05,0x0C,0x03,0x09,0x0B,0x00,0x01,0x0D,0x08,0x00,0x0A,0x00,0x00,0x00};
-unsigned char D_075E[] = {TERRAIN_FLAG_80,0,TERRAIN_FLAG_40,0,TERRAIN_FLAG_20,0,TERRAIN_FLAG_10};
+/*indexed by direction (0=N 2=E 4=S 6=W): masks out the connection flag
+  of that direction (TERRAIN_WALL_N=N, _40=E, _20=S, _10=W)*/
+/*0747*/unsigned char DirConnClearMask[] = {~TERRAIN_WALL_N,0,~TERRAIN_WALL_E,0,~TERRAIN_WALL_S,0,~TERRAIN_WALL_W};
+/*silver serpent body frame from its connection flags (TerrainType >> 4,
+  bit3=N bit2=E bit1=S bit0=W): 1/3/5/7 = tail ending N/E/S/W,
+  8 = N-S, 9 = E-W, 0x0A = N-E, 0x0B = E-S, 0x0C = S-W, 0x0D = N-W*/
+/*074E*/unsigned char SerpentBodyFrame[] = {0x00,0x07,0x05,0x0C,0x03,0x09,0x0B,0x00,0x01,0x0D,0x08,0x00,0x0A,0x00,0x00,0x00};
+/*indexed by direction (0=N 2=E 4=S 6=W): connection flag of that direction*/
+/*075E*/unsigned char DirConnFlag[] = {TERRAIN_WALL_N,0,TERRAIN_WALL_E,0,TERRAIN_WALL_S,0,TERRAIN_WALL_W};
 
 /*uncalled?*/
-__1184_000E(int x, int y, int z) {
-	int si, di;
+/*is location (x, y, z) currently loaded in the object list?
+  (dungeon: z is the current level; surface: its area is one of LoadedAreas[])*/
+/*__1184_000E*/OBJ_IsLocLoaded(int x, int y, int z) {
+	int isLoaded, i;
 	int mapId;
 
-	si = 0;
+	isLoaded = 0;
 	if(z) {
-		si = (z == MapZ);
+		isLoaded = (z == MapZ);
 	} else if(MapZ == 0) {
 		mapId = (x >> 7) + ((y >> 4) & 0x38);
-		for(di = 0; di < 4; di ++)
-			if(D_06E8[di] == mapId) {
-				si = 1;
+		for(i = 0; i < 4; i ++)
+			if(LoadedAreas[i] == mapId) {
+				isLoaded = 1;
 				break;
 			}
 	}
-	return si;
+	return isLoaded;
 }
 
+/*frame number of a creature of type objTyp facing direction dir (0=N 2=E
+  4=S 6=W), i.e. dir times the number of frames per direction, plus the
+  "standing" frame for the walking animations*/
 /*C_1184_0073*/OBJ_MakeDirFrame(int objTyp, int dir) {
 	if(
-		objTyp == OBJ_0FC || objTyp == OBJ_0DD ||
-		objTyp == OBJ_162 || objTyp == OBJ_167 ||
-		objTyp == OBJ_184
+		objTyp == OBJ_CHAIR || objTyp == OBJ_CANNON ||
+		objTyp == OBJ_MOUSE || objTyp == OBJ_RABBIT ||
+		objTyp == OBJ_CAT
 	) return dir >> 1;
 
 	if(
-		objTyp == OBJ_15C || objTyp == OBJ_15D || objTyp == OBJ_15E || objTyp == OBJ_15F ||
-		objTyp == OBJ_166 || objTyp == OBJ_169 || objTyp >= OBJ_1AA || objTyp == OBJ_19D ||
-		(objTyp >= OBJ_16F && objTyp <= OBJ_174) || objTyp == OBJ_156 || objTyp == OBJ_15A ||
-		objTyp == OBJ_188
+		objTyp == OBJ_SHEEP || objTyp == OBJ_DOG || objTyp == OBJ_DEER || objTyp == OBJ_WOLF ||
+		objTyp == OBJ_SNAKE || objTyp == OBJ_GIANT_SPIDER || objTyp >= OBJ_GIANT_SCORPION || objTyp == OBJ_SILVER_SERPENT ||
+		(objTyp >= OBJ_DAEMON && objTyp <= OBJ_MONGBAT) || objTyp == OBJ_GIANT_RAT || objTyp == OBJ_SEA_SERPENT ||
+		objTyp == OBJ_MUSICIAN_SHORT_CAPE
 	) return dir;
 
-	if(objTyp == OBJ_16A)
+	if(objTyp == OBJ_WINGED_GARGOYLE)
 		return  ((dir << 1) + (dir << 2)) + 7;
 
-	if(objTyp == OBJ_1A8)
+	if(objTyp == OBJ_CYCLOPS)
 		return (dir << 2) + 3;
 
-	if(objTyp == OBJ_16B)
+	if(objTyp == OBJ_GARGOYLE)
 		return (dir >> 1) + dir + 1;
 
 	if(
-		(objTyp >= OBJ_178 && objTyp <= OBJ_183) ||
-		(objTyp >= OBJ_199 && objTyp <= OBJ_19A)
+		(objTyp >= OBJ_FIGHTER && objTyp <= OBJ_WOMAN) ||
+		(objTyp >= OBJ_LORD_BRITISH && objTyp <= OBJ_AVATAR)
 	) return (dir << 1) + 1;
 
 	return 0;
 }
 
+/*for a 2-tile creature/dragon/ship part, find the other part it is joined
+  to (its TerrainType connection flag gives the side; the other part must
+  carry the opposite flag); for a silver serpent body segment (>= 0x100)
+  return the head (stored in its quantity). Returns objNum otherwise.*/
 /*C_1184_0153*/OBJ_getHead(int objNum) {
 	int i;
-	int x, y, imped, imped_2;
+	int x, y, connFlag, backFlag;
 	int objTyp, ret;
 
 	if(objNum < 0)
 		return -1;
 	ret = objNum;
 	objTyp = GetType(ret);
-	if(objTyp >= OBJ_1AA || objTyp == OBJ_19B || objTyp == OBJ_19C) {
+	if(objTyp >= OBJ_GIANT_SCORPION || objTyp == OBJ_DRAGON || objTyp == OBJ_SHIP) {
 		x = GetX(objNum);
 		y = GetY(objNum);
-		imped = TerrainType[TILE_FRAME(objNum)] & 0xf0;
-		if(imped == TERRAIN_FLAG_80) {
+		connFlag = TerrainType[TILE_FRAME(objNum)] & 0xf0;
+		if(connFlag == TERRAIN_WALL_N) {
 			y --;
-			imped_2 = TERRAIN_FLAG_20;
-		} else if(imped == TERRAIN_FLAG_40) {
+			backFlag = TERRAIN_WALL_S;
+		} else if(connFlag == TERRAIN_WALL_E) {
 			x ++;
-			imped_2 = TERRAIN_FLAG_10;
-		} else if(imped == TERRAIN_FLAG_20) {
+			backFlag = TERRAIN_WALL_W;
+		} else if(connFlag == TERRAIN_WALL_S) {
 			y ++;
-			imped_2 = TERRAIN_FLAG_80;
-		} else if(imped == TERRAIN_FLAG_10) {
+			backFlag = TERRAIN_WALL_N;
+		} else if(connFlag == TERRAIN_WALL_W) {
 			x --;
-			imped_2 = TERRAIN_FLAG_40;
+			backFlag = TERRAIN_WALL_E;
 		} else {
 			return objNum;
 		}
 		for(i = FindLoc(x, y, MapZ); i >= 0; i = NextLoc()) {
-			if(GetType(i) == objTyp && (TerrainType[TILE_FRAME(i)] & imped_2)) {
+			if(GetType(i) == objTyp && (TerrainType[TILE_FRAME(i)] & backFlag)) {
 				ret = i;
 				break;
 			}
 		}
 	} else if(
-		objTyp == OBJ_19D &&
+		objTyp == OBJ_SILVER_SERPENT &&
 		objNum >= 0x100 &&
-		GetType(GetQuan(objNum)) == OBJ_19D
+		GetType(GetQuan(objNum)) == OBJ_SILVER_SERPENT
 	) {
 		ret = GetQuan(objNum);
 	}
 	return ret;
 }
 
-/*C_1184_02E3*/static ClearSpace(int num) {
-	if(D_E6E0 >= num)
-		return D_D5DA;
+/*returns the next free object slot if at least num slots are free, else -1*/
+/*C_1184_02E3*/static GetFreeObjSlot(int num) {
+	if(FreeObjCount >= num)
+		return FreeObjHead;
 	return -1;
 }
 
-static C_1184_02FA(int x, int y, int bp06) {
+/*locate (x, y) in the sorted Link[] chain (z is ignored).
+  wantPrev == 0: returns the first object whose key (y, x) is >= the
+                 searched one (-1 if none; inside the 40x40 area only the
+                 MapObjPtr[] cache is used);
+  wantPrev != 0: returns the node after which an object at (x, y) must be
+                 inserted (0x100 = list head), i.e. new objects go in front
+                 of the objects already on that tile.*/
+/*C_1184_02FA*/static OBJ_FindListPos(int x, int y, int wantPrev) {
 	int i, j;
 	struct coord xyz;
-	int bp_0c, bp_0a, bp_08, bp_06;
-	int some_x, some_y;
+	int cur, prev, next, objY;
+	int relX, relY;
 
-	some_x = (x - AreaX) & 0x3ff;
-	some_y = (y - AreaY) & 0x3ff;
-	if(some_x < AREA_W && some_y < AREA_H) {
-		j = AREA_W * some_y + some_x;
-		if(bp06) {
+	relX = (x - AreaX) & 0x3ff;
+	relY = (y - AreaY) & 0x3ff;
+	if(relX < AREA_W && relY < AREA_H) {
+		j = AREA_W * relY + relX;
+		if(wantPrev) {
 			/*first non null object before j*/
 			for(i = j - 1; i >= 0 && ((int *)MapObjPtr)[i] == -1; i --);
 			/*first non null object after j*/
@@ -157,12 +231,12 @@ static C_1184_02FA(int x, int y, int bp06) {
 			else
 				i = 0x100;
 
-			for(j = ((int *)MapObjPtr)[j]; (bp_08 = Link[i]) >= 0 && bp_08 != j; i = bp_08) {
-				if(GetCoordUse(bp_08) == LOCXYZ) {
-					bp_06 = GetY(bp_08);
+			for(j = ((int *)MapObjPtr)[j]; (next = Link[i]) >= 0 && next != j; i = next) {
+				if(GetCoordUse(next) == LOCXYZ) {
+					objY = GetY(next);
 					if(
-						(bp_06 > y) ||
-						((bp_06 == y) && (GetX(bp_08) >= x))
+						(objY > y) ||
+						((objY == y) && (GetX(next) >= x))
 					) break;
 				}
 			}
@@ -177,255 +251,278 @@ static C_1184_02FA(int x, int y, int bp06) {
 		SetCoordXYZ(xyz, x, y, 0);
 		if(
 			((AreaY + (AREA_H-1)) & 0x3ff) < y || (
-			((AreaY + (AREA_W-1)) & 0x3ff) == y && ((AreaX + (AREA_W-1)) & 0x3ff) < x
+			((AreaY + (AREA_W-1)) & 0x3ff) == y/*AREA_W for AREA_H: same value*/ && ((AreaX + (AREA_W-1)) & 0x3ff) < x
 		)) {
 			for(i = 0x63f; i >= 0 && ((int *)MapObjPtr)[i] == -1; i --);
 			if(i < 0)
-				bp_0a = 0x100;
+				prev = 0x100;
 			else
-				bp_0a = ((int *)MapObjPtr)[i];
+				prev = ((int *)MapObjPtr)[i];
 		} else {
-			bp_0a = 0x100;
+			prev = 0x100;
 		}
-		for(bp_0c = Link[bp_0a]; bp_0c >= 0; bp_0a = bp_0c, bp_0c = Link[bp_0c]) {
-			if(GetCoordUse(bp_0c) == LOCXYZ) {
-				/*strange?!? considers X/Y as a 24bit integer?
-				i.e if((ObjPos[bp_0c].24bit) & 0xfffff >= xyz.24bit) break;*/
-				if((ObjPos[bp_0c].raw[2] & 0xf) > xyz.raw[2])
+		for(cur = Link[prev]; cur >= 0; prev = cur, cur = Link[cur]) {
+			if(GetCoordUse(cur) == LOCXYZ) {
+				/*compares the 20 low bits of the coordinates, i.e. the key (y << 10 | x)
+				(raw[2] & 0xf are the 4 high bits of y):
+				i.e if((ObjPos[cur].24bit & 0xfffff) >= xyz.24bit) break;*/
+				if((ObjPos[cur].raw[2] & 0xf) > xyz.raw[2])
 					break;
-				if((ObjPos[bp_0c].raw[2] & 0xf) == xyz.raw[2]) {
-					if(ObjPos[bp_0c].raw[1] > xyz.raw[1])
+				if((ObjPos[cur].raw[2] & 0xf) == xyz.raw[2]) {
+					if(ObjPos[cur].raw[1] > xyz.raw[1])
 						break;
-					if(ObjPos[bp_0c].raw[1] == xyz.raw[1] && ObjPos[bp_0c].raw[0] >= xyz.raw[0])
+					if(ObjPos[cur].raw[1] == xyz.raw[1] && ObjPos[cur].raw[0] >= xyz.raw[0])
 						break;
 				}
 			}
 		}
-		i = bp_0a;
-		if(!bp06)
+		i = prev;
+		if(!wantPrev)
 			i = Link[i];
 	}
 	return i;
 }
 
+/*next object at the location set by FindLoc (same z), also returning the
+  parts of double-width/double-height objects whose tile covers it, i.e.
+  objects at x+1, y+1 or x+1/y+1 (LocPartOffset tells which). Since the list is
+  sorted, the scan walks row y from x, then jumps once to row y+1.
+  Returns -1 at the end.*/
 /*C_1184_053F*/NextLoc() {
-	struct coord *si;
-	int di;
-	struct coord loc_down, loc_right, loc_dn_rt;
-	int bp_08, loc_x, loc_y, loc_z;
+	struct coord *pos;
+	int found;
+	struct coord locDown, locRight, locDownRight;
+	int tileNum, locX, locY, locZ;
 	
-	di = -1;
-	loc_x = GetCoordX(D_06F8);
-	loc_y = GetCoordY(D_06F8);
-	loc_z = GetCoordZ(D_06F8);
+	found = -1;
+	locX = GetCoordX(LocTarget);
+	locY = GetCoordY(LocTarget);
+	locZ = GetCoordZ(LocTarget);
 
-	loc_dn_rt =
-	loc_down =
-	loc_right = D_06F8;
+	locDownRight =
+	locDown =
+	locRight = LocTarget;
 
-	SetCoordX(loc_right, loc_x + 1);
-	SetCoordY(loc_down, loc_y + 1);
-	SetCoordX(loc_dn_rt, loc_x + 1);
-	SetCoordY(loc_dn_rt, loc_y + 1);
-	while(D_06F4 >= 0 && di < 0) {
-		if(GetCoordUse(D_06F4) == LOCXYZ && GetZ(D_06F4) == loc_z) {
-			si = &(ObjPos[D_06F4]);
-			bp_08 = TILE_FRAME(D_06F4);
+	SetCoordX(locRight, locX + 1);
+	SetCoordY(locDown, locY + 1);
+	SetCoordX(locDownRight, locX + 1);
+	SetCoordY(locDownRight, locY + 1);
+	while(LocCursor >= 0 && found < 0) {
+		if(GetCoordUse(LocCursor) == LOCXYZ && GetZ(LocCursor) == locZ) {
+			pos = &(ObjPos[LocCursor]);
+			tileNum = TILE_FRAME(LocCursor);
 			if(
-				si->raw[0] == D_06F8.raw[0] &&
-				si->raw[1] == D_06F8.raw[1] &&
-				si->raw[2] == D_06F8.raw[2]
+				pos->raw[0] == LocTarget.raw[0] &&
+				pos->raw[1] == LocTarget.raw[1] &&
+				pos->raw[2] == LocTarget.raw[2]
 			) {
-				di = D_06F4;
+				found = LocCursor;
 			} else if(
-				si->raw[0] == loc_right.raw[0] &&
-				si->raw[1] == loc_right.raw[1] &&
-				si->raw[2] == loc_right.raw[2]
+				pos->raw[0] == locRight.raw[0] &&
+				pos->raw[1] == locRight.raw[1] &&
+				pos->raw[2] == locRight.raw[2]
 			) {
-				if(IsTileDoubleH(bp_08)) {
-					di = D_06F4;
-					D_0658 = 1;
+				if(IsTileDoubleH(tileNum)) {
+					found = LocCursor;
+					LocPartOffset = 1;
 				}
 			} else if(
-				si->raw[0] == loc_down.raw[0] &&
-				si->raw[1] == loc_down.raw[1] &&
-				si->raw[2] == loc_down.raw[2]
+				pos->raw[0] == locDown.raw[0] &&
+				pos->raw[1] == locDown.raw[1] &&
+				pos->raw[2] == locDown.raw[2]
 			) {
-				if(IsTileDoubleV(bp_08)) {
-					di = D_06F4;
-					D_0658 = IsTileDoubleH(bp_08)?2:1;
+				if(IsTileDoubleV(tileNum)) {
+					found = LocCursor;
+					LocPartOffset = IsTileDoubleH(tileNum)?2:1;
 				}
 			} else if(
-				si->raw[0] == loc_dn_rt.raw[0] &&
-				si->raw[1] == loc_dn_rt.raw[1] &&
-				si->raw[2] == loc_dn_rt.raw[2]
+				pos->raw[0] == locDownRight.raw[0] &&
+				pos->raw[1] == locDownRight.raw[1] &&
+				pos->raw[2] == locDownRight.raw[2]
 			) {
-				if((TileFlag[bp_08] & (TILE_FLAG1_80|TILE_FLAG1_40)) == (TILE_FLAG1_80|TILE_FLAG1_40)) {
-					di = D_06F4;
-					D_0658 = 3;
+				if((TileFlag[tileNum] & (TILE_DOUBLE_WIDTH|TILE_DOUBLE_HEIGHT)) == (TILE_DOUBLE_WIDTH|TILE_DOUBLE_HEIGHT)) {
+					found = LocCursor;
+					LocPartOffset = 3;
 				}
-			} else if(!D_06F6) {
-				D_06F4 = C_1184_02FA(loc_x, loc_y + 1, 0);
-				D_06F6 = 1;
+			} else if(!LocOnNextRow) {
+				/*past the location on row y: continue once on row y+1*/
+				LocCursor = OBJ_FindListPos(locX, locY + 1, 0);
+				LocOnNextRow = 1;
 				continue;
 			} else {
-				D_06F4 = -1;
+				LocCursor = -1;
 				break;
 			}
 		}
-		D_06F4 = Link[D_06F4];
+		LocCursor = Link[LocCursor];
 	}
-	return di;
+	return found;
 }
 
+/*start iterating over the objects at (x, y, z); returns the first one or -1*/
 /*C_1184_075A*/FindLoc(int x, int y, int z) {
 	if(z) {
 		x &= 0xff;
 		y &= 0xff;
 	}
-	D_0658 =
-	D_06F6 = 0;
-	D_06F4 = C_1184_02FA(x, y, 0);
-	SetCoordXYZ(D_06F8, x, y, z);
+	LocPartOffset =
+	LocOnNextRow = 0;
+	LocCursor = OBJ_FindListPos(x, y, 0);
+	SetCoordXYZ(LocTarget, x, y, z);
 	return NextLoc();
 }
 
-C_1184_07A7(int objTyp, int x, int y) {
-	int si, di;
+/*find an object of type objTyp exactly at (x, y, MapZ) (multi-tile
+  parts are not considered); -1 if none*/
+/*C_1184_07A7*/OBJ_FindTypeAt(int objTyp, int x, int y) {
+	int obj, found;
 
-	di = -1;
+	found = -1;
 	for(
-		si = C_1184_02FA(x, y, 0);
-		si >= 0 && (
-			GetCoordUse(si) != LOCXYZ ||
-			(GetX(si) == x && GetY(si) == y)
+		obj = OBJ_FindListPos(x, y, 0);
+		obj >= 0 && (
+			GetCoordUse(obj) != LOCXYZ ||
+			(GetX(obj) == x && GetY(obj) == y)
 		);
-		si = Link[si]
+		obj = Link[obj]
 	) {
-		if(GetCoordUse(si) == LOCXYZ && GetZ(si) == MapZ && GetType(si) == objTyp) {
-			di = si;
+		if(GetCoordUse(obj) == LOCXYZ && GetZ(obj) == MapZ && GetType(obj) == objTyp) {
+			found = obj;
 			break;
 		}
 	}
 
-	return di;
+	return found;
 }
 
+/*start iterating over the direct contents of objNum (objects whose
+  GetAssoc() is objNum); they directly follow it in the chain. Returns
+  the first one or -1.*/
 /*C_1184_0840*/FindInv(int objNum) {
-	int si, di;
+	int first, ret;
 
-	di = -1;
-	si = Link[objNum];
-	if(GetCoordUse(si) != LOCXYZ && GetAssoc(si) == objNum) {
-		di = si;
-		D_06FB = Link[si];
-		D_06FD = objNum;
-		D_06FF = GetType(di);
-		D_0701 = -1;
+	ret = -1;
+	first = Link[objNum];
+	if(GetCoordUse(first) != LOCXYZ && GetAssoc(first) == objNum) {
+		ret = first;
+		InvCursor = Link[first];
+		InvOwner = objNum;
+		InvType = GetType(ret);
+		InvQuality = -1;
 	}
-	return di;
+	return ret;
 }
 
+/*next direct content of the object given to FindInv (skips the contents
+  of sub-containers; skips equipped items if InvSkipEquipped is set); -1 at the end*/
 /*C_1184_0899*/NextInv() {
-	int si;
+	int ret;
 
-	for(si = -1; D_06FB >= 0 && si < 0; D_06FB = Link[D_06FB]) {
-		if(GetCoordUse(D_06FB) == LOCXYZ) {
-			D_06FB = -1;
+	for(ret = -1; InvCursor >= 0 && ret < 0; InvCursor = Link[InvCursor]) {
+		if(GetCoordUse(InvCursor) == LOCXYZ) {
+			InvCursor = -1;
 			break;
 		}
-		if(GetAssoc(D_06FB) == D_06FD) {
-			if(D_0656 == 0 || GetCoordUse(D_06FB) == INVEN || GetCoordUse(D_06FB) == CONTAINED)
-				si = D_06FB;
+		if(GetAssoc(InvCursor) == InvOwner) {
+			if(InvSkipEquipped == 0 || GetCoordUse(InvCursor) == INVEN || GetCoordUse(InvCursor) == CONTAINED)
+				ret = InvCursor;
 		}
 	}
-	return si;
+	return ret;
 }
 
+/*next map object inside the rectangle given to SearchArea; -1 at the end*/
 /*C_1184_090D*/NextArea() {
-	int si, di;
-	int bp_04, bp_02;
+	int ret, x;
+	int y, z;
 
-	si = -1;
-	if(D_0703 >= 0) {
-		for(; D_0703 != D_0705 && D_0703 >= 0 && si < 0; D_0703 = Link[D_0703]) {
-			if(GetCoordUse(D_0703) == LOCXYZ) {
-				di = GetX(D_0703) & D_05CA;
-				bp_04 = GetY(D_0703) & D_05CA;
-				bp_02 = GetZ(D_0703);
+	ret = -1;
+	if(AreaCursor >= 0) {
+		for(; AreaCursor != AreaEnd && AreaCursor >= 0 && ret < 0; AreaCursor = Link[AreaCursor]) {
+			if(GetCoordUse(AreaCursor) == LOCXYZ) {
+				x = GetX(AreaCursor) & MapCoordMask;
+				y = GetY(AreaCursor) & MapCoordMask;
+				z = GetZ(AreaCursor);
 				if(
-					di >= D_BDCE[0] && di <= D_BDCE[2] &&
-					bp_04 >= D_BDCE[1] && bp_04 <= D_BDCE[3] &&
-					bp_02 == D_BDD8
-				) si = D_0703;
+					x >= SearchRect[0] && x <= SearchRect[2] &&
+					y >= SearchRect[1] && y <= SearchRect[3] &&
+					z == SearchZ
+				) ret = AreaCursor;
 			}
 		}
-		if(D_0703 == D_0705)
-			D_0703 = D_0705 = -1;
+		if(AreaCursor == AreaEnd)
+			AreaCursor = AreaEnd = -1;
 	}
-	return si;
+	return ret;
 }
 
+/*start iterating over the map objects inside the rectangle
+  (x1, y1)-(x2, y2) at level MapZ; returns the first one or -1*/
 /*C_1184_09DE*/SearchArea(int x1, int y1, int x2, int y2) {
 	if(x1 < 0)
 		x1 = 0;
 	if(y1 < 0)
 		y1 = 0;
-	D_BDCE[0] = x1;
-	D_BDCE[2] = x2;
-	D_BDCE[1] = y1;
-	D_BDCE[3] = y2;
-	D_BDD8 = MapZ;
-	D_0703 = C_1184_02FA(x1, y1, 0);
-	D_0705 = C_1184_02FA(x2 + 1, y2, 0);
+	SearchRect[0] = x1;
+	SearchRect[2] = x2;
+	SearchRect[1] = y1;
+	SearchRect[3] = y2;
+	SearchZ = MapZ;
+	AreaCursor = OBJ_FindListPos(x1, y1, 0);
+	AreaEnd = OBJ_FindListPos(x2 + 1, y2, 0);
 	return NextArea();
 }
 
+/*next direct content of the FindInvType owner with the wanted type
+  (and quality, unless -1); -1 at the end*/
 /*C_1184_0A37*/NextInvType() {
-	int si;
+	int ret;
 
-	for(si = -1; D_06FB >= 0 && si < 0; D_06FB = Link[D_06FB]) {
-		if(GetCoordUse(D_06FB) == LOCXYZ) {
-			D_06FB = -1;
+	for(ret = -1; InvCursor >= 0 && ret < 0; InvCursor = Link[InvCursor]) {
+		if(GetCoordUse(InvCursor) == LOCXYZ) {
+			InvCursor = -1;
 			break;
 		}
-		if(GetAssoc(D_06FB) == D_06FD && GetType(D_06FB) == D_06FF) {
+		if(GetAssoc(InvCursor) == InvOwner && GetType(InvCursor) == InvType) {
 			if(
-				(D_0701 < 0 || GetQual(D_06FB) == D_0701) &&
-				(D_0656 == 0 || GetCoordUse(D_06FB) == INVEN || GetCoordUse(D_06FB) == CONTAINED)
-			) si = D_06FB;
+				(InvQuality < 0 || GetQual(InvCursor) == InvQuality) &&
+				(InvSkipEquipped == 0 || GetCoordUse(InvCursor) == INVEN || GetCoordUse(InvCursor) == CONTAINED)
+			) ret = InvCursor;
 		}
 	}
-	return si;
+	return ret;
 }
 
 
+/*first direct content of objNum of type objType and the given quality
+  (-1 = any quality); -1 if none*/
 /*C_1184_0AE2*/FindInvType(int objNum, int objType, int quality) {
-	int si, di;
+	int first, ret;
 
 	if(objNum < 0)
 		return -1;
-	di = -1;
-	si = Link[objNum];
-	if(GetCoordUse(si) != LOCXYZ && GetAssoc(si) == objNum) {
-		di = si;
-		D_06FB = si;
-		D_06FD = objNum;
-		D_06FF = objType;
-		D_0701 = quality;
-		di = NextInvType();
+	ret = -1;
+	first = Link[objNum];
+	if(GetCoordUse(first) != LOCXYZ && GetAssoc(first) == objNum) {
+		ret = first;
+		InvCursor = first;
+		InvOwner = objNum;
+		InvType = objType;
+		InvQuality = quality;
+		ret = NextInvType();
 	}
-	return di;
+	return ret;
 }
 
-/*find a "living" object at x, y*/
-C_1184_0B3D(int objNum, int x, int y) {
+/*find a living NPC/monster (slot startNum..0xFF, at least 1) standing at
+  (x, y, MapZ); -1 if none*/
+/*C_1184_0B3D*/OBJ_FindNPCAt(int startNum, int x, int y) {
 	int i, ret;
 
 	ret = -1;
-	if(objNum < 1)
-		objNum = 1;
-	for(i = objNum; i < 0x100; i ++) {
+	if(startNum < 1)
+		startNum = 1;
+	for(i = startNum; i < 0x100; i ++) {
 		if(
 			ObjShapeType[i] &&
 			!IsDead(i) &&
@@ -440,198 +537,216 @@ C_1184_0B3D(int objNum, int x, int y) {
 	return ret;
 }
 
-/*SlimeRefreshFrame?*/
-C_1184_0BC1() {
-	int si, di;
-	int bp_0e, x, y, new_x, new_y, bp_04, bp_02;
+/*refresh the frame of every slime (temporary monster slots): bit mask
+  of the neighbouring slimes, 1=N 2=E 4=S 8=W, so that they merge visually*/
+/*C_1184_0BC1*/OBJ_UpdateSlimeFrames() {
+	int slime, other;
+	int dir, x, y, newX, newY, neighbours, dirBit;
 
-	for(si = 0xe0; si < 0x100; si ++) {
-		if(GetType(si) == OBJ_177 && !IsDead(si)) {
-			x = GetX(si);
-			y = GetY(si);
-			bp_02 = 1;
-			bp_04 = 0;
-			for(bp_0e = 0; bp_0e < 8; bp_02 <<= 1, bp_0e +=2) {
-				new_x = x + DirIncrX[bp_0e];
-				new_y = y + DirIncrY[bp_0e];
+	for(slime = 0xe0; slime < 0x100; slime ++) {
+		if(GetType(slime) == OBJ_SLIME && !IsDead(slime)) {
+			x = GetX(slime);
+			y = GetY(slime);
+			dirBit = 1;
+			neighbours = 0;
+			for(dir = 0; dir < 8; dirBit <<= 1, dir +=2) {
+				newX = x + DirIncrX[dir];
+				newY = y + DirIncrY[dir];
 				for(
-					di = C_1184_0B3D(0xe0, new_x, new_y);
-					di >= 0;
-					di = C_1184_0B3D(di + 1, new_x, new_y)
+					other = OBJ_FindNPCAt(0xe0, newX, newY);
+					other >= 0;
+					other = OBJ_FindNPCAt(other + 1, newX, newY)
 				) {
-					if(GetType(di) == OBJ_177 && !IsDead(di)) {
-						bp_04 |= bp_02;
+					if(GetType(other) == OBJ_SLIME && !IsDead(other)) {
+						neighbours |= dirBit;
 						break;
 					}
 				}
 			}
-			SetFrame(si, bp_04);
+			SetFrame(slime, neighbours);
 		}
 	}
 }
 
-/*silver serpent related?*/
-static C_1184_0CBE(int objNum, int x, int y, int bp06) {
-	int si;
-	int bp_1a, bp_18, bp_16, bp_14, bp_12;
-	int bp_10;
-	int bp_0e, bp_0c, bp_0a, bp_08, bp_06;
-	int bp_04, bp_02;
+/*silver serpent body. The segments are objects (>= 0x100) of type
+  OBJ_SILVER_SERPENT whose quantity is the head and whose quality is the
+  segment number (head's quality + 1, + 2, ...). Connections between
+  segments are given by the TerrainType flags of their frame.
+  deleteBody == 0: the head (objNum) has just moved away from
+                   (oldX, oldY): renumber the segments, then move the tail
+                   segment into the vacated tile (snake trick);
+  deleteBody != 0: delete all the segments.*/
+/*C_1184_0CBE*/static OBJ_MoveSerpentBody(int objNum, int oldX, int oldY, int deleteBody) {
+	int part;
+	int partX, partY, headX, headY, headZ;
+	int partIndex;
+	int tail, beforeTail, vacatedConn, backDir, headFrame;
+	int partConn, partFrame;
 
-	bp_0c = bp_0e = objNum;
-	bp_1a = x;
-	bp_18 = y;
-	bp_0a = TerrainType[TILE_FRAME(objNum)];
-	if(bp_0a & TERRAIN_FLAG_80)
-		bp_08 = 4;
-	else if(bp_0a & TERRAIN_FLAG_40)
-		bp_08 = 6;
-	else if(bp_0a & TERRAIN_FLAG_20)
-		bp_08 = 0;
-	else if(bp_0a & TERRAIN_FLAG_10)
-		bp_08 = 2;
-	bp_06 = bp_08;
-	bp_16 = GetX(objNum);
-	bp_14 = GetY(objNum);
-	bp_12 = GetZ(objNum);
-	if(bp_16 > x) {
-		bp_06 = 2;
-		bp_0a |= TERRAIN_FLAG_40;
-	} else if(bp_16 < x)  {
-		bp_06 = 6;
-		bp_0a |= TERRAIN_FLAG_10;
-	} else if(bp_14 > y) {
-		bp_06 = 4;
-		bp_0a |= TERRAIN_FLAG_20;
-	} else if(bp_14 < y) {
-		bp_06 = 0;
-		bp_0a |= TERRAIN_FLAG_80;
+	beforeTail = tail = objNum;
+	partX = oldX;
+	partY = oldY;
+	vacatedConn = TerrainType[TILE_FRAME(objNum)];
+	if(vacatedConn & TERRAIN_WALL_N)
+		backDir = 4;
+	else if(vacatedConn & TERRAIN_WALL_E)
+		backDir = 6;
+	else if(vacatedConn & TERRAIN_WALL_S)
+		backDir = 0;
+	else if(vacatedConn & TERRAIN_WALL_W)
+		backDir = 2;
+	headFrame = backDir;
+	headX = GetX(objNum);
+	headY = GetY(objNum);
+	headZ = GetZ(objNum);
+	if(headX > oldX) {
+		headFrame = 2;
+		vacatedConn |= TERRAIN_WALL_E;
+	} else if(headX < oldX)  {
+		headFrame = 6;
+		vacatedConn |= TERRAIN_WALL_W;
+	} else if(headY > oldY) {
+		headFrame = 4;
+		vacatedConn |= TERRAIN_WALL_S;
+	} else if(headY < oldY) {
+		headFrame = 0;
+		vacatedConn |= TERRAIN_WALL_N;
 	}
-	SetFrame(objNum, bp_06);
-	bp_10 = GetQual(objNum) + 1;
+	SetFrame(objNum, headFrame);
+	/*follow the body from the head to the tail*/
+	partIndex = GetQual(objNum) + 1;
 	do {
 		for(
-			si = FindLoc(bp_1a - DirIncrX[bp_08], bp_18 - DirIncrY[bp_08], bp_12);
-			si >= 0;
-			si = NextLoc()
+			part = FindLoc(partX - DirIncrX[backDir], partY - DirIncrY[backDir], headZ);
+			part >= 0;
+			part = NextLoc()
 		) {
 			if(
-				si >= 0x100 &&
-				GetType(si) == OBJ_19D &&
-				GetQual(si) == bp_10 &&
-				GetQuan(si) == objNum
+				part >= 0x100 &&
+				GetType(part) == OBJ_SILVER_SERPENT &&
+				GetQual(part) == partIndex &&
+				GetQuan(part) == objNum
 			) {
-				bp_0c = bp_0e;
-				bp_0e = si;
-				bp_02 = GetFrame(si);
-				bp_10 ++;
-				SetQual(si, bp_10);
-				bp_1a = GetX(si);
-				bp_18 = GetY(si);
-				bp_06 = bp_08;
-				bp_04 = TerrainType[TILE_FRAME(si)] & D_0747[bp_08];
-				if(bp_04 & TERRAIN_FLAG_80)
-					bp_08 = 4;
-				else if(bp_04 & TERRAIN_FLAG_40)
-					bp_08 = 6;
-				else if(bp_04 & TERRAIN_FLAG_20)
-					bp_08 = 0;
-				else if(bp_04 & TERRAIN_FLAG_10)
-					bp_08 = 2;
-				if(bp06)
-					DeleteObj(si);
+				beforeTail = tail;
+				tail = part;
+				partFrame = GetFrame(part);
+				partIndex ++;
+				SetQual(part, partIndex);
+				partX = GetX(part);
+				partY = GetY(part);
+				headFrame = backDir;
+				partConn = TerrainType[TILE_FRAME(part)] & DirConnClearMask[backDir];
+				if(partConn & TERRAIN_WALL_N)
+					backDir = 4;
+				else if(partConn & TERRAIN_WALL_E)
+					backDir = 6;
+				else if(partConn & TERRAIN_WALL_S)
+					backDir = 0;
+				else if(partConn & TERRAIN_WALL_W)
+					backDir = 2;
+				if(deleteBody)
+					DeleteObj(part);
 				break;
 			}
 		}
-	} while(si >= 0 && (bp_02 & 0xf) >= 8);
-	if(bp06)
+	} while(part >= 0 && (partFrame & 0xf) >= 8);/*frames < 8 are tail ends*/
+	if(deleteBody)
 		return;
 
-	if(bp_0c != objNum) {
-		bp_04 = TerrainType[TILE_FRAME(bp_0c)];
-		bp_04 &= D_0747[(GetFrame(bp_0e) & 0xf) ^ 5];
-		if(bp_04 & TERRAIN_FLAG_80)
-			SetFrame(bp_0c, 1);
-		else if(bp_04 & TERRAIN_FLAG_40)
-			SetFrame(bp_0c, 3);
-		else if(bp_04 & TERRAIN_FLAG_20)
-			SetFrame(bp_0c, 5);
-		else if(bp_04 & TERRAIN_FLAG_10)
-			SetFrame(bp_0c, 7);
+	/*the segment before the tail becomes the new tail end*/
+	if(beforeTail != objNum) {
+		partConn = TerrainType[TILE_FRAME(beforeTail)];
+		partConn &= DirConnClearMask[(GetFrame(tail) & 0xf) ^ 5];
+		if(partConn & TERRAIN_WALL_N)
+			SetFrame(beforeTail, 1);
+		else if(partConn & TERRAIN_WALL_E)
+			SetFrame(beforeTail, 3);
+		else if(partConn & TERRAIN_WALL_S)
+			SetFrame(beforeTail, 5);
+		else if(partConn & TERRAIN_WALL_W)
+			SetFrame(beforeTail, 7);
 	}
-	if(bp_0e == objNum)
+	if(tail == objNum)
 		return;
-	if(bp_0c != objNum)
-		SetFrame(bp_0e, D_074E[bp_0a >> 4]);
+	/*move the old tail into the tile left by the head*/
+	if(beforeTail != objNum)
+		SetFrame(tail, SerpentBodyFrame[vacatedConn >> 4]);
 	else
-		SetFrame(bp_0e, GetFrame(objNum) + 1);
-	MoveObj(bp_0e, x, y, bp_12);
-	SetQual(bp_0e, GetQual(objNum) + 1);
+		SetFrame(tail, GetFrame(objNum) + 1);
+	MoveObj(tail, oldX, oldY, headZ);
+	SetQual(tail, GetQual(objNum) + 1);
 }
 
-/*dragon related*/
-C_1184_10F1(int x, int y, int z, int dir, int bp06) {
-	int si;
-	int bp_02;
+/*find the dragon part next to (x, y) in direction dir whose frame
+  matches a dragon facing (headFrame & 6) (table DragonPartFrames); -1 if none*/
+/*C_1184_10F1*/OBJ_FindDragonPart(int x, int y, int z, int dir, int headFrame) {
+	int part;
+	int partFrame;
 
-	bp_02 = D_17CE[(dir >> 1) + ((bp06 & 6) << 1)];
+	partFrame = DragonPartFrames[(dir >> 1) + ((headFrame & 6) << 1)];
 	for(
-		si = FindLoc(x + DirIncrX[dir], y + DirIncrY[dir], z);
-		si >= 0;
-		si = NextLoc()
+		part = FindLoc(x + DirIncrX[dir], y + DirIncrY[dir], z);
+		part >= 0;
+		part = NextLoc()
 	) {
-		if(GetType(si) == OBJ_19B && (GetFrame(si) & 0x3e) == bp_02)
-			return si;
+		if(GetType(part) == OBJ_DRAGON && (GetFrame(part) & 0x3e) == partFrame)
+			return part;
 	}
 	return -1;
 }
 
-/*big creatures related*/
-C_1184_116D(int objNum, int x, int y, int bp06) {
-	int si, di;
-	int bp_0e, bp_0c, bp_0a, bp_08, bp_06, bp_04, bp_02;
+/*multi-object creatures (2-tile monsters >= OBJ_GIANT_SCORPION, dragon,
+  hydra, ship): objNum has moved from (oldX, oldY); move its other parts
+  along, or delete them if deleteParts is set. The parts are found around
+  the old position in every direction (hydra) or in the directions given
+  by the TerrainType connection flags.*/
+/*C_1184_116D*/OBJ_MoveCreatureParts(int objNum, int oldX, int oldY, int deleteParts) {
+	int dir, part;
+	int newX, newY, z, partType, connFlags, partConn, facing;
 
-	bp_0e = GetX(objNum);
-	bp_0c = GetY(objNum);
-	bp_0a = GetZ(objNum);
-	bp_06 = TerrainType[TILE_FRAME(objNum)];
-	bp_08 = GetType(objNum);
-	if(bp_08 == OBJ_176)
-		bp_08 = OBJ_1A9;
-	if(bp_08 == OBJ_19B)
-		bp_02 = (GetFrame(objNum) & 6) >> 1;
-	for(si = 0; si < 8; si ++) {
+	newX = GetX(objNum);
+	newY = GetY(objNum);
+	z = GetZ(objNum);
+	connFlags = TerrainType[TILE_FRAME(objNum)];
+	partType = GetType(objNum);
+	if(partType == OBJ_HYDRA)
+		partType = OBJ_HYDRA_BODY;
+	if(partType == OBJ_DRAGON)
+		facing = (GetFrame(objNum) & 6) >> 1;
+	for(dir = 0; dir < 8; dir ++) {
 		if(
-			bp_08 == OBJ_1A9 ||
-			((si & 1) == 0 && (bp_06 & D_075E[si]))
+			partType == OBJ_HYDRA_BODY ||
+			((dir & 1) == 0 && (connFlags & DirConnFlag[dir]))
 		) {
-			if(bp_08 == OBJ_19B) {
-				di = C_1184_10F1(x, y, bp_0a, si, bp_02 << 1);
+			if(partType == OBJ_DRAGON) {
+				part = OBJ_FindDragonPart(oldX, oldY, z, dir, facing << 1);
 			} else {
 				for(
-					di = FindLoc(DirIncrX[si] + x, DirIncrY[si] + y, bp_0a);
-					di >= 0;
-					di = NextLoc()
+					part = FindLoc(DirIncrX[dir] + oldX, DirIncrY[dir] + oldY, z);
+					part >= 0;
+					part = NextLoc()
 				) {
-					bp_04 = TerrainType[TILE_FRAME(di)];
-					if(di >= 0x100 && GetType(di) == bp_08) {
-						if(bp_08 == OBJ_1A9 && (GetFrame(di) >> 2) == si)
+					partConn = TerrainType[TILE_FRAME(part)];
+					if(part >= 0x100 && GetType(part) == partType) {
+						if(partType == OBJ_HYDRA_BODY && (GetFrame(part) >> 2) == dir)
 							break;
-						if(bp_08 != OBJ_1A9 && (bp_04 & D_075E[si ^ 4]))
+						if(partType != OBJ_HYDRA_BODY && (partConn & DirConnFlag[dir ^ 4]))
 							break;
 					}
 				}
 			}
-			if(di < 0)
+			if(part < 0)
 				continue;
-			if(bp06)
-				DeleteObj(di);
+			if(deleteParts)
+				DeleteObj(part);
 			else
-				MoveObj(di, DirIncrX[si] + bp_0e, DirIncrY[si] + bp_0c, bp_0a);
+				MoveObj(part, DirIncrX[dir] + newX, DirIncrY[dir] + newY, z);
 		}
 	}
 }
 
+/*create an object from a status and a struct coord (map location or
+  container depending on the status); does not return the new object*/
 /*C_1184_134C*/AddObj(int status, struct coord location, int shapeType, int shapeNum, int amount) {
 	if((status & 0x18) == LOCXYZ)
 		AddMapObj(shapeType | (shapeNum << 10), status, amount, GetCoordX(location), GetCoordY(location), GetCoordZ(location));
@@ -639,24 +754,26 @@ C_1184_116D(int objNum, int x, int y, int bp06) {
 		AddInvObj(shapeType | (shapeNum << 10), status, amount, GetCoordAssoc(location));
 }
 
+/*create an object on the map at (x, y, z) (in front of the objects
+  already there); returns the new object or -1 if no slot is free*/
 /*C_1184_13A7*/AddMapObj(int shapeType, int status, int amount, int x, int y, int z) {
 	int objNum;
-	int bp_04, bp_02;
+	int prev, posMask;
 	
-	bp_02 = z?0xff:0x3ff;
-	x &= bp_02;
-	y &= bp_02;
-	objNum = ClearSpace(1);
+	posMask = z?0xff:0x3ff;
+	x &= posMask;
+	y &= posMask;
+	objNum = GetFreeObjSlot(1);
 	if(objNum >= 0) {
-		bp_04 = C_1184_02FA(x, y, 1);
-		D_D5DA = Link[D_D5DA];
-		D_E6E0 --;
+		prev = OBJ_FindListPos(x, y, 1);
+		FreeObjHead = Link[FreeObjHead];
+		FreeObjCount --;
 		ObjStatus[objNum] = status | LOCAL;
 		SetXYZ(objNum, x, y, z);
 		ObjShapeType[objNum] = shapeType;
 		Amount[objNum] = amount;
-		Link[objNum] = Link[bp_04];
-		Link[bp_04] = objNum;
+		Link[objNum] = Link[prev];
+		Link[prev] = objNum;
 		x = (x - AreaX) & 0x3ff;
 		y = (y - AreaY) & 0x3ff;
 		if(x < AREA_W && y < AREA_H)
@@ -665,41 +782,45 @@ C_1184_116D(int objNum, int x, int y, int bp06) {
 	return objNum;
 }
 
-/*C_1184_14A8*/AddInvObj(int bp0c, int status, int amount, int di/*bp06*/) {
+/*create an object inside owner (an NPC or a container); returns the new
+  object or -1 if no slot is free*/
+/*C_1184_14A8*/AddInvObj(int shapeType, int status, int amount, int owner) {
 	int objNum;
 
-	if(StatusDisplay == CMD_92 && Party[D_04B3] == di)
+	if(StatusDisplay == CMD_STAT_EQUIP && Party[StatusMember] == owner)
 		StatusDirty = 1;
-	objNum = ClearSpace(1);
+	objNum = GetFreeObjSlot(1);
 	if(objNum >= 0) {
-		D_D5DA = Link[D_D5DA];
-		D_E6E0 --;
+		FreeObjHead = Link[FreeObjHead];
+		FreeObjCount --;
 		ObjStatus[objNum] = status;
-		if(bp0c != OBJ_18C)
+		if(shapeType != OBJ_GARGOYLE_LENS_VIOLET)
 			SetLocal(objNum);
-		SetAssoc(objNum, di);
-		ObjShapeType[objNum] = bp0c;
+		SetAssoc(objNum, owner);
+		ObjShapeType[objNum] = shapeType;
 		Amount[objNum] = amount;
-		Link[objNum] = Link[di];
-		Link[di] = objNum;
+		Link[objNum] = Link[owner];
+		Link[owner] = objNum;
 	}
 	return objNum;
 }
 
+/*create a temporary monster of type objType at (x, y, z) in one of the
+  slots 0xE0-0xFF; returns it or -1 if none is free*/
 /*C_1184_1540*/AddMonster(int objType, int x, int y, int z) {
 	int objNum;
-	int bp_04, bp_02;
+	int prev, posMask;
 
-	bp_02 = z?0xff:0x3ff;
-	x &= bp_02;
-	y &= bp_02;
+	posMask = z?0xff:0x3ff;
+	x &= posMask;
+	y &= posMask;
 	objNum = -1;
-	if(D_E6E2)
-		objNum = D_BDD6;
+	if(FreeMonsterCount)
+		objNum = FreeMonsterHead;
 	if(objNum >= 0) {
-		bp_04 = C_1184_02FA(x, y, 1);
-		D_BDD6 = Link[D_BDD6];
-		D_E6E2 --;
+		prev = OBJ_FindListPos(x, y, 1);
+		FreeMonsterHead = Link[FreeMonsterHead];
+		FreeMonsterCount --;
 		ObjStatus[objNum] = LOCAL | OWNED;
 		NPCStatus[objNum] = 0;
 		NPCMode[objNum] = AI_ASSAULT;
@@ -707,203 +828,219 @@ C_1184_116D(int objNum, int x, int y, int bp06) {
 		ObjShapeType[objNum] =
 		OrigShapeType[objNum] = TypeFrame(objType, 0);
 		Amount[objNum] = 1;
-		Link[objNum] = Link[bp_04];
-		Link[bp_04] = objNum;
+		Link[objNum] = Link[prev];
+		Link[prev] = objNum;
 		x = (x - AreaX) & 0x3ff;
 		y = (y - AreaY) & 0x3ff;
 		if(x < AREA_W && y < AREA_H)
 			MapObjPtr[y][x] = objNum;
-		if(objType == OBJ_177)
-			C_1184_0BC1();
+		if(objType == OBJ_SLIME)
+			OBJ_UpdateSlimeFrames();
 	}
 	return objNum;
 }
 
-static C_1184_1665(int objNum) {
-	int ret;
+/*the node preceding objNum in the Link[] chain (-1 if not found)*/
+/*C_1184_1665*/static OBJ_FindPrevLink(int objNum) {
+	int prev;
 
 	if(GetCoordUse(objNum) == LOCXYZ)
-		ret = C_1184_02FA(GetX(objNum), GetY(objNum), 1);
+		prev = OBJ_FindListPos(GetX(objNum), GetY(objNum), 1);
 	else
-		ret = GetAssoc(objNum);
-	for(; ret >= 0 && Link[ret] != objNum; ret = Link[ret]);
+		prev = GetAssoc(objNum);
+	for(; prev >= 0 && Link[prev] != objNum; prev = Link[prev]);
 
-	return ret;
+	return prev;
 }
 
-static C_1184_16D5(int x, int y, int z, int bp08, int bp06) {
-	int si, di;
-	int bp_02;
+/*objNum (at x, y, z) is being unlinked and nextObj now follows its
+  predecessor: fix the MapObjPtr[] entry of the tile if it pointed to
+  objNum (nextObj, or -1 if nextObj is on another tile)*/
+/*C_1184_16D5*/static OBJ_FixMapObjPtr(int x, int y, int z, int objNum, int nextObj) {
+	int relX, relY;
+	int posMask;
 
-	if(GetCoordUse(bp08) == LOCXYZ) {
-		bp_02 = z?0xff:0x3ff;
-		si = (x - AreaX) & bp_02;
-		di = (y - AreaY) & bp_02;
-		if(si < AREA_W && di < AREA_H && MapObjPtr[di][si] == bp08) {
-			if(GetCoordUse(bp06) == LOCXYZ && (GetX(bp06) != x || GetY(bp06) != y))
-				MapObjPtr[di][si] = -1;
+	if(GetCoordUse(objNum) == LOCXYZ) {
+		posMask = z?0xff:0x3ff;
+		relX = (x - AreaX) & posMask;
+		relY = (y - AreaY) & posMask;
+		if(relX < AREA_W && relY < AREA_H && MapObjPtr[relY][relX] == objNum) {
+			if(GetCoordUse(nextObj) == LOCXYZ && (GetX(nextObj) != x || GetY(nextObj) != y))
+				MapObjPtr[relY][relX] = -1;
 			else
-				MapObjPtr[di][si] = bp06;
+				MapObjPtr[relY][relX] = nextObj;
 		}
 	}
 }
 
+/*delete an object: its contents are dropped where it was (or put in its
+  owner), extra parts of big creatures are deleted too, and the slot goes
+  back to the monster or object free list. Ships can't be deleted.*/
 /*C_1184_17A5*/DeleteObj(int objNum) {
-	int di;
-	int bp_04, bp_02;
+	int objTyp;
+	int content, prev;
 
 	if(objNum < 0)
 		return;
-	D_0707 = -1;
-	if(StatusDisplay == CMD_92 && C_1184_1D2E(objNum, Party[D_04B3]))
+	LastSpilledObj = -1;
+	if(StatusDisplay == CMD_STAT_EQUIP && OBJ_IsInside(objNum, Party[StatusMember]))
 		StatusDirty = 1;
-	di = GetType(objNum);
-	if(di == OBJ_19C)
+	objTyp = GetType(objNum);
+	if(objTyp == OBJ_SHIP)
 		return;
 	if(objNum < 0x100) {
-		if(di == OBJ_176 || di == OBJ_19C || di >= OBJ_1AA || di == OBJ_19B)
-			C_1184_116D(objNum, GetX(objNum), GetY(objNum), 1);
-		else if(di == OBJ_19D)
-			C_1184_0CBE(objNum, GetX(objNum), GetY(objNum), 1);
+		if(objTyp == OBJ_HYDRA || objTyp == OBJ_SHIP || objTyp >= OBJ_GIANT_SCORPION || objTyp == OBJ_DRAGON)
+			OBJ_MoveCreatureParts(objNum, GetX(objNum), GetY(objNum), 1);
+		else if(objTyp == OBJ_SILVER_SERPENT)
+			OBJ_MoveSerpentBody(objNum, GetX(objNum), GetY(objNum), 1);
 	}
-	while((bp_04 = FindInv(objNum)) >= 0) {
-		D_0707 = bp_04;
+	/*spill the contents*/
+	while((content = FindInv(objNum)) >= 0) {
+		LastSpilledObj = content;
 		if(GetCoordUse(objNum) == LOCXYZ)
-			MoveObj(bp_04, GetX(objNum), GetY(objNum), GetZ(objNum));
+			MoveObj(content, GetX(objNum), GetY(objNum), GetZ(objNum));
 		else
-			InsertObj(bp_04, GetAssoc(objNum), GetCoordUse(objNum));
+			InsertObj(content, GetAssoc(objNum), GetCoordUse(objNum));
 	}
 	ObjShapeType[objNum] = 0;
-	bp_02 = C_1184_1665(objNum);
-	if(bp_02 >= 0) {
-		Link[bp_02] = Link[objNum];
+	prev = OBJ_FindPrevLink(objNum);
+	if(prev >= 0) {
+		Link[prev] = Link[objNum];
 		if(objNum < 0x100) {
-			Link[objNum] = D_BDD6;
-			D_BDD6 = objNum;
-			D_E6E2 ++;
+			Link[objNum] = FreeMonsterHead;
+			FreeMonsterHead = objNum;
+			FreeMonsterCount ++;
 		} else {
-			Link[objNum] = D_D5DA;
-			D_D5DA = objNum;
-			D_E6E0 ++;
+			Link[objNum] = FreeObjHead;
+			FreeObjHead = objNum;
+			FreeObjCount ++;
 		}
 	}
-	C_1184_16D5(GetX(objNum), GetY(objNum), GetZ(objNum), objNum, Link[bp_02]);
-	if(di == OBJ_177)
-		C_1184_0BC1();
+	OBJ_FixMapObjPtr(GetX(objNum), GetY(objNum), GetZ(objNum), objNum, Link[prev]);
+	if(objTyp == OBJ_SLIME)
+		OBJ_UpdateSlimeFrames();
 }
 
-C_1184_19AA(int x, int y, int z) {
-	int si;
-	int bp_08, bp_06, obj_x, obj_y, obj_z;
+/*the loaded area is now centered on (x, y, z): delete the temporary
+  (LOCAL) monsters and objects farther than 20 tiles away, and let the
+  eggs there hatch again*/
+/*C_1184_19AA*/OBJ_PurgeFarLocals(int x, int y, int z) {
+	int obj;
+	int objTyp, next, objX, objY, objZ;
 
-	x &= D_05CA;
-	y &= D_05CA;
+	x &= MapCoordMask;
+	y &= MapCoordMask;
 	/*delete local objects*/
-	for(si = 0xe0; si < 0x100; si ++) {
-		if(ObjShapeType[si]) {
-			obj_x = GetX(si);
-			obj_y = GetY(si);
-			obj_z = GetZ(si);
+	for(obj = 0xe0; obj < 0x100; obj ++) {
+		if(ObjShapeType[obj]) {
+			objX = GetX(obj);
+			objY = GetY(obj);
+			objZ = GetZ(obj);
 			if(
-				x - 20 > obj_x || x + 20 <= obj_x ||
-				y - 20 > obj_y || y + 20 <= obj_y ||
-				obj_z != z
+				x - 20 > objX || x + 20 <= objX ||
+				y - 20 > objY || y + 20 <= objY ||
+				objZ != z
 			) {
-				if(IsLocal(si))
-					DeleteObj(si);
+				if(IsLocal(obj))
+					DeleteObj(obj);
 			}
 		}
 	}
 	/*reset eggs*/
-	for(si = Link[0x100]; si >= 0; si = bp_06) {
-		bp_06 = Link[si];
-		if(GetCoordUse(si) == LOCXYZ) {
-			obj_x = GetX(si);
-			obj_y = GetY(si);
-			obj_z = GetZ(si);
+	for(obj = Link[0x100]; obj >= 0; obj = next) {
+		next = Link[obj];
+		if(GetCoordUse(obj) == LOCXYZ) {
+			objX = GetX(obj);
+			objY = GetY(obj);
+			objZ = GetZ(obj);
 			if(
-				x - 20 > obj_x || x + 20 <= obj_x ||
-				y - 20 > obj_y || y + 20 <= obj_y ||
-				obj_z != z
+				x - 20 > objX || x + 20 <= objX ||
+				y - 20 > objY || y + 20 <= objY ||
+				objZ != z
 			) {
-				bp_08 = GetType(si);
-				if(IsLocal(si) || ObjShapeType[si] == 0) {
-					DeleteObj(si);
-					if(D_0707 >= 0)
-						bp_06 = D_0707;
-				} else if(bp_08 == OBJ_14F && IsHatched(si)) {
-					ClrHatched(si);
+				objTyp = GetType(obj);
+				if(IsLocal(obj) || ObjShapeType[obj] == 0) {
+					DeleteObj(obj);
+					if(LastSpilledObj >= 0)
+						next = LastSpilledObj;
+				} else if(objTyp == OBJ_EGG && IsHatched(obj)) {
+					ClrHatched(obj);
 				}
 			}
 		}
 	}
 }
 
-/*in case of death?*/
-C_1184_1B3A(int objNum) {
-	int ret;
-	int bp_0a, bp_08, x, y, z;
+/*an NPC/monster dies: create its dead body (same shape, quality = the
+  NPC number) at its location, put its inventory into the body, keep any
+  blood on top and send the NPC to the limbo level 15. Returns the body.*/
+/*C_1184_1B3A*/OBJ_MakeDeadBody(int objNum) {
+	int body;
+	int content, firstAtLoc, x, y, z;
 
-	ret = -1;
+	body = -1;
 	if(objNum < 0)
 		return -1;
 	if(ObjShapeType[objNum]) {
 		x = GetX(objNum);
 		y = GetY(objNum);
 		z = GetZ(objNum);
-		bp_08 = FindLoc(x, y, z);
+		firstAtLoc = FindLoc(x, y, z);
 
-		D_065A = 1;
-		ret = AddMapObj(ObjShapeType[objNum], ObjStatus[objNum] | OWNED, QualQuan(objNum, 0), x, y, z);
-		if(ret >= 0) {
+		AllowSubmissionMove = 1;
+		body = AddMapObj(ObjShapeType[objNum], ObjStatus[objNum] | OWNED, QualQuan(objNum, 0), x, y, z);
+		if(body >= 0) {
 			if(objNum < 0xe0)
-				ClrLocal(ret);
-			while((bp_0a = FindInv(objNum)) >= 0) {
-				InsertObj(bp_0a, ret, CONTAINED);
-				SetOwned(bp_0a);
+				ClrLocal(body);
+			while((content = FindInv(objNum)) >= 0) {
+				InsertObj(content, body, CONTAINED);
+				SetOwned(content);
 			}
-			if(GetType(bp_08) == OBJ_152)
-				MoveObj(bp_08, x, y, z);
+			if(GetType(firstAtLoc) == OBJ_BLOOD)
+				MoveObj(firstAtLoc, x, y, z);
 			MoveObj(objNum, x, y, 15);
 		}
-		D_065A = 0;
+		AllowSubmissionMove = 0;
 	}
 
-	return ret;
+	return body;
 }
 
-/*in case of revive?*/
-C_1184_1C52(int objNum) {
-	int si, di;
-	int bp_02;
+/*resurrect the NPC whose dead body is given (the NPC number is the body's
+  quality): put the NPC where the body (or whoever carries it) is, give it
+  back the body's contents (Amulet of submission re-equipped) and delete
+  the body. Returns the NPC.*/
+/*C_1184_1C52*/OBJ_ReviveFromBody(int body) {
+	int root, content;
+	int npc;
 
-	if(objNum < 0)
+	if(body < 0)
 		return -1;
 
-	D_065A = 1;
-	bp_02 = GetQual(objNum);
-	for(si = objNum; GetCoordUse(si) != LOCXYZ; si = GetAssoc(si));
-	MoveObj(bp_02, GetX(si), GetY(si), GetZ(si));
-	for(di = FindInv(objNum); di >= 0; di = FindInv(objNum)) {
-		if(GetType(di) == OBJ_04C)
-			InsertObj(di, bp_02, EQUIP);
+	AllowSubmissionMove = 1;
+	npc = GetQual(body);
+	for(root = body; GetCoordUse(root) != LOCXYZ; root = GetAssoc(root));
+	MoveObj(npc, GetX(root), GetY(root), GetZ(root));
+	for(content = FindInv(body); content >= 0; content = FindInv(body)) {
+		if(GetType(content) == OBJ_AMULET_OF_SUBMISSION)
+			InsertObj(content, npc, EQUIP);
 		else
-			InsertObj(di, bp_02, INVEN);
+			InsertObj(content, npc, INVEN);
 	}
-	DeleteObj(objNum);
-	D_065A = 0;
+	DeleteObj(body);
+	AllowSubmissionMove = 0;
 
-	return bp_02;
+	return npc;
 }
 
-/*contains ...?*/
-C_1184_1D2E(int objNum, int bp06) {
+/*is objNum (directly or not) inside container?*/
+/*C_1184_1D2E*/OBJ_IsInside(int objNum, int container) {
 	int ret;
 
 	ret = 0;
 	while(GetCoordUse(objNum) != LOCXYZ) {
 		objNum = GetAssoc(objNum);
-		if(objNum == bp06) {
+		if(objNum == container) {
 			ret = 1;
 			break;
 		}
@@ -911,261 +1048,283 @@ C_1184_1D2E(int objNum, int bp06) {
 	return ret;
 }
 
-static C_1184_1D60(int objNum) {
-	int i, ret;
+/*last node of objNum's subtree (its contents, recursively), objNum if empty*/
+/*C_1184_1D60*/static OBJ_LastOfSubtree(int objNum) {
+	int i, last;
 
 	if(objNum < 0)
 		return -1;
-	for(i = ret = objNum; Link[i] >= 0 && GetCoordUse(Link[i]) != LOCXYZ; ) {
+	for(i = last = objNum; Link[i] >= 0 && GetCoordUse(Link[i]) != LOCXYZ; ) {
 		i = Link[i];
-		if(C_1184_1D2E(i, objNum))
-			ret = i;
+		if(OBJ_IsInside(i, objNum))
+			last = i;
 	}
-	return ret;
+	return last;
 }
 
-/*C_1184_1DAF*/MoveObj(int objNum, int to_x, int to_y, int to_z) {
-	int cur_x;
-	int bp_0e, bp_0c, bp_0a, cur_y, bp_06, bp_04, bp_02;
+/*move an object (and its contents) to the map at (toX, toY, toZ); also
+  moves the other parts of multi-object creatures, refreshes slimes,
+  flags a redraw when the view is concerned and applies terrain effects
+  to NPCs (if MoveAppliesTerrain). Returns objNum, or -1 if the move is refused
+  (Amulet of submission, impossible silver serpent move).*/
+/*C_1184_1DAF*/MoveObj(int objNum, int toX, int toY, int toZ) {
+	int oldX;
+	int insertAfter, prev, last, oldY, frame, objTyp, posMask;
 
 	if(objNum < 0)
 		return -1;
-	if(StatusDisplay == CMD_92 && C_1184_1D2E(objNum, Party[D_04B3]))
+	if(StatusDisplay == CMD_STAT_EQUIP && OBJ_IsInside(objNum, Party[StatusMember]))
 		StatusDirty = 1;
-	bp_04 = GetType(objNum);
-	if(bp_04 == OBJ_04C)
+	objTyp = GetType(objNum);
+	if(objTyp == OBJ_AMULET_OF_SUBMISSION)
 		return -1;
-	cur_x = GetX(objNum) - to_x;
-	cur_y = GetY(objNum) - to_y;
-	if(bp_04 == OBJ_19D && objNum < 0x100) {
-		bp_06 = GetFrame(objNum);
-		if(cur_x && cur_y)
+	/*oldX/oldY hold the move delta (negated) for now*/
+	oldX = GetX(objNum) - toX;
+	oldY = GetY(objNum) - toY;
+	if(objTyp == OBJ_SILVER_SERPENT && objNum < 0x100) {
+		frame = GetFrame(objNum);
+		if(oldX && oldY)
 			return -1;
-		if(cur_x == 0 && cur_y == 0)
+		if(oldX == 0 && oldY == 0)
 			return -1;
-		if(!CLOSE_ENOUGH(1, cur_x, cur_y, 0, 0))
+		if(!CLOSE_ENOUGH(1, oldX, oldY, 0, 0))
 			return -1;
-		if(DirIncrX[bp_06] == cur_x && DirIncrY[bp_06] == cur_y)
+		/*can't move backwards into its own body*/
+		if(DirIncrX[frame] == oldX && DirIncrY[frame] == oldY)
 			return -1;
 	}
 
-	bp_02 = to_z?0xff:0x3ff;
-	to_x &= bp_02;
-	to_y &= bp_02;
-	cur_x = GetX(objNum);
-	cur_y = GetY(objNum);
-	bp_0c = C_1184_1665(objNum);
-	if(bp_0c < 0)
+	posMask = toZ?0xff:0x3ff;
+	toX &= posMask;
+	toY &= posMask;
+	oldX = GetX(objNum);
+	oldY = GetY(objNum);
+	prev = OBJ_FindPrevLink(objNum);
+	if(prev < 0)
 		return -1;
 	if(
-		((MapX - 5) <= cur_x && (MapX + 5) >= cur_x &&
-		(MapY - 5) <= cur_y && (MapY + 5) >= cur_y) ||
+		((MapX - 5) <= oldX && (MapX + 5) >= oldX &&
+		(MapY - 5) <= oldY && (MapY + 5) >= oldY) ||
 
-		((MapX - 5) <= to_x && (MapX + 5) >= to_x &&
-		(MapY - 5) <= to_y && (MapY + 5) >= to_y)
-	) D_17B0 = 1;
+		((MapX - 5) <= toX && (MapX + 5) >= toX &&
+		(MapY - 5) <= toY && (MapY + 5) >= toY)
+	) VisibilityDirty = 1;
 
-	bp_0a = C_1184_1D60(objNum);
-	Link[bp_0c] = Link[bp_0a];
-	C_1184_16D5(GetX(objNum), GetY(objNum), GetZ(objNum), objNum, Link[bp_0c]);
-	bp_0e = C_1184_02FA(to_x, to_y, 1);
-	Link[bp_0a] = Link[bp_0e];
-	Link[bp_0e] = objNum;
+	/*unlink the subtree prev->[objNum..last] and insert it at the new place*/
+	last = OBJ_LastOfSubtree(objNum);
+	Link[prev] = Link[last];
+	OBJ_FixMapObjPtr(GetX(objNum), GetY(objNum), GetZ(objNum), objNum, Link[prev]);
+	insertAfter = OBJ_FindListPos(toX, toY, 1);
+	Link[last] = Link[insertAfter];
+	Link[insertAfter] = objNum;
 	SetCoordUse(objNum, LOCXYZ);
-	SetXYZ(objNum, to_x, to_y, to_z);
-	to_x = (to_x - AreaX) & 0x3ff;
-	to_y = (to_y - AreaY) & 0x3ff;
-	if(to_x < AREA_W && to_y < AREA_H)
-		MapObjPtr[to_y][to_x] = objNum;
-	if(bp_04 == OBJ_177)
-		C_1184_0BC1();
-	else if(bp_04 == OBJ_19D && objNum < 0x100)
-		C_1184_0CBE(objNum, cur_x, cur_y, 0);
+	SetXYZ(objNum, toX, toY, toZ);
+	toX = (toX - AreaX) & 0x3ff;
+	toY = (toY - AreaY) & 0x3ff;
+	if(toX < AREA_W && toY < AREA_H)
+		MapObjPtr[toY][toX] = objNum;
+	if(objTyp == OBJ_SLIME)
+		OBJ_UpdateSlimeFrames();
+	else if(objTyp == OBJ_SILVER_SERPENT && objNum < 0x100)
+		OBJ_MoveSerpentBody(objNum, oldX, oldY, 0);
 	else if(objNum < 0x100 && (
-		bp_04 == OBJ_176 || bp_04 == OBJ_19B ||bp_04 == OBJ_19C || bp_04 >= OBJ_1AA
-	)) C_1184_116D(objNum, cur_x, cur_y, 0);
-	else if(bp_04 == OBJ_165)
+		objTyp == OBJ_HYDRA || objTyp == OBJ_DRAGON ||objTyp == OBJ_SHIP || objTyp >= OBJ_GIANT_SCORPION
+	)) OBJ_MoveCreatureParts(objNum, oldX, oldY, 0);
+	else if(objTyp == OBJ_CORPSER)
 		SetFrame(objNum, 0);
 
-	if(objNum < 0x100 && D_06E6) {
-		ClrSkipSomeTest(objNum);
-		C_0A33_0FEB(objNum);
+	if(objNum < 0x100 && MoveAppliesTerrain) {
+		ClrHurtThisTurn(objNum);
+		ApplyTerrainEffects(objNum);
 	}
 
 	return objNum;
 }
 
+/*put an object (and its contents) inside destNum with coord use objLoc
+  (INVEN, EQUIP or CONTAINED); returns objNum or -1 if refused*/
 /*C_1184_20DD*/InsertObj(int objNum, int destNum, int objLoc) {
-	int bp_06, bp_04, bp_02;
+	int prev, last, objTyp;
 
 	if(objNum < 0 || destNum < 0)
 		return -1;
 
-	bp_02 = GetType(objNum);
-	if(bp_02 == OBJ_04C && !D_065A)
+	objTyp = GetType(objNum);
+	if(objTyp == OBJ_AMULET_OF_SUBMISSION && !AllowSubmissionMove)
 		return -1;
 
 	if(objNum == destNum)
 		return -1;
-	if(C_1184_1D2E(destNum, objNum))
+	if(OBJ_IsInside(destNum, objNum))
 		return -1;
-	bp_06 = C_1184_1665(objNum);
-	bp_04 = C_1184_1D60(objNum);
-	Link[bp_06] = Link[bp_04];
-	Link[bp_04] = Link[destNum];
+	prev = OBJ_FindPrevLink(objNum);
+	last = OBJ_LastOfSubtree(objNum);
+	Link[prev] = Link[last];
+	Link[last] = Link[destNum];
 	Link[destNum] = objNum;
-	C_1184_16D5(GetX(objNum), GetY(objNum), GetZ(objNum), objNum, Link[bp_06]);
+	OBJ_FixMapObjPtr(GetX(objNum), GetY(objNum), GetZ(objNum), objNum, Link[prev]);
 	SetCoordUse(objNum, objLoc);
 	SetAssoc(objNum, destNum);
 	return objNum;
 }
 
-int D_0765[] = {
-	OBJ_05A,OBJ_03F,OBJ_04D,OBJ_037,OBJ_038,OBJ_041,OBJ_042,
-	OBJ_043,OBJ_044,OBJ_045,OBJ_046,OBJ_047,OBJ_048,OBJ_151,
-	OBJ_080,OBJ_081,OBJ_053,OBJ_14F,OBJ_059,OBJ_05B,OBJ_05C
+/*object types counted by the quantity byte of Amount[]*/
+/*0765*/int StackableTypes[] = {
+	OBJ_TORCH,OBJ_LOCKPICK,OBJ_GEM,OBJ_ARROW,OBJ_BOLT,OBJ_BLACK_PEARL,OBJ_BLOOD_MOSS,
+	OBJ_GARLIC,OBJ_GINSENG,OBJ_MANDRAKE,OBJ_NIGHTSHADE,OBJ_SPIDERSILK,OBJ_ASH,OBJ_EFFECT,
+	OBJ_LOAF_OF_BREAD,OBJ_PORTION_OF_MEAT,OBJ_FLASK_OF_OIL,OBJ_EGG,OBJ_GOLD_NUGGET,OBJ_ZU_YLEM,OBJ_SILVER_SNAKE_VENOM
 };
 
+/*how an object type counts: 4 = whole Amount[] word (gold),
+  2 = quantity byte (stackable, see StackableTypes), 0 = one per object*/
 /*C_1184_21C7*/QuanType(int objTyp) {
-	int si, di;
+	int i, ret;
 
-	di = 0;
-	if(objTyp == OBJ_058) {
-		di = 4;
+	ret = 0;
+	if(objTyp == OBJ_GOLD) {
+		ret = 4;
 	} else {
-		for(si = 0; si < 21; si++)
-			if(D_0765[si] == objTyp) {
-				di = 2;
+		for(i = 0; i < 21; i++)
+			if(StackableTypes[i] == objTyp) {
+				ret = 2;
 				break;
 			}
 	}
-	return di;
+	return ret;
 }
 
-static C_1184_21FD(int objNum) {
-	int si;
+/*number of items an object stands for (gold amount, stack quantity or 1)*/
+/*C_1184_21FD*/static OBJ_GetCount(int objNum) {
+	int quanType;
 
-	si = QuanType(ObjShapeType[objNum]);
-	if(si == 4)
+	quanType = QuanType(ObjShapeType[objNum]);
+	if(quanType == 4)
 		return Amount[objNum];
-	if(si == 2)
+	if(quanType == 2)
 		return GetQuan(objNum);
 	return 1;
 }
 
+/*give owner (NPC or container) amount (quantity | quality << 8) items of
+  objType; stacks are limited to 0x90 items. Returns the last object
+  created/updated (or -1).*/
 /*C_1184_2241*/GiveObj(int owner, int objType, int amount) {
-	int si;
-	int bp_0c, bp_0a, bp_08, bp_06, bp_04, bp_02;
+	int obj;
+	int i, quality, quantity, quanType, coordUse, slot;
 
 	if(owner < 0)
 		return -1;
-	bp_0a = amount >> 8;
-	bp_08 = (unsigned char)amount;
-	bp_06 = QuanType(objType);
+	quality = amount >> 8;
+	quantity = (unsigned char)amount;
+	quanType = QuanType(objType);
 	if(owner < 0x100) {
-		bp_04 = INVEN;
-		if(objType == OBJ_04C) {
-			bp_04 = EQUIP;
-			for(si = FindInv(owner); si >= 0; si = NextInv()) {
-				if(GetCoordUse(si) == EQUIP) {
-					bp_02 = STAT_GetEquipSlot(si);
-					if(bp_02 == SLOT_NECK) {
-						SetCoordUse(si, INVEN);
+		coordUse = INVEN;
+		if(objType == OBJ_AMULET_OF_SUBMISSION) {
+			coordUse = EQUIP;
+			for(obj = FindInv(owner); obj >= 0; obj = NextInv()) {
+				if(GetCoordUse(obj) == EQUIP) {
+					slot = STAT_GetEquipSlot(obj);
+					if(slot == SLOT_NECK) {
+						SetCoordUse(obj, INVEN);
 						break;
 					}
 				}
 			}
 		}
 	} else {
-		bp_04 = CONTAINED;
+		coordUse = CONTAINED;
 	}
-	if(bp_06 == 4) {
-		si = FindInvType(owner, objType, -1);
-		if(si < 0)
-			si = AddInvObj(objType, bp_04 | 1, 0, owner);
-		if(si >= 0)
-			Amount[si] += amount;
-	} else if(bp_06 == 2) {
-		D_0656 = 1;
-		si = FindInvType(owner, objType, bp_0a);
-		D_0656 = 0;
-		while(bp_08) {
-			if(si < 0)
-				si = AddInvObj(objType, bp_04 | 1, QualQuan(bp_0a, 0), owner);
-			if(si < 0)
+	if(quanType == 4) {
+		obj = FindInvType(owner, objType, -1);
+		if(obj < 0)
+			obj = AddInvObj(objType, coordUse | 1, 0, owner);
+		if(obj >= 0)
+			Amount[obj] += amount;
+	} else if(quanType == 2) {
+		InvSkipEquipped = 1;
+		obj = FindInvType(owner, objType, quality);
+		InvSkipEquipped = 0;
+		while(quantity) {
+			if(obj < 0)
+				obj = AddInvObj(objType, coordUse | 1, QualQuan(quality, 0), owner);
+			if(obj < 0)
 				break;
-			if(GetQuan(si) + bp_08 > 0x90) {
-				bp_08 -= 0x90 - GetQuan(si);
-				SetQuan(si, 0x90);
-				si = -1;
+			if(GetQuan(obj) + quantity > 0x90) {
+				quantity -= 0x90 - GetQuan(obj);
+				SetQuan(obj, 0x90);
+				obj = -1;
 			} else {
-				AddQuan(si, bp_08);
-				bp_08 = 0;
+				AddQuan(obj, quantity);
+				quantity = 0;
 			}
 		}
 	} else {
-		for(bp_0c = 0; bp_0c < bp_08; bp_0c ++) {
-			si = AddInvObj(objType, bp_04 | 1, QualQuan(bp_0a, 0), owner);
-			if(si < 0)
+		for(i = 0; i < quantity; i ++) {
+			obj = AddInvObj(objType, coordUse | 1, QualQuan(quality, 0), owner);
+			if(obj < 0)
 				break;
 		}
 	}
-	return si;
+	return obj;
 }
 
+/*remove amount (quantity | quality << 8, quality 0 = any) items of
+  objType from owner's possessions (recursively)*/
 /*C_1184_23F8*/TakeObj(int owner, int objType, int amount) {
-	int si, di;
-	int bp_0a, bp_08, bp_06, bp_04, bp_02;
+	int obj, quanType;
+	int count, next, quality, quantity, changed;
 
-	bp_02 = 0;
+	changed = 0;
 	if(owner < 0)
 		return -1;
-	bp_06 = amount >> 8;
-	bp_04 = (unsigned char)amount;
-	di = QuanType(objType);
-	if(di != 4)
-		amount = bp_04;
-	si = FindInv(owner);
-	while(si >= 0 && GetCoordUse(si) != LOCXYZ && C_1184_1D2E(si, owner)) {
-		if(GetType(si) == objType) {
-			if(di == 4 || bp_06 == 0 || GetQual(si) == bp_06)  {
-				bp_0a = C_1184_21FD(si);
-				if(amount >= bp_0a) {
-					amount -= bp_0a;
-					bp_08 = Link[si];
-					DeleteObj(si);
-					si = bp_08;
-					bp_02 = 1;
+	quality = amount >> 8;
+	quantity = (unsigned char)amount;
+	quanType = QuanType(objType);
+	if(quanType != 4)
+		amount = quantity;
+	obj = FindInv(owner);
+	while(obj >= 0 && GetCoordUse(obj) != LOCXYZ && OBJ_IsInside(obj, owner)) {
+		if(GetType(obj) == objType) {
+			if(quanType == 4 || quality == 0 || GetQual(obj) == quality)  {
+				count = OBJ_GetCount(obj);
+				if(amount >= count) {
+					amount -= count;
+					next = Link[obj];
+					DeleteObj(obj);
+					obj = next;
+					changed = 1;
 					continue;
 				}
-				if(di == 4)
-					Amount[si] -= amount;
-				else if(di == 2)
-					SubQuan(si, amount);
+				if(quanType == 4)
+					Amount[obj] -= amount;
+				else if(quanType == 2)
+					SubQuan(obj, amount);
 				amount = 0;
-				bp_02 = 1;
+				changed = 1;
+				/*always true here*/
 				if(amount <= 0)
 					break;
 			}
 		}
-		si = Link[si];
+		obj = Link[obj];
 	}
-	if(bp_02 && StatusDisplay == CMD_92 && Party[D_04B3] == owner)
+	if(changed && StatusDisplay == CMD_STAT_EQUIP && Party[StatusMember] == owner)
 		StatusDirty = 1;
-	return si;
+	return obj;
 }
 
+/*count the items of objType that objNum possesses (recursively)*/
 /*C_1184_252D*/TestObj(int objNum, int objType) {
-	int si, di;
+	int obj, total;
 
-	di = 0;
-	si = FindInv(objNum);
-	while(si >= 0 && GetCoordUse(si) != LOCXYZ && C_1184_1D2E(si, objNum)) {
-		if(GetType(si) == objType)
-			di += C_1184_21FD(si);
-		si = Link[si];
+	total = 0;
+	obj = FindInv(objNum);
+	while(obj >= 0 && GetCoordUse(obj) != LOCXYZ && OBJ_IsInside(obj, objNum)) {
+		if(GetType(obj) == objType)
+			total += OBJ_GetCount(obj);
+		obj = Link[obj];
 	}
-	return di;
+	return total;
 }
 
 /*uncalled?*/
@@ -1174,9 +1333,13 @@ static C_1184_21FD(int objNum) {
 		GiveObj(newOwner, objType, amount);
 }
 
+/*copy object objNum to entry index of the objblk buffer and free it
+  (ObjShapeType = 0). ScratchBuf->_6000[] maps buffer entries back to
+  object numbers so that a CONTAINED object can store its container as a
+  buffer index; NPC-held items keep the NPC number.*/
 /*C_1184_25A2*/static __ObjSerialize(int objNum, int index) {
-	struct coord bp_06;
-	int bp_02;
+	struct coord containerPos;
+	int containerIdx;
 
 	if(GetCoordUse(objNum) != LOCXYZ) {
 		if((int)GetAssoc(objNum) < 0x100) {
@@ -1186,550 +1349,598 @@ static C_1184_21FD(int objNum) {
 			SetCoordUse(objNum, CONTAINED);
 		}
 	}
-	ScratchBuf->inner[index]._00 = ObjStatus[objNum];
-	ScratchBuf->inner[index]._01 = ObjPos[objNum];
-	ScratchBuf->inner[index]._04 = ObjShapeType[objNum];
-	ScratchBuf->inner[index]._06 = Amount[objNum];
+	ScratchBuf->objs[index].status = ObjStatus[objNum];
+	ScratchBuf->objs[index].pos = ObjPos[objNum];
+	ScratchBuf->objs[index].shapeType = ObjShapeType[objNum];
+	ScratchBuf->objs[index].amount = Amount[objNum];
 	if(GetCoordUse(objNum) == CONTAINED) {
 		for(
-			bp_02 = index;
-			ScratchBuf->_6000[bp_02] != GetAssoc(objNum);
-			bp_02 --
+			containerIdx = index;
+			ScratchBuf->objNum[containerIdx] != GetAssoc(objNum);
+			containerIdx --
 		);
-		SetCoordAssoc(bp_06, bp_02);
-		ScratchBuf->inner[index]._01 = bp_06;
+		SetCoordAssoc(containerPos, containerIdx);
+		ScratchBuf->objs[index].pos = containerPos;
 	}
 	ObjShapeType[objNum] = 0;
 	if(index + 1 >= 0xc00)
 		CON_printf(/*078F*/"Error-too many objects in region!\n");
 }
 
-/*DeleteTempFiles*/
-C_1184_26E2() {
-	int si;
+/*DeleteTempFiles: delete every "objblkXY.tmp" file flagged in ObjBlkTmpPending*/
+/*C_1184_26E2*/OBJ_DeleteTmpBlocks() {
+	int areaId;
 
-	DISK_confirm(DISK_8);
-	for(si = 0; si < (8*8 + 5); si ++) {
-		if(D_065C[si]) {
-			__Tmp_file[15] = (si & 7) + 'A';
-			__Tmp_file[16] = (si >> 3) + 'A';
+	DISK_confirm(DISK_PLAYER);
+	for(areaId = 0; areaId < (8*8 + 5); areaId ++) {
+		if(ObjBlkTmpPending[areaId]) {
+			__Tmp_file[15] = (areaId & 7) + 'A';
+			__Tmp_file[16] = (areaId >> 3) + 'A';
 			OSI_delete(__Tmp_file);
 		}
 	}
 }
 
-/*write a objblk*/
-static C_1184_2722(int num_obj, int area_id) {
-	int si, di;
-	char bp_04[2],bp_02[2];
+/*write the numObj entries of the objblk buffer to __Tmp_file (whose
+  letters were set by the caller): a word count then 8 bytes per object.
+  If the disk gets full (DISK_full sets DiskFullChoice): on 'R' (restore) nothing
+  more is written; on 'S' (save) every pending .tmp file is renamed over
+  the real file, this block is written directly to __Sav_file and a save
+  game is requested (DiskFullChoice = 'G').*/
+/*C_1184_2722*/static OBJ_WriteBlockFile(int numObj, int areaId) {
+	int i, fd;
+	char tmpLetters[2],savLetters[2];
 
-	D_065C[area_id] = 1;
-	DISK_confirm(DISK_8);
-	di = OSI_create(__Tmp_file);
-	OSI_write(di, 0, 2, &num_obj);
-	if(D_2E9E != 'S' && D_2E9E != 'R')
-		OSI_write(di, -1, (long)num_obj << 3, ScratchBuf);
-	if(D_2E9E == 'S') {
-		bp_04[0] = __Tmp_file[15];
-		bp_04[1] = __Tmp_file[16];
-		bp_02[0] = __Sav_file[15];
-		bp_02[1] = __Sav_file[16];
-		OSI_close(di);
-		for(si = 0; si < (8*8 + 5); si ++) {
-			if(D_065C[si]) {
-				__Sav_file[15] = __Tmp_file[15] = (si & 7) + 'A';
-				__Sav_file[16] = __Tmp_file[16] = (si >> 3) + 'A';
+	ObjBlkTmpPending[areaId] = 1;
+	DISK_confirm(DISK_PLAYER);
+	fd = OSI_create(__Tmp_file);
+	OSI_write(fd, 0, 2, &numObj);
+	if(DiskFullChoice != 'S' && DiskFullChoice != 'R')
+		OSI_write(fd, -1, (long)numObj << 3, ScratchBuf);
+	if(DiskFullChoice == 'S') {
+		tmpLetters[0] = __Tmp_file[15];
+		tmpLetters[1] = __Tmp_file[16];
+		savLetters[0] = __Sav_file[15];
+		savLetters[1] = __Sav_file[16];
+		OSI_close(fd);
+		for(i = 0; i < (8*8 + 5); i ++) {
+			if(ObjBlkTmpPending[i]) {
+				__Sav_file[15] = __Tmp_file[15] = (i & 7) + 'A';
+				__Sav_file[16] = __Tmp_file[16] = (i >> 3) + 'A';
 				OSI_delete(__Sav_file);
-				if(si != area_id)
+				if(i != areaId)
 					OSI_rename(__Tmp_file, __Sav_file);
-				D_065C[si] = 0;
+				ObjBlkTmpPending[i] = 0;
 			}
 		}
-		__Tmp_file[15] = __Sav_file[15] = bp_04[0];
-		__Tmp_file[16] = __Sav_file[16] = bp_04[1];
-		di = OSI_create(__Sav_file);
-		OSI_write(di, 0, 2, &num_obj);
-		OSI_write(di, -1, (long)num_obj << 3, ScratchBuf);
-		__Sav_file[15] = bp_02[0];
-		__Sav_file[16] = bp_02[1];
-		D_2E9E = 'G';
-		D_0340 = 1;
+		__Tmp_file[15] = __Sav_file[15] = tmpLetters[0];
+		__Tmp_file[16] = __Sav_file[16] = tmpLetters[1];
+		fd = OSI_create(__Sav_file);
+		OSI_write(fd, 0, 2, &numObj);
+		OSI_write(fd, -1, (long)numObj << 3, ScratchBuf);
+		__Sav_file[15] = savLetters[0];
+		__Sav_file[16] = savLetters[1];
+		DiskFullChoice = 'G';
+		MapAnimEnabled = 1;
 	}
-	OSI_close(di);
+	OSI_close(fd);
 }
 
-/*bozo i -- leave an outside area*/
-static C_1184_2888(int area_id) {
-	int si, num_obj;
-	int bp_08, bp_06, x, y;
+/*unload the outdoor area areaId (yyyxxx, 128x128 tiles at z 0): every
+  object there and its contents, including the inventories of the NPCs
+  standing there (the NPCs themselves stay), is serialized, removed from
+  the chain and freed, then written to the area's .tmp file*/
+/*C_1184_2888*/static OBJ_UnloadArea(int areaId) {
+	int obj, numObj;
+	int prev, last, baseX, baseY;
 
-	if(area_id < 0 || D_2E9E == 'R')
+	if(areaId < 0 || DiskFullChoice == 'R')
 		return;
-	num_obj = 0;
-	x = (area_id & 7) << 7;
-	y = (area_id & 0x38) << 4;
-	bp_08 = 0x100;
-	si = Link[0x100];
-	while(num_obj < 0xc00 && si >= 0) {
-		if(GetCoordUse(si) == LOCXYZ && GetZ(si) == 0 &&
-			(GetX(si) & 0x380) == x && (GetY(si) & 0x380) == y
+	numObj = 0;
+	baseX = (areaId & 7) << 7;
+	baseY = (areaId & 0x38) << 4;
+	prev = 0x100;
+	obj = Link[0x100];
+	while(numObj < 0xc00 && obj >= 0) {
+		if(GetCoordUse(obj) == LOCXYZ && GetZ(obj) == 0 &&
+			(GetX(obj) & 0x380) == baseX && (GetY(obj) & 0x380) == baseY
 		) {
-			if(si < 0x100) {
-				bp_08 = si;
+			if(obj < 0x100) {
+				prev = obj;
 			} else {
-				ScratchBuf->_6000[num_obj] = si;
-				__ObjSerialize(si, num_obj++);
-				D_E6E0 ++;
+				ScratchBuf->objNum[numObj] = obj;
+				__ObjSerialize(obj, numObj++);
+				FreeObjCount ++;
 			}
-			bp_06 = si;
-			si = Link[si];
-			while(si >= 0 && GetCoordUse(si) != LOCXYZ) {
-				if(num_obj < 0xc00) {
-					ScratchBuf->_6000[num_obj] = si;
-					__ObjSerialize(si, num_obj++);
+			last = obj;
+			obj = Link[obj];
+			while(obj >= 0 && GetCoordUse(obj) != LOCXYZ) {
+				if(numObj < 0xc00) {
+					ScratchBuf->objNum[numObj] = obj;
+					__ObjSerialize(obj, numObj++);
 				}
-				D_E6E0 ++;
-				bp_06 = si;
-				si = Link[si];
+				FreeObjCount ++;
+				last = obj;
+				obj = Link[obj];
 			}
-			Link[bp_06] = D_D5DA;
-			D_D5DA = Link[bp_08];
-			Link[bp_08] = si;
+			Link[last] = FreeObjHead;
+			FreeObjHead = Link[prev];
+			Link[prev] = obj;
 		} else {
-			bp_08 = si;
-			si = Link[si];
+			prev = obj;
+			obj = Link[obj];
 		}
 	}
-	__Tmp_file[15] = (area_id & 7) + 'A';
-	__Tmp_file[16] = (area_id >> 3) + 'A';
-	C_1184_2722(num_obj, area_id);
+	__Tmp_file[15] = (areaId & 7) + 'A';
+	__Tmp_file[16] = (areaId >> 3) + 'A';
+	OBJ_WriteBlockFile(numObj, areaId);
 }
 
-static C_1184_29C4(int obj_0, int obj_1) {
-	int assoc_0, assoc_1;
+/*order of two objects in the chain for the merge: < 0 if obj0 must come
+  first (-1 stands for the end of a list). An NPC-held object sorts
+  before a map object (OBJ_RelinkHeldItems moves it behind its owner later);
+  otherwise objects are compared by the location of their outermost
+  container/owner: y, then x, then higher z first.*/
+/*C_1184_29C4*/static OBJ_CompareOrder(int obj0, int obj1) {
+	int root0, root1;
 	int dist;
 
-	if(obj_0 == -1)
+	if(obj0 == -1)
 		return 1;
-	if(obj_1 == -1)
+	if(obj1 == -1)
 		return -1;
-	assoc_0 = obj_0; assoc_1 = obj_1;
-	while(GetCoordUse(assoc_0) == CONTAINED)
-		assoc_0 = GetAssoc(assoc_0);
-	while(GetCoordUse(assoc_1) == CONTAINED)
-		assoc_1 = GetAssoc(assoc_1);
-	if(GetCoordUse(assoc_0) != LOCXYZ && GetCoordUse(obj_1) == LOCXYZ)
+	root0 = obj0; root1 = obj1;
+	while(GetCoordUse(root0) == CONTAINED)
+		root0 = GetAssoc(root0);
+	while(GetCoordUse(root1) == CONTAINED)
+		root1 = GetAssoc(root1);
+	if(GetCoordUse(root0) != LOCXYZ && GetCoordUse(obj1) == LOCXYZ)
 		return -1;
-	if(GetCoordUse(assoc_1) != LOCXYZ && GetCoordUse(obj_0) == LOCXYZ)
+	if(GetCoordUse(root1) != LOCXYZ && GetCoordUse(obj0) == LOCXYZ)
 		return 1;
-	if(Is_0010(assoc_0))
-		assoc_0 = GetAssoc(assoc_0);
-	if(Is_0010(assoc_1))
-		assoc_1 = GetAssoc(assoc_1);
-	dist = GetY(assoc_0) - GetY(assoc_1);
+	if(IsHeldByNPC(root0))
+		root0 = GetAssoc(root0);
+	if(IsHeldByNPC(root1))
+		root1 = GetAssoc(root1);
+	dist = GetY(root0) - GetY(root1);
 	if(dist == 0)
-		dist = GetX(assoc_0) - GetX(assoc_1);
+		dist = GetX(root0) - GetX(root1);
 	if(dist == 0)
-		dist = GetZ(assoc_1) - GetZ(assoc_0);
-	if(assoc_0 == assoc_1) {
-		if(GetCoordUse(assoc_0) == LOCXYZ)
+		dist = GetZ(root1) - GetZ(root0);
+	if(root0 == root1) {/*second test can't be true: obj0/obj1 meant?*/
+		if(GetCoordUse(root0) == LOCXYZ)
 			dist = -1;
-		else if(GetCoordUse(assoc_1) == LOCXYZ)
+		else if(GetCoordUse(root1) == LOCXYZ)
 			dist = 1;
 	}
 	return dist;
 }
 
-static C_1184_2B27() {
-	int si, di;
-	int bp_06, bp_04, bp_02;
+/*after loading blocks: move every NPC-held (INVEN/EQUIP) object that is
+  not inside its owner's subtree (with its own contents) behind its owner*/
+/*C_1184_2B27*/static OBJ_RelinkHeldItems() {
+	int obj, walk;
+	int prev, last, owner;
 
-	bp_06 = 0x100;
-	while(Link[bp_06] >= 0) {
-		si = Link[bp_06];
-		if(Is_0010(si)) {
-			bp_02 = GetAssoc(si);
+	prev = 0x100;
+	while(Link[prev] >= 0) {
+		obj = Link[prev];
+		if(IsHeldByNPC(obj)) {
+			owner = GetAssoc(obj);
 			for(
-				di = Link[bp_02];
-				di >= 0 && GetCoordUse(di) != LOCXYZ && di != si;
-				di = Link[di]
+				walk = Link[owner];
+				walk >= 0 && GetCoordUse(walk) != LOCXYZ && walk != obj;
+				walk = Link[walk]
 			);
-			if(di != si) {
-				bp_04 = C_1184_1D60(si);
-				bp_02 = C_1184_1D60(bp_02);
-				Link[bp_06] = Link[bp_04];
-				Link[bp_04] = Link[bp_02];
-				Link[bp_02] = si;
+			if(walk != obj) {
+				last = OBJ_LastOfSubtree(obj);
+				owner = OBJ_LastOfSubtree(owner);
+				Link[prev] = Link[last];
+				Link[last] = Link[owner];
+				Link[owner] = obj;
 				continue;
 			}
 		}
-		bp_06 = si;
+		prev = obj;
 	}
 }
 
-/*C_1184_2BD8*/static __ObjectsDeserialize(int num_obj) {
-	int si, di;
-	int bp_06, bp_04, bp_02;
+/*allocate numObj objects from the objblk buffer (as long as slots are
+  free), translate the CONTAINED buffer indexes back to object numbers,
+  then merge the new (sorted) chain into the main list*/
+/*C_1184_2BD8*/static __ObjectsDeserialize(int numObj) {
+	int cur, incoming;
+	int i, tmp, restart;
 
-	for(bp_06 = 0; bp_06 < num_obj; bp_06 ++) {
-		if(D_E6E0 == 0) {
-			ScratchBuf->_6000[bp_06] = -1;
-			if(bp_06)
-				Link[ScratchBuf->_6000[bp_06 - 1]] = -1;
+	for(i = 0; i < numObj; i ++) {
+		if(FreeObjCount == 0) {
+			ScratchBuf->objNum[i] = -1;
+			if(i)
+				Link[ScratchBuf->objNum[i - 1]] = -1;
 			break;
 		}
-		si = D_D5DA;
-		ScratchBuf->_6000[bp_06] = si;
-		D_D5DA = Link[si];
-		D_E6E0 --;
-		ObjStatus[si] = ScratchBuf->inner[bp_06]._00;
-		ObjPos[si] =  ScratchBuf->inner[bp_06]._01;
-		ObjShapeType[si] = ScratchBuf->inner[bp_06]._04;
-		Amount[si] = ScratchBuf->inner[bp_06]._06;
-		if(GetCoordUse(si) == CONTAINED)
-			GetAssoc(si) = ScratchBuf->_6000[GetAssoc(si)];
+		cur = FreeObjHead;
+		ScratchBuf->objNum[i] = cur;
+		FreeObjHead = Link[cur];
+		FreeObjCount --;
+		ObjStatus[cur] = ScratchBuf->objs[i].status;
+		ObjPos[cur] =  ScratchBuf->objs[i].pos;
+		ObjShapeType[cur] = ScratchBuf->objs[i].shapeType;
+		Amount[cur] = ScratchBuf->objs[i].amount;
+		if(GetCoordUse(cur) == CONTAINED)
+			GetAssoc(cur) = ScratchBuf->objNum[GetAssoc(cur)];
 	}
-	if(bp_06 == num_obj)
-		Link[ScratchBuf->_6000[bp_06 - 1]] = -1;
-	si = 0x100;
-	di = ScratchBuf->_6000[0];
-	bp_02 = 0;
-	while(si >= 0 && di >= 0) {
-		if(C_1184_29C4(Link[si], di) < 0) {
-			si = Link[si];
+	if(i == numObj)
+		Link[ScratchBuf->objNum[i - 1]] = -1;
+	/*merge: cur walks the main list, incoming the new chain*/
+	cur = 0x100;
+	incoming = ScratchBuf->objNum[0];
+	restart = 0;
+	while(cur >= 0 && incoming >= 0) {
+		if(OBJ_CompareOrder(Link[cur], incoming) < 0) {
+			cur = Link[cur];
 		} else {
-			bp_04 = Link[si];
-			Link[si] = di;
-			si = bp_04;
-			while(Link[di] >= 0 && C_1184_29C4(si, Link[di]) > 0) {
-				if(C_1184_29C4(di, Link[di]) <= 0) {
-					di = Link[di];
+			tmp = Link[cur];
+			Link[cur] = incoming;
+			cur = tmp;
+			while(Link[incoming] >= 0 && OBJ_CompareOrder(cur, Link[incoming]) > 0) {
+				if(OBJ_CompareOrder(incoming, Link[incoming]) <= 0) {
+					incoming = Link[incoming];
 				} else {
-					bp_02 = 1;
+					restart = 1;
 					break;
 				}
 			}
-			bp_04 = Link[di];
-			Link[di] = si;
-			di = bp_04;
-			if(bp_02) {
-				si = 0x100;
-				bp_02 = 0;
+			tmp = Link[incoming];
+			Link[incoming] = cur;
+			incoming = tmp;
+			if(restart) {
+				cur = 0x100;
+				restart = 0;
 				continue;
 			}
 		}
-		if(Link[si] < 0) {
-			Link[si] = di;
-			si = -1;
+		if(Link[cur] < 0) {
+			Link[cur] = incoming;
+			cur = -1;
 		}
 	}
 }
 
-/*read an objblk file*/
-static C_1184_2DEF(int area_id) {
-	int di;
-	int bp_02;
+/*load the outdoor area areaId from its objblk file (the .tmp one if any)*/
+/*C_1184_2DEF*/static OBJ_LoadArea(int areaId) {
+	int fd;
+	int numObj;
 
-	if(area_id < 0 || D_2E9E == 'R')
+	if(areaId < 0 || DiskFullChoice == 'R')
 		return;
-	area_id &= 0x3f;
-	DISK_confirm(DISK_8);
-	if(!D_065C[area_id]) {
-		__Sav_file[15] = 'A' + (area_id & 7);
-		__Sav_file[16] = 'A' + (area_id >> 3);
-		di = OSI_open(__Sav_file);
+	areaId &= 0x3f;
+	DISK_confirm(DISK_PLAYER);
+	if(!ObjBlkTmpPending[areaId]) {
+		__Sav_file[15] = 'A' + (areaId & 7);
+		__Sav_file[16] = 'A' + (areaId >> 3);
+		fd = OSI_open(__Sav_file);
 	} else {
-		__Tmp_file[15] = 'A' + (area_id & 7);
-		__Tmp_file[16] = 'A' + (area_id >> 3);
-		di = OSI_open(__Tmp_file);
+		__Tmp_file[15] = 'A' + (areaId & 7);
+		__Tmp_file[16] = 'A' + (areaId >> 3);
+		fd = OSI_open(__Tmp_file);
 	}
-	OSI_read(di, 0, 2, (void far *)&bp_02);
-	if(bp_02 > 0xc00)
-		bp_02 = 0xc00;
-	if(bp_02)
-		OSI_read(di, -1, (long)bp_02 << 3, ScratchBuf);
-	OSI_close(di);
-	if(bp_02)
-		__ObjectsDeserialize(bp_02);
+	OSI_read(fd, 0, 2, (void far *)&numObj);
+	if(numObj > 0xc00)
+		numObj = 0xc00;
+	if(numObj)
+		OSI_read(fd, -1, (long)numObj << 3, ScratchBuf);
+	OSI_close(fd);
+	if(numObj)
+		__ObjectsDeserialize(numObj);
 }
 
-C_1184_2ECC() {
-	int si;
-	int diff_x, diff_y;
-	int __unused__;
+/*rebuild the MapObjPtr[][] cache: first chained object of every tile of
+  the 40x40 area*/
+/*C_1184_2ECC*/OBJ_RebuildMapObjPtr() {
+	int obj;
+	int relX, relY;
+	int unusedMask;
 
-	for(diff_y = 0; diff_y < AREA_H; diff_y ++) {
-		for(diff_x = 0; diff_x < AREA_W; diff_x ++)
-			MapObjPtr[diff_y][diff_x] = -1;
+	for(relY = 0; relY < AREA_H; relY ++) {
+		for(relX = 0; relX < AREA_W; relX ++)
+			MapObjPtr[relY][relX] = -1;
 	}
-	for(si = Link[0x100]; si >= 0; si = Link[si]) {
-		if(GetCoordUse(si) == LOCXYZ) {
-			__unused__ = GetZ(si)?0xff:0x3ff;
-			diff_x = (GetX(si) - AreaX) & 0x3ff;/*__unused__ => bug?*/
-			diff_y = (GetY(si) - AreaY) & 0x3ff;/*__unused__ => bug?*/
-			if(diff_x < AREA_W && diff_y < AREA_H && MapObjPtr[diff_y][diff_x] == -1)
-				MapObjPtr[diff_y][diff_x] = si;
+	for(obj = Link[0x100]; obj >= 0; obj = Link[obj]) {
+		if(GetCoordUse(obj) == LOCXYZ) {
+			unusedMask = GetZ(obj)?0xff:0x3ff;
+			relX = (GetX(obj) - AreaX) & 0x3ff;/*__unused__ => bug?*/
+			relY = (GetY(obj) - AreaY) & 0x3ff;/*__unused__ => bug?*/
+			if(relX < AREA_W && relY < AREA_H && MapObjPtr[relY][relX] == -1)
+				MapObjPtr[relY][relX] = obj;
 		}
 	}
 }
 
-/*bozo ii - leave a dungeon level?*/
-static C_1184_2FB3(int z) {
-	int si, num_obj;
-	int bp_04, bp_02;
+/*unload dungeon level z (1..5) like OBJ_UnloadArea does for an outdoor
+  area; its file is "objblk<'A'+z-1>i", flag ObjBlkTmpPending[64 + z - 1]*/
+/*C_1184_2FB3*/static OBJ_UnloadDungeon(int z) {
+	int obj, numObj;
+	int prev, last;
 
-	if(z < 0 || z > 5 || D_2E9E == 'R')
+	if(z < 0 || z > 5 || DiskFullChoice == 'R')
 		return;
-	num_obj = 0;
-	bp_04 = 0x100;
+	numObj = 0;
+	prev = 0x100;
 
 
-	si = Link[0x100];
-	while(num_obj < 0xc00 && si >= 0) {
-		if(GetCoordUse(si) == LOCXYZ && GetZ(si) == z) {
+	obj = Link[0x100];
+	while(numObj < 0xc00 && obj >= 0) {
+		if(GetCoordUse(obj) == LOCXYZ && GetZ(obj) == z) {
 
 
-			if(si < 0x100) {
-				bp_04 = si;
+			if(obj < 0x100) {
+				prev = obj;
 			} else {
-				ScratchBuf->_6000[num_obj] = si;
-				__ObjSerialize(si, num_obj++);
-				D_E6E0 ++;
+				ScratchBuf->objNum[numObj] = obj;
+				__ObjSerialize(obj, numObj++);
+				FreeObjCount ++;
 			}
-			bp_02 = si;
-			si = Link[si];
-			while(si >= 0 && GetCoordUse(si) != LOCXYZ) {
-				if(num_obj < 0xc00) {
-					ScratchBuf->_6000[num_obj] = si;
-					__ObjSerialize(si, num_obj++);
+			last = obj;
+			obj = Link[obj];
+			while(obj >= 0 && GetCoordUse(obj) != LOCXYZ) {
+				if(numObj < 0xc00) {
+					ScratchBuf->objNum[numObj] = obj;
+					__ObjSerialize(obj, numObj++);
 				}
-				D_E6E0 ++;
-				bp_02 = si;
-				si = Link[si];
+				FreeObjCount ++;
+				last = obj;
+				obj = Link[obj];
 			}
-			Link[bp_02] = D_D5DA;
-			D_D5DA = Link[bp_04];
-			Link[bp_04] = si;
+			Link[last] = FreeObjHead;
+			FreeObjHead = Link[prev];
+			Link[prev] = obj;
 		} else {
-			bp_04 = si;
-			si = Link[si];
+			prev = obj;
+			obj = Link[obj];
 		}
 	}
 	__Tmp_file[15] = z - 1 + 'A';
 	__Tmp_file[16] = 'I';
-	C_1184_2722(num_obj, z + 0x3f);
+	OBJ_WriteBlockFile(numObj, z + 0x3f);
 }
 
-/*read a dungeon objblk file*/
-static C_1184_30A6(int z) {
-	int si;
-	int bp_02;
+/*load dungeon level z (1..5) from its objblk file (the .tmp one if any)*/
+/*C_1184_30A6*/static OBJ_LoadDungeon(int z) {
+	int fd;
+	int numObj;
 
-	if(z < 0 || z > 5 || D_2E9E == 'R')
+	if(z < 0 || z > 5 || DiskFullChoice == 'R')
 		return;
-	DISK_confirm(DISK_8);
-	if(!D_065C[8*8 + z - 1]) {
+	DISK_confirm(DISK_PLAYER);
+	if(!ObjBlkTmpPending[8*8 + z - 1]) {
 		__Sav_file[15] = 'A' + z - 1;
 		__Sav_file[16] = 'I';
-		si = OSI_open(__Sav_file);
+		fd = OSI_open(__Sav_file);
 	} else {
 		__Tmp_file[15] = 'A' + z - 1;
 		__Tmp_file[16] = 'I';
-		si = OSI_open(__Tmp_file);
+		fd = OSI_open(__Tmp_file);
 	}
-	OSI_read(si, 0, 2, (void far *)&bp_02);
-	if(bp_02 > 0xc00)
-		bp_02 = 0xc00;
-	if(bp_02)
-		OSI_read(si, -1, (long)bp_02 << 3, ScratchBuf);
-	OSI_close(si);
-	if(bp_02)
-		__ObjectsDeserialize(bp_02);
+	OSI_read(fd, 0, 2, (void far *)&numObj);
+	if(numObj > 0xc00)
+		numObj = 0xc00;
+	if(numObj)
+		OSI_read(fd, -1, (long)numObj << 3, ScratchBuf);
+	OSI_close(fd);
+	if(numObj)
+		__ObjectsDeserialize(numObj);
 }
 
+/*make sure the objects around (x, y, z) are loaded. On the surface a
+  2x2 window of areas is kept; it is only shifted when (x, y) comes
+  within 5 tiles of its border. Areas leaving the window (or the level
+  left) are unloaded, new ones loaded, then NPC inventories relinked.*/
 /*C_1184_3176*/LoadNewRegions(int x, int y, int z) {
-	int si, di;
-	int bp_14, bp_12, bp_10, bp_0e, bp_0c, bp_0a;
+	int i, j;
+	int shiftX, shiftY, relX, relY, numUnloaded, numLoaded;
 	int mapIds[4];
 
-	bp_0c =
-	bp_0a = 0;
-	if(D_06F2 > 0 && D_06F2 != z) {
-		C_1184_19AA(x, y, z);
-		C_1184_2FB3(D_06F2);
-		bp_0c ++;
+	numUnloaded =
+	numLoaded = 0;
+	if(LoadedZ > 0 && LoadedZ != z) {
+		OBJ_PurgeFarLocals(x, y, z);
+		OBJ_UnloadDungeon(LoadedZ);
+		numUnloaded ++;
 	}
 	if(z == 0) {
-		if(D_06F0 == -1) {
+		/*mapIds[0] = top-left area of the window*/
+		if(LoadedWindowArea == -1) {
 			mapIds[0] = (((x - 0x40) >> 7) & 7) + (((y - 0x40) >> 4) & 0x38);
 		} else {
-			bp_14 = 0;
-			bp_10 = x - ((D_06F0 & 7) << 7);
-			for(; bp_10 < 5; bp_10 += 0x80, bp_14 --);
-			for(; bp_10 >= 0xfb; bp_10 -= 0x80, bp_14 ++);
-			bp_12 = 0;
-			bp_0e = y - ((D_06F0 & 0x38) << 4);
-			for(; bp_0e < 5; bp_0e += 0x80, bp_12 -= 8);
-			for(; bp_0e >= 0xfb; bp_0e -= 0x80, bp_12 += 8);
-			mapIds[0] = (((D_06F0 & 7) + bp_14) & 7) + (((D_06F0 & 0x38) + bp_12) & 0x38);
+			shiftX = 0;
+			relX = x - ((LoadedWindowArea & 7) << 7);
+			for(; relX < 5; relX += 0x80, shiftX --);
+			for(; relX >= 0xfb; relX -= 0x80, shiftX ++);
+			shiftY = 0;
+			relY = y - ((LoadedWindowArea & 0x38) << 4);
+			for(; relY < 5; relY += 0x80, shiftY -= 8);
+			for(; relY >= 0xfb; relY -= 0x80, shiftY += 8);
+			mapIds[0] = (((LoadedWindowArea & 7) + shiftX) & 7) + (((LoadedWindowArea & 0x38) + shiftY) & 0x38);
 		}
 		mapIds[1] = ((mapIds[0] + 1) & 7) + (mapIds[0] & 0x38);
 		mapIds[2] = (mapIds[0] + 8) & 0x3f;
 		mapIds[3] = (mapIds[1] + 8) & 0x3f;
-		D_06F0 = mapIds[0];
+		LoadedWindowArea = mapIds[0];
 	} else {
-		for(si = 0; si < 4; si ++)
-			mapIds[si] = -1;
-		D_06F0 = -1;
+		for(i = 0; i < 4; i ++)
+			mapIds[i] = -1;
+		LoadedWindowArea = -1;
 	}
-	if(D_06F2 == 0) {
-		for(si = 0; si < 4; si ++) {
-			for(di = 0; di < 4; di ++) {
-				if(mapIds[di] == D_06E8[si])
+	/*unload the areas no longer needed*/
+	if(LoadedZ == 0) {
+		for(i = 0; i < 4; i ++) {
+			for(j = 0; j < 4; j ++) {
+				if(mapIds[j] == LoadedAreas[i])
 					break;
 			}
-			if(di != 4 || D_06E8[si] == -1)
+			if(j != 4 || LoadedAreas[i] == -1)
 				continue;
-			if(bp_0c == 0)
-				C_1184_19AA(x, y, z);
-			C_1184_2888(D_06E8[si]);
-			bp_0c ++;
-			D_06E8[si] = -1;
+			if(numUnloaded == 0)
+				OBJ_PurgeFarLocals(x, y, z);
+			OBJ_UnloadArea(LoadedAreas[i]);
+			numUnloaded ++;
+			LoadedAreas[i] = -1;
 		}
 	}
+	/*load the new ones*/
 	if(z == 0) {
-		for(di = 0; di < 4; di ++) {
-			for(si = 0; si < 4; si++) {
-				if(mapIds[di] == D_06E8[si])
+		for(j = 0; j < 4; j ++) {
+			for(i = 0; i < 4; i++) {
+				if(mapIds[j] == LoadedAreas[i])
 					break;
 			}
-			if(si != 4)
+			if(i != 4)
 				continue;
-			for(si = 0; si < 4; si ++) {
-				if(D_06E8[si] == -1)
+			for(i = 0; i < 4; i ++) {
+				if(LoadedAreas[i] == -1)
 					break;
 			}
-			C_1184_2DEF(mapIds[di]);
-			bp_0a ++;
-			D_06E8[si] = mapIds[di];
+			OBJ_LoadArea(mapIds[j]);
+			numLoaded ++;
+			LoadedAreas[i] = mapIds[j];
 		}
-	} else if(D_06F2 != z) {
-		C_1184_30A6(z);
-		bp_0a ++;
+	} else if(LoadedZ != z) {
+		OBJ_LoadDungeon(z);
+		numLoaded ++;
 	}
-	D_06F2 = z;
-	if(bp_0a)
-		C_1184_2B27();
+	LoadedZ = z;
+	if(numLoaded)
+		OBJ_RelinkHeldItems();
 }
 
-/*"commit" obj files*/
-C_1184_33CA() {
-	int si;
+/*"commit" obj files (save game): write the loaded blocks, rename every
+  .tmp file over its objblk file, then reload the blocks*/
+/*C_1184_33CA*/OBJ_CommitBlocks() {
+	int i;
 
 	if(MapZ) {
-		C_1184_2FB3(MapZ);
+		OBJ_UnloadDungeon(MapZ);
 	} else {
-		for(si = 0; si < 4; si ++)
-			C_1184_2888(D_06E8[si]);
+		for(i = 0; i < 4; i ++)
+			OBJ_UnloadArea(LoadedAreas[i]);
 	}
-	for(si = 0; si < (8*8 + 5); si ++) {
-		if(D_065C[si]) {
-			__Tmp_file[15] = __Sav_file[15] = __Bak_file[15] = (si & 7) + 'A';
-			__Tmp_file[16] = __Sav_file[16] = __Bak_file[16] = (si >> 3) + 'A';
+	for(i = 0; i < (8*8 + 5); i ++) {
+		if(ObjBlkTmpPending[i]) {
+			__Tmp_file[15] = __Sav_file[15] = __Bak_file[15] = (i & 7) + 'A';
+			__Tmp_file[16] = __Sav_file[16] = __Bak_file[16] = (i >> 3) + 'A';/*.bak is never used*/
 			OSI_delete(__Sav_file);
 			OSI_rename(__Tmp_file, __Sav_file);
-			D_065C[si] = 0;
+			ObjBlkTmpPending[i] = 0;
 		}
 	}
-	for(si = 0; si < 4; si ++)
-		D_06E8[si] = -1;
-	D_06F0 = D_06F2 = -1;
+	for(i = 0; i < 4; i ++)
+		LoadedAreas[i] = -1;
+	LoadedWindowArea = LoadedZ = -1;
 	LoadNewRegions(MapX, MapY, MapZ);
-	C_1184_2ECC();
+	OBJ_RebuildMapObjPtr();
 }
 
-/*C_1184_347C*/ShowObject(int tile_frame, int x, int y, int bp06) {
-	unsigned char *si;
+/*add a tile to the display stack of the 11x11 view cell (x, y).
+  Each cell's stack is a list of nodes: Obj_11x11[y][x] = first node,
+  CellObjNext[node] = next node (CellObjNext[0] = free node list), CellObjTile[node] =
+  tile | frame; it is drawn from the first node on (first = bottom).
+  A "background" tile (IsTileBa) replaces the cell's map tile instead.
+  Non-foreground tiles go first (below everything already there);
+  foreground tiles (or mode 2) go:
+    mode 0/2: just before the first foreground tile already there;
+    mode 1:   last (on top) -- parts of multi-tile objects, hit effects;
+    mode 3:   darkness: last, or with infravision right after the first
+              non-warm tile.
+  Nothing is shown on hidden cells nor, except warm tiles under
+  infravision, on dark ones; egg objects are never shown.*/
+/*C_1184_347C*/ShowObject(int tileFrame, int x, int y, int mode) {
+	unsigned char *slot;
 	int tile;
-	int bp_08, bp_06, bp_04;
-	unsigned char *bp_02;
+	int mapTile, onTop, node;
+	unsigned char *insertAt;
 
-	tile = tile_frame & 0x7ff;
-	if(BaseTile[OBJ_14F] == tile)
+	tile = tileFrame & 0x7ff;
+	if(BaseTile[OBJ_EGG] == tile)
 		return;
-	bp_08 = Tile_11x11[y][x];
-	if(bp_08 == TIL_0FF)
+	mapTile = Tile_11x11[y][x];
+	if(mapTile == TIL_HIDDEN)
 		return;
-	if(bp_08 == TIL_1BC) {
+	if(mapTile == TIL_DARKNESS) {
 		if(SpellFx[1] == 0 || !IsTileWa(tile))
 			return;
 	}
 	if(IsTileBa(tile)) {
-		Tile_11x11[y][x] = tile_frame;
+		Tile_11x11[y][x] = tileFrame;
 		return;
 	}
-	bp_04 = D_E5E0[0];
-	if(bp_04 == 0)
+	node = CellObjNext[0];
+	if(node == 0)
 		return;
-	D_E5E0[0] = D_E5E0[bp_04];
-	D_D5DC[bp_04] = tile_frame;
-	si = &(Obj_11x11[y][x]);
-	if(IsTileFor(tile) || bp06 == 2) {
-		bp_06 = 1;
-		if(bp06 & 1) {
-			if(SpellFx[1] && bp06 == 3) {
-				bp_02 = si;
-				for(; *si; si = D_E5E0 + *si) {
-					if(!IsTileWa(D_D5DC[*si] & 0x7ff)) {
-						bp_02 = D_E5E0 + *si;
+	CellObjNext[0] = CellObjNext[node];
+	CellObjTile[node] = tileFrame;
+	slot = &(Obj_11x11[y][x]);
+	if(IsTileFor(tile) || mode == 2) {
+		onTop = 1;
+		if(mode & 1) {
+			if(SpellFx[1] && mode == 3) {
+				insertAt = slot;
+				for(; *slot; slot = CellObjNext + *slot) {
+					if(!IsTileWa(CellObjTile[*slot] & 0x7ff)) {
+						insertAt = CellObjNext + *slot;
 						break;
 					}
 				}
-				si = bp_02;
+				slot = insertAt;
 			} else {
-				while(*si)
-					si = D_E5E0 + *si;
+				while(*slot)
+					slot = CellObjNext + *slot;
 			}
 		} else {
-			while(*si && !IsTileFor(D_D5DC[*si] & 0x7ff))
-				si = D_E5E0 + *si;
+			while(*slot && !IsTileFor(CellObjTile[*slot] & 0x7ff))
+				slot = CellObjNext + *slot;
 		}
 	}
-	D_E5E0[bp_04] = *si;
-	*si = bp_04;
+	CellObjNext[node] = *slot;
+	*slot = node;
 }
 
-static C_1184_35EA(int tile, int frame, int x, int y) {
-	int bp_02;
+/*show tile + frame at view cell (x, y) together with the left/upper parts
+  of double-width/double-height tiles (x, y may be 11 for those)*/
+/*C_1184_35EA*/static OBJ_ShowMultiTile(int tile, int frame, int x, int y) {
+	int flags;
 
 	if(x < 11 && y < 11)
 		ShowObject(tile + frame, x, y, 0);
 
-	bp_02 = TileFlag[tile];
-	if(bp_02 & TILE_FLAG1_80) {
+	flags = TileFlag[tile];
+	if(flags & TILE_DOUBLE_WIDTH) {
 		if(x != 0 && y < 11)
 			ShowObject(tile + frame - 1, x - 1, y, 1);
-		if(bp_02 & TILE_FLAG1_40) {
+		if(flags & TILE_DOUBLE_HEIGHT) {
 			if(x < 11 && y != 0)
 				ShowObject(tile + frame - 2, x, y - 1, 1);
 			if(x != 0 && y != 0)
 				ShowObject(tile + frame - 3, x - 1, y - 1, 1);
 		}
-	} else if(x < 11 && y != 0 && (bp_02 & TILE_FLAG1_40)) {
+	} else if(x < 11 && y != 0 && (flags & TILE_DOUBLE_HEIGHT)) {
 		ShowObject(tile + frame - 1, x, y - 1, 1);
 	}
 }
 
+/*build the display stacks of the 11x11 view from the objects around
+  (MapX, MapY); also triggers the ambient sounds, the bard music and
+  volcano eruptions, and draws the darkness of the badly lit cells*/
 /*C_1184_36C2*/ShowObjects() {
 	int objNum;
 	int i, j;
-	int tile, obj_x, obj_y, light;
-	int newFrame, objTyp, bp_06, bp_04, hasMusic;
+	int tile, objX, objY, light;
+	int newFrame, objTyp, stack, node, hasMusic;
 
-	MUS_051E();
+	MUS_ClearAmbient();
 	hasMusic = 0;
 	for(i = 0; i < 0x100; i ++)
-		D_E5E0[i] = i + 1;
+		CellObjNext[i] = i + 1;
 
 	for(i = 0; i < 11; i ++)
 		for(j = 0; j < 11; j ++)
@@ -1744,28 +1955,30 @@ static C_1184_35EA(int tile, int frame, int x, int y) {
 		objTyp = GetType(objNum);
 		/*possible eruption*/
 		if(Erupting == 1)
-			if(objTyp == OBJ_133 || objTyp == OBJ_0AB)
+			if(objTyp == OBJ_VOLCANO || objTyp == OBJ_FUMAROLE)
 				Erupting = objNum;
 		/*bard*/
-		if(objTyp == OBJ_188)
+		if(objTyp == OBJ_MUSICIAN_SHORT_CAPE)
 			hasMusic = 1;
 		/*ambiant sound*/
-		MUS_043B(objTyp, COMBAT_getCathesus(objNum, MapX, MapY));
+		MUS_AddAmbientSource(objTyp, COMBAT_TileDistance(objNum, MapX, MapY));
 		/* */
 		if(IsInvisible(objNum) && (objNum >= 0x100 || !IsPlrControl(objNum)))
 			continue;
 		if(objNum < 0x100 && IsDraggedUnder(objNum))
 			continue;
 		/*mirror reflection*/
-		if(objTyp == OBJ_07B && GetFrame(objNum) < 2) {
-			if(C_1184_0B3D(0, GetX(objNum), GetY(objNum) + 1) >= 0)
+		if(objTyp == OBJ_MIRROR && GetFrame(objNum) < 2) {
+			if(OBJ_FindNPCAt(0, GetX(objNum), GetY(objNum) + 1) >= 0)
 				SetFrame(objNum, 1);
 			else
 				SetFrame(objNum, 0);
 		}
 		/* */
 		tile = TILE_FRAME(objNum);
-		if(IsInvisible(objNum) && objTyp < OBJ_1AA)
+		/*outline drawn with the tile (bits 11-12 of the tile number, above the
+		  0x7ff tile mask): 2 << 10 = invisible, 4 << 10 = protected, 6 << 10 = cursed*/
+		if(IsInvisible(objNum) && objTyp < OBJ_GIANT_SCORPION)
 			newFrame = (2 << 10);
 		if(objNum < 0x100) {
 			if(IsProtected(objNum))
@@ -1773,42 +1986,42 @@ static C_1184_35EA(int tile, int frame, int x, int y) {
 			if(IsCursed(objNum))
 				newFrame = (6 << 10);
 		}
-		obj_x = GetX(objNum) - MapX + 5;
-		obj_y = GetY(objNum) - MapY + 5;
+		objX = GetX(objNum) - MapX + 5;
+		objY = GetY(objNum) - MapY + 5;
 		if(newFrame)
-			C_1184_35EA(tile, newFrame, obj_x, obj_y);
+			OBJ_ShowMultiTile(tile, newFrame, objX, objY);
 		if(!IsInvisible(objNum))
-			C_1184_35EA(tile, 0, obj_x, obj_y);
+			OBJ_ShowMultiTile(tile, 0, objX, objY);
 		/*britannia lens in temple of singularity*/
 		if(
-			objTyp == OBJ_18A &&
-			obj_x + MapX == 0x39e &&
-			obj_y + MapY == 0x358 &&
+			objTyp == OBJ_BRITANNIA_LENS_BLUE &&
+			objX + MapX == 0x39e &&
+			objY + MapY == 0x358 &&
 			GetZ(objNum) == 0 &&
-			obj_y < 11
+			objY < 11
 		) {
-			if(obj_x)
-				ShowObject(TIL_1BA, obj_x + 1, obj_y, 1);
-			if(obj_x < 10)
-				ShowObject(TIL_1BB, obj_x - 1, obj_y, 1);
+			if(objX)
+				ShowObject(TIL_1BA, objX + 1, objY, 1);
+			if(objX < 10)
+				ShowObject(TIL_1BB, objX - 1, objY, 1);
 			continue;
 		}
 		/*gargoyle lens in temple of singularity*/
 		if(
-			objTyp == OBJ_18C &&
-			obj_x + MapX == 0x3a2 &&
-			obj_y + MapY == 0x358 &&
+			objTyp == OBJ_GARGOYLE_LENS_VIOLET &&
+			objX + MapX == 0x3a2 &&
+			objY + MapY == 0x358 &&
 			GetZ(objNum) == 0 &&
-			obj_y < 11
+			objY < 11
 		) {
-			if(obj_x)
-				ShowObject(TIL_1B8, obj_x + 1, obj_y, 1);
-			if(obj_x < 10)
-				ShowObject(TIL_1B9, obj_x - 1, obj_y, 1);
+			if(objX)
+				ShowObject(TIL_1B8, objX + 1, objY, 1);
+			if(objX < 10)
+				ShowObject(TIL_1B9, objX - 1, objY, 1);
 		}
 	}
 	/* */
-	if(!D_05E8) {
+	if(!XRayView) {
 		for(i = 0; i < 11; i ++) {
 			for(j = 0; j < 11; j ++) {
 				if(IsTerrainWall(Tile_11x11[j][i])) {
@@ -1816,19 +2029,20 @@ static C_1184_35EA(int tile, int frame, int x, int y) {
 						!(AreaFlags[j     + ViewY][i + 1 + ViewX] & 0x80) ||
 						!(AreaFlags[j + 1 + ViewY][i     + ViewX] & 0x80)
 					) {
-						bp_06 = Obj_11x11[j][i];
-						if(bp_06) {
+						stack = Obj_11x11[j][i];
+						/*wall not seen from the party side: hide what is on it*/
+						if(stack) {
 							Obj_11x11[j][i] = 0;
-							for(bp_04 = bp_06; D_E5E0[bp_04]; bp_04 = D_E5E0[bp_04]);
-							D_E5E0[bp_04] = D_E5E0[0];
-							D_E5E0[0] = bp_06;
+							for(node = stack; CellObjNext[node]; node = CellObjNext[node]);
+							CellObjNext[node] = CellObjNext[0];
+							CellObjNext[0] = stack;
 						}
 					}
 				}
 				/*draw obscurity*/
 				light = AreaLight[j + ViewY][i + ViewX];
 				if(light < 4 && light > 0) {
-					tile = TIL_1BC + light;
+					tile = TIL_DARKNESS + light;
 					ShowObject(tile, i, j, 3);
 				}
 			}
@@ -1838,96 +2052,103 @@ static C_1184_35EA(int tile, int frame, int x, int y) {
 	if(Erupting == 1)
 		Erupting = 0;
 	/* */
-	if(hasMusic && !D_0654) {
+	if(hasMusic && !MusicianWasNear) {
 		MUS_SongIndex = 0;
 		MUS_Song = OSI_rand(0, 1);
 	}
-	D_0654 = hasMusic;
+	MusicianWasNear = hasMusic;
 }
 
-/*Initialization?*/
-C_1184_3B1D() {
-	int si;
+/*Initialization: empty object list, all slots free (monsters 0xE0-0xFF,
+  objects 0x101-0xBFF), no area loaded*/
+/*C_1184_3B1D*/OBJ_InitLists() {
+	int i;
 
-	for(si = 0; si < 0xbff; si ++)
-		Link[si] = si + 1;
+	for(i = 0; i < 0xbff; i ++)
+		Link[i] = i + 1;
 	Link[0xbff] = -1;
 	Link[0xff] = -1;
-	D_BDD6 = 0xe0;
-	D_E6E2 = 0x20;
-	D_D5DA = 0x101;
-	D_E6E0 = 0xaff;
+	FreeMonsterHead = 0xe0;
+	FreeMonsterCount = 0x20;
+	FreeObjHead = 0x101;
+	FreeObjCount = 0xaff;
 	Link[0x100] = -1;
-	for(si = 0; si < 4; si ++)
-		D_06E8[si] = -1;
-	D_06F0 = D_06F2 = -1;
+	for(i = 0; i < 4; i ++)
+		LoadedAreas[i] = -1;
+	LoadedWindowArea = LoadedZ = -1;
 }
 
-/*called after a restore*/
-C_1184_3B7D() {
-	int si, di;
-	int bp_02;
+/*called after a restore: link the existing NPCs (0x00-0xFF) into the
+  sorted object list and remove the used temporary monster slots from
+  their free list (if slot 0xFF is used, its predecessor gets 0x100: bug?)*/
+/*C_1184_3B7D*/OBJ_RelinkNPCs() {
+	int npc, prev;
+	int lastFree;
 
-	bp_02 = 0x100;
-	for(si = 0; si < 0x100; si ++) {
-		if(ObjShapeType[si]) {
-			if(si >= 0xe0) {
-				if(bp_02 == 0x100)
-					D_BDD6 = si + 1;
+	lastFree = 0x100;
+	for(npc = 0; npc < 0x100; npc ++) {
+		if(ObjShapeType[npc]) {
+			if(npc >= 0xe0) {
+				if(lastFree == 0x100)
+					FreeMonsterHead = npc + 1;
 				else
-					Link[bp_02] = si + 1;
-				D_E6E2 --;
+					Link[lastFree] = npc + 1;
+				FreeMonsterCount --;
 			}
-			for(di = 0x100; Link[di] >= 0 && C_1184_29C4(Link[di], si) < 0; di = Link[di]);
-			Link[si] = Link[di];
-			Link[di] = si;
+			for(prev = 0x100; Link[prev] >= 0 && OBJ_CompareOrder(Link[prev], npc) < 0; prev = Link[prev]);
+			Link[npc] = Link[prev];
+			Link[prev] = npc;
 		} else {
-			if(si >= 0xe0)
-				bp_02 = si;
+			if(npc >= 0xe0)
+				lastFree = npc;
 		}
 	}
 }
 
-/*load tile description from "look.lzd"*/
+/*load tile description from "look.lzd": entries are (word first tile,
+  zero-terminated string) sorted by tile; the entry for numTile is the
+  first one whose first tile is >= numTile. Returns "nothing" if empty.*/
 /*C_1184_3C1B*/GetTileString(int numTile) {
-	int si;
-	char *di;
-	int far *bp_04;
+	int tileNum;
+	char *dst;
+	int far *src;
 
-	DISK_confirm(DISK_5);
+	DISK_confirm(DISK_MAP);
 	IsZFile = 1;
 	LoadFile(/*07B2*/"look.lzd", ScratchBuf);
 	IsZFile = 0;
-	bp_04 = ScratchBuf;
-	si = *(bp_04++);
-	while(si < numTile) {
-		while(*(((char far *)bp_04)++));
-		si = *(bp_04++);
+	src = ScratchBuf;
+	tileNum = *(src++);
+	while(tileNum < numTile) {
+		while(*(((char far *)src)++));
+		tileNum = *(src++);
 	}
-	di = D_D7DC;
-	while(*di++ = *(((char far *)bp_04)++));
-	return D_D7DC[0]?D_D7DC:/*07BB*/"nothing";
+	dst = TileStringBuf;
+	while(*dst++ = *(((char far *)src)++));
+	return TileStringBuf[0]?TileStringBuf:/*07BB*/"nothing";
 }
 
+/*name of an object: the party member's name, the original shape's name for
+  a dead or sleeping NPC, otherwise its tile description*/
 /*C_1184_3C9C*/GetObjectString(int objNum) {
-	char *di;
-	int bp_02;
+	char *str;
+	int i;
 
 	if(objNum < 0) {
-		di = /*07C3*/"Nothing";
+		str = /*07C3*/"Nothing";
 	} else if(IsPlrControl(objNum)) {
-		di = GetTileString(TILE_FRAME(objNum));
-		for(bp_02 = 0; bp_02 < PartySize; bp_02 ++) {
-			if(Party[bp_02] == objNum) {
-				strcpy(D_D7DC, Names[bp_02]);
-				di = D_D7DC;
+		str = GetTileString(TILE_FRAME(objNum));
+		for(i = 0; i < PartySize; i ++) {
+			if(Party[i] == objNum) {
+				strcpy(TileStringBuf, Names[i]);
+				str = TileStringBuf;
 				break;
 			}
 		}
-	} else if(objNum < 0x100 && Isbis_0014(objNum)) {
-		di = GetTileString(BaseTile[OrigShapeType[objNum] & 0x3ff] + (OrigShapeType[objNum] >> 10));
+	} else if(objNum < 0x100 && IsDeadOrAsleep(objNum)) {
+		str = GetTileString(BaseTile[OrigShapeType[objNum] & 0x3ff] + (OrigShapeType[objNum] >> 10));
 	} else {
-		di = GetTileString(TILE_FRAME(objNum));
+		str = GetTileString(TILE_FRAME(objNum));
 	}
-	return di;
+	return str;
 }

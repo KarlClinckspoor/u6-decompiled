@@ -10,17 +10,17 @@ tSurface	STRUC
 tSurface	ENDS
 
 tMouse	STRUC
-	f_00	db ?	;button1
-	f_01	db ?	;button2
-	f_02	dw ?	;x
-	f_04	dw ?	;y
-	f_06	dw ?	;
-	f_08	dd ?	;graphic data?
-	f_0c	dw ?	;pointer index?
-	f_0e	dw ?	;graphic structure?[struct tSurface *]
-	f_10	dd ?	;work memory?0x400 bytes
-	f_14	dd ?	;a callback
-	f_18	db ?	;"is installed" flag?
+	buttonL	db ?	;button1
+	buttonR	db ?	;button2
+	posX	dw ?	;x
+	posY	dw ?	;y
+	unused06	dw ?	;
+	shapes	dd ?	;graphic data?
+	shapeIndex	dw ?	;pointer index?
+	surface	dw ?	;graphic structure?[struct tSurface *]
+	saveBuf	dd ?	;work memory?0x400 bytes
+	onMove	dd ?	;a callback
+	installed	db ?	;"is installed" flag?
 tMouse	ENDS
 
 ;--note: problem with tasm on these
@@ -32,7 +32,7 @@ ENDM
 
 DSegStart
 
-EXTRN D_ECB8:DWORD
+EXTRN GrDriver:DWORD
 
 _pMouse	dw 0	;D_2FB4
 _nMouseSem	dw 0	;D_2FB6
@@ -50,17 +50,17 @@ CSegStart	MOUSE_TEXT
 ;
 ;----------------------------------------
 ;init mouse?
-ProcStart	_MOUSE_0000	;332B:0000
+ProcStart	_MOUSE_INIT	;332B:0000
 	MOV	BX,[BP+06]
 	MOV	_pMouse,BX
 	;%%
-	MOV	[BX].tMouse.f_00,0
-	MOV	[BX].tMouse.f_01,0
-	MOV	[BX].tMouse.f_02,0
-	MOV	[BX].tMouse.f_04,0
-	MOV	WORD PTR [BX].tMouse.f_14,OFFSET MOUSE_TEXT:_MOUSE_0055
-	MOV	WORD PTR [BX].tMouse.f_14+2,MOUSE_TEXT
-	MOV	[BX].tMouse.f_18,0
+	MOV	[BX].tMouse.buttonL,0
+	MOV	[BX].tMouse.buttonR,0
+	MOV	[BX].tMouse.posX,0
+	MOV	[BX].tMouse.posY,0
+	MOV	WORD PTR [BX].tMouse.onMove,OFFSET MOUSE_TEXT:_MOUSE_0055
+	MOV	WORD PTR [BX].tMouse.onMove+2,MOUSE_TEXT
+	MOV	[BX].tMouse.installed,0
 	;--
 	MOV	AX,0	;mouse reset/get mouse installed flag
 	INT	33h
@@ -70,7 +70,7 @@ ProcStart	_MOUSE_0000	;332B:0000
 	PUSH	BX	;push # of buttons
 	;--
 	MOV	BX,_pMouse
-	MOV	[BX].tMouse.f_18,1
+	MOV	[BX].tMouse.installed,1
 	;--
 	MOV	_nMouseSem,-1
 	CALL_FAR_PTR _MOUSE_0124
@@ -78,7 +78,7 @@ ProcStart	_MOUSE_0000	;332B:0000
 	;-- returns # of buttons
 	POP	AX
 C_0050:	;--
-ProcEnd	_MOUSE_0000
+ProcEnd	_MOUSE_INIT
 
 ;dummy callback
 PUBLIC _MOUSE_0055	;332B:0055
@@ -91,25 +91,25 @@ ProcStart	_MOUSE_POINTER	;332B:0056	;MOUSE_0056
 	MOV	AX,[BP+0Ah]
 	;--
 	MOV	BX,_pMouse
-	CMP	[BX].tMouse.f_18,0
+	CMP	[BX].tMouse.installed,0
 	JZ	C_009A
 	;-- compare bp0a to f_0c and bp06 to f_08
-	CMP	AX,[BX].tMouse.f_0c
+	CMP	AX,[BX].tMouse.shapeIndex
 	JNZ	C_007D
 	MOV	AX,ES
-	CMP	AX,WORD PTR [BX].tMouse.f_08+2
+	CMP	AX,WORD PTR [BX].tMouse.shapes+2
 	JNZ	C_007D
-	CMP	DI,WORD PTR [BX].tMouse.f_08
+	CMP	DI,WORD PTR [BX].tMouse.shapes
 	JZ	C_009A
 C_007D:	;--
 	CALL_FAR_PTR _MOUSE_HIDE
 	;--
 	LES	DI,[BP+06]
-	MOV	AX,WORD PTR [BP].tMouse.f_08+2
+	MOV	AX,WORD PTR [BP].tMouse.shapes+2
 	MOV	BX,_pMouse
-	MOV	[BX].tMouse.f_0c,AX
-	MOV	WORD PTR [BX].tMouse.f_08+2,ES
-	MOV	WORD PTR [BX].tMouse.f_08,DI
+	MOV	[BX].tMouse.shapeIndex,AX
+	MOV	WORD PTR [BX].tMouse.shapes+2,ES
+	MOV	WORD PTR [BX].tMouse.shapes,DI
 	;--
 	CALL_FAR_PTR _MOUSE_SHOW
 C_009A:	;--
@@ -120,7 +120,7 @@ ProcEnd	_MOUSE_POINTER
 ;update mouse state
 ProcStart _MOUSE_SERVE	;332B:009F
 	MOV	BX,_pMouse
-	CMP	[BX].tMouse.f_18,0
+	CMP	[BX].tMouse.installed,0
 	JZ	C_00D4
 	;--
 	MOV	AX,3	;get mouse position and buttons status
@@ -173,14 +173,14 @@ endif
 	AND	D_2FC0,2	;store R button status
 	;--
 	MOV	SI,_pMouse
-	MOV	[SI].tMouse.f_02,CX
-	MOV	[SI].tMouse.f_04,DX
-	MOV	[SI].tMouse.f_00,BL
-	AND	[SI].tMouse.f_00,1
-	MOV	[SI].tMouse.f_01,BL
-	AND	[SI].tMouse.f_01,2
+	MOV	[SI].tMouse.posX,CX
+	MOV	[SI].tMouse.posY,DX
+	MOV	[SI].tMouse.buttonL,BL
+	AND	[SI].tMouse.buttonL,1
+	MOV	[SI].tMouse.buttonR,BL
+	AND	[SI].tMouse.buttonR,2
 	;--
-	CALL	DWORD PTR [SI].tMouse.f_14
+	CALL	DWORD PTR [SI].tMouse.onMove
 if 0
 	POP	AX
 	OR	AX,AX
@@ -207,8 +207,8 @@ _MOUSE_SHOW	PROC FAR
 	INC	_nMouseSem
 	JNZ	C_0145
 	;--
-	CALL_FAR_PTR _MOUSE_0183	;call graphic function 0Ch
-	CALL_FAR_PTR _MOUSE_015C	;call graphic function 30h
+	CALL_FAR_PTR _MOUSE_SAVE_BG	;call graphic function 0Ch
+	CALL_FAR_PTR _MOUSE_DRAW	;call graphic function 30h
 C_0145:	;--
 	RET
 _MOUSE_SHOW	ENDP
@@ -226,62 +226,62 @@ C_015B:	;--
 _MOUSE_HIDE	ENDP
 ;----------------------------------------
 ;call graphic function 30h
-PUBLIC _MOUSE_015C	;332B:015C
-_MOUSE_015C	PROC FAR
+PUBLIC _MOUSE_DRAW	;332B:015C
+_MOUSE_DRAW	PROC FAR	;MOUSE_015C
 	MOV	BX,_pMouse
-	CMP	[BX].tMouse.f_18,0
+	CMP	[BX].tMouse.installed,0
 	JZ	C_0182
 	;--
-	PUSH	[BX].tMouse.f_0e
-	PUSH	[BX].tMouse.f_02
-	PUSH	[BX].tMouse.f_04
-	PUSH	WORD PTR [BX].tMouse.f_08+2
-	PUSH	WORD PTR [BX].tMouse.f_08
-	PUSH	[BX].tMouse.f_0c
-	MOV	WORD PTR [D_ECB8],30h
-	CALL	DWORD PTR [D_ECB8]
+	PUSH	[BX].tMouse.surface
+	PUSH	[BX].tMouse.posX
+	PUSH	[BX].tMouse.posY
+	PUSH	WORD PTR [BX].tMouse.shapes+2
+	PUSH	WORD PTR [BX].tMouse.shapes
+	PUSH	[BX].tMouse.shapeIndex
+	MOV	WORD PTR [GrDriver],30h
+	CALL	DWORD PTR [GrDriver]
 C_0182:	;--
 	RET
-_MOUSE_015C	ENDP
+_MOUSE_DRAW	ENDP	;MOUSE_015C
 ;----------------------------------------
 ;call graphic function 0Ch
-PUBLIC _MOUSE_0183	;332B:0183
-_MOUSE_0183	PROC FAR
+PUBLIC _MOUSE_SAVE_BG	;332B:0183
+_MOUSE_SAVE_BG	PROC FAR	;MOUSE_0183
 	MOV	BX,_pMouse
-	CMP	[BX].tMouse.f_18,0
+	CMP	[BX].tMouse.installed,0
 	JZ	C_01AF
 	;--
-	PUSH	[BX].tMouse.f_0e
-	PUSH	WORD PTR [BX].tMouse.f_10+2
-	PUSH	WORD PTR [BX].tMouse.f_10
-	PUSH	[BX].tMouse.f_02
-	PUSH	[BX].tMouse.f_04
-	PUSH	WORD PTR [BX].tMouse.f_08+2
-	PUSH	WORD PTR [BX].tMouse.f_08
-	PUSH	[BX].tMouse.f_0c
-	MOV	WORD PTR [D_ECB8],0Ch
-	CALL	DWORD PTR [D_ECB8]
+	PUSH	[BX].tMouse.surface
+	PUSH	WORD PTR [BX].tMouse.saveBuf+2
+	PUSH	WORD PTR [BX].tMouse.saveBuf
+	PUSH	[BX].tMouse.posX
+	PUSH	[BX].tMouse.posY
+	PUSH	WORD PTR [BX].tMouse.shapes+2
+	PUSH	WORD PTR [BX].tMouse.shapes
+	PUSH	[BX].tMouse.shapeIndex
+	MOV	WORD PTR [GrDriver],0Ch
+	CALL	DWORD PTR [GrDriver]
 C_01AF:	;--
 	RET
-_MOUSE_0183	ENDP
+_MOUSE_SAVE_BG	ENDP	;MOUSE_0183
 ;----------------------------------------
 ;call graphic function 0Fh
 PUBLIC _MOUSE_01B0	;332B:01B0
 _MOUSE_01B0	PROC FAR
 	MOV	BX,_pMouse
-	CMP	[BX].tMouse.f_18,0
+	CMP	[BX].tMouse.installed,0
 	JZ	C_01DC
 	;--
-	PUSH	[BX].tMouse.f_0e
-	PUSH	WORD PTR [BX].tMouse.f_10+2
-	PUSH	WORD PTR [BX].tMouse.f_10
-	PUSH	[BX].tMouse.f_02
-	PUSH	[BX].tMouse.f_04
-	PUSH	WORD PTR [BX].tMouse.f_08+2
-	PUSH	WORD PTR [BX].tMouse.f_08
-	PUSH	[BX].tMouse.f_0c
-	MOV	WORD PTR [D_ECB8],0Fh
-	CALL	DWORD PTR [D_ECB8]
+	PUSH	[BX].tMouse.surface
+	PUSH	WORD PTR [BX].tMouse.saveBuf+2
+	PUSH	WORD PTR [BX].tMouse.saveBuf
+	PUSH	[BX].tMouse.posX
+	PUSH	[BX].tMouse.posY
+	PUSH	WORD PTR [BX].tMouse.shapes+2
+	PUSH	WORD PTR [BX].tMouse.shapes
+	PUSH	[BX].tMouse.shapeIndex
+	MOV	WORD PTR [GrDriver],0Fh
+	CALL	DWORD PTR [GrDriver]
 C_01DC:	;--
 	RET
 _MOUSE_01B0	ENDP
@@ -308,14 +308,14 @@ ProcStart	_MOUSE_IN_AREA	;332B:01F0
 	;--
 	MOV	SI,_pMouse
 	MOV	AH,0
-	MOV	AL,[SI].tMouse.f_18
+	MOV	AL,[SI].tMouse.installed
 	CMP	AX,0
 	JNZ	C_0208
 	JMP	C_0291
 C_0208:	;--
-	MOV	ES,WORD PTR [SI].tMouse.f_08+2
-	MOV	DI,WORD PTR [SI].tMouse.f_08
-	MOV	BX,[SI].tMouse.f_0c
+	MOV	ES,WORD PTR [SI].tMouse.shapes+2
+	MOV	DI,WORD PTR [SI].tMouse.shapes
+	MOV	BX,[SI].tMouse.shapeIndex
 	;-- ES:DI += offset
 	MOV	AX,ES
 	MOV	DX,0
@@ -352,22 +352,22 @@ C_0208:	;--
 	CMP	CX,0
 	JL	C_0291
 	;--
-	MOV	CX,[SI].tMouse.f_02
+	MOV	CX,[SI].tMouse.posX
 	SUB	CX,ES:[DI+02]
 	CMP	CX,[BX].tSurface.right
 	JG	C_0291
 	;--
-	MOV	CX,[SI].tMouse.f_02
+	MOV	CX,[SI].tMouse.posX
 	ADD	CX,ES:[DI]
 	CMP	CX,[BX].tSurface.left
 	JL	C_0291
 	;--
-	MOV	CX,[SI].tMouse.f_04
+	MOV	CX,[SI].tMouse.posY
 	SUB	CX,ES:[DI+04]
 	CMP	CX,[BX].tSurface.bottom
 	JG	C_0291
 	;--
-	MOV	CX,[SI].tMouse.f_04
+	MOV	CX,[SI].tMouse.posY
 	ADD	CX,ES:[DI+06]
 	CMP	CX,[BX].tSurface.top
 	JL	C_0291
@@ -384,16 +384,16 @@ ProcStart	_MOUSE_0297	;332B:0297
 	;--
 	MOV	SI,_pMouse
 	MOV	AX,0
-	CMP	BYTE PTR [SI].tMouse.f_18,0
+	CMP	BYTE PTR [SI].tMouse.installed,0
 	JZ	C_02CA
 	;--
-	MOV	DX,[SI].tMouse.f_02
+	MOV	DX,[SI].tMouse.posX
 	CMP	DX,[BX].tSurface.right
 	JG	C_02CA
 	CMP	DX,[BX].tSurface.left
 	JL	C_02CA
 	
-	MOV	DX,[SI].tMouse.f_04
+	MOV	DX,[SI].tMouse.posY
 	CMP	DX,[BX].tSurface.top
 	JL	C_02CA
 	CMP	DX,[BX].tSurface.bottom

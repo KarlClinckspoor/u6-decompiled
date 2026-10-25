@@ -5,62 +5,88 @@
  */
 /*
 	"look" "drop" "get" "move" "use" module
+
+	Implements the object-manipulation commands of the main command loop
+	(called from gameloop.c): CmdLook "look" (also searching, reading
+	books/signs, spellbook pages, clocks), CmdDrop "drop" (throwing,
+	breakable objects), CmdGet "get" (weight checks, stealing),
+	CmdMove "move" (pushing on the map, giving to party members,
+	moving into/out of containers) and CmdUse "use", which
+	dispatches on the object type to one handler per usable object
+	(doors, chests, keys, torches, potions, instruments, cannon, powder
+	kegs, drawbridge cranks, levers, vehicles, horses, balloon, crystal
+	ball, telescope, runes, vortex cube, ...).
+	Object type lists (containers ContainerTypes, breakables BreakableTypes, usables
+	UsableTypes, books BookTypes, signs SignTypes) drive the generic checks.
+	Some handlers (door/chest locking, trap, drawbridge, explosions,
+	horse mounting, "peer") are also used by the spell code (spell.c),
+	the AI and the conversation code.
 */
 #include "u6.h"
 
 #undef abs
 #include <math.h>
 
-static C_27A1_0008(int bp06) {
+/*party member object for party slot partyIdx; when the party is in a
+ vehicle the whole party is represented by Party[0] (the vehicle)*/
+/*C_27A1_0008*/static GetPartyObjOrVehicle(int partyIdx) {
 	if(IN_VEHICLE)
 		return Party[0];
 	else
-		return Party[bp06];
+		return Party[partyIdx];
 }
 
-static C_27A1_0028(int bp06) {
+/*X of objNum, or X of object 0 (the party's vehicle) when in a vehicle*/
+/*C_27A1_0028*/static GetObjXOrVehicle(int objNum) {
 	if(IN_VEHICLE)
 		return GetX(0);
 	else
-		return GetX(bp06);
+		return GetX(objNum);
 }
 
-static C_27A1_0051(int bp06) {
+/*Y of objNum, or Y of object 0 (the party's vehicle) when in a vehicle*/
+/*C_27A1_0051*/static GetObjYOrVehicle(int objNum) {
 	if(IN_VEHICLE)
 		return GetY(0);
 	else
-		return GetY(bp06);
+		return GetY(objNum);
 }
 
-int D_1C00[] = {
-	OBJ_062,OBJ_063,OBJ_039,
-	OBJ_0BA,OBJ_0BC,OBJ_0BF,
-	OBJ_0C0,OBJ_153,OBJ_03E
+/*container types*/
+/*1C00*/int ContainerTypes[] = {
+	OBJ_OPEN_CHEST,OBJ_BACKPACK,OBJ_SPELLBOOK,
+	OBJ_OPEN_BARREL,OBJ_BAG,OBJ_BASKET,
+	OBJ_OPEN_CRATE,OBJ_DEAD_BODY,OBJ_VORTEX_CUBE
 };
 
-/*IsReadyable?*/
-C_27A1_0082(int typeObject) {
-	int si;
+/*is typeObject a container (one of ContainerTypes)? returns 1/0*/
+/*C_27A1_0082*/IsContainerType(int typeObject) {
+	int i;
 
-	for(si = 0; si < 9; si ++)
-		if(D_1C00[si] == typeObject)
+	for(i = 0; i < 9; i ++)
+		if(ContainerTypes[i] == typeObject)
 			return 1;
 	return 0;
 }
 
-C_27A1_00A9(int objNum, int bp06) {
-	int si;
+/*can itemObj be put into containerObj?
+ containerObj must be a container type other than spellbook/dead body
+ (those are handled separately), itemObj must be an item (>= 0x100);
+ chests/barrels/crates must be open (frame 0) and can not themselves be
+ put into another container. returns 1/0*/
+/*C_27A1_00A9*/CanPutInContainer(int containerObj, int itemObj) {
+	int objTyp;
 
-	if(objNum != -1) {
-		si = GetType(objNum);
+	if(containerObj != -1) {
+		objTyp = GetType(containerObj);
 		if(
-			C_27A1_0082(si) &&
-			bp06 >= 0x100 &&
-			si != OBJ_039 && si != OBJ_153
+			IsContainerType(objTyp) &&
+			itemObj >= 0x100 &&
+			objTyp != OBJ_SPELLBOOK && objTyp != OBJ_DEAD_BODY
 		) {
-			if((si != OBJ_062 && si != OBJ_0BA && si != OBJ_0C0) || GetFrame(objNum) == 0) {
-				si = GetType(bp06);
-				if(si != OBJ_062 && si != OBJ_0BA && si != OBJ_0C0)
+			if((objTyp != OBJ_OPEN_CHEST && objTyp != OBJ_OPEN_BARREL && objTyp != OBJ_OPEN_CRATE) || GetFrame(containerObj) == 0) {
+				objTyp = GetType(itemObj);
+				if(objTyp != OBJ_OPEN_CHEST && objTyp != OBJ_OPEN_BARREL && objTyp != OBJ_OPEN_CRATE)
 					return 1;
 			}
 		}
@@ -68,119 +94,135 @@ C_27A1_00A9(int objNum, int bp06) {
 	return 0;
 }
 
-int D_1C12[] = {
-	OBJ_053,OBJ_05C,OBJ_09B,OBJ_07B,OBJ_073,
-	OBJ_074,OBJ_075,OBJ_076,OBJ_077,OBJ_078,
-	OBJ_0B7,OBJ_0B8,OBJ_113,OBJ_0A1,OBJ_1A1
+/*types that break when thrown*/
+/*1C12*/int BreakableTypes[] = {
+	OBJ_FLASK_OF_OIL,OBJ_SILVER_SNAKE_VENOM,OBJ_CRYSTAL_BALL,OBJ_MIRROR,OBJ_WINE,
+	OBJ_MEAD,OBJ_ALE,OBJ_WINEGLASS,OBJ_PLATE,OBJ_MUG,
+	OBJ_HONEY_JAR,OBJ_JAR_OF_HONEY,OBJ_POTION,OBJ_WATER_VASE,OBJ_DRAGON_EGG
 };
 
-/*IsBreakable?*/
-static C_27A1_012C(int typeObject) {
-	int si;
+/*does an object of type typeObject break when thrown (one of BreakableTypes)?*/
+/*C_27A1_012C*/static IsBreakableType(int typeObject) {
+	int i;
 
-	for(si = 0; si < 15; si ++) {
-		if(D_1C12[si] == typeObject)
+	for(i = 0; i < 15; i ++) {
+		if(BreakableTypes[i] == typeObject)
 			return 1;
 	}
 	return 0;
 }
 
+/*is objNum (and everything it contains) flagged OWNED, i.e. "ok to
+ take"? taking an object without the flag is stealing (see "get")*/
 static /*C_27A1_0153*/IsOkToGet(int objNum) {
-	int si;
+	int child;
 
 	if(!IsOwned(objNum))
 		return 0;
-	for(si = Link[objNum]; si >= 0 && GetCoordUse(si) != LOCXYZ && C_1184_1D2E(si, objNum); si = Link[si]) {
-		if(!IsOwned(si))
+	for(child = Link[objNum]; child >= 0 && GetCoordUse(child) != LOCXYZ && OBJ_IsInside(child, objNum); child = Link[child]) {
+		if(!IsOwned(child))
 			return 0;
 	}
 	return 1;
 }
 
+/*set the OWNED ("ok to take") flag on objNum and all its contents*/
 /*C_27A1_019E*/SetOkToGet(int objNum) {
-	int si;
+	int child;
 
 	SetOwned(objNum);
-	for(si = Link[objNum]; si >= 0 && GetCoordUse(si) != LOCXYZ && C_1184_1D2E(si, objNum); si = Link[si])
-		SetOwned(si);
+	for(child = Link[objNum]; child >= 0 && GetCoordUse(child) != LOCXYZ && OBJ_IsInside(child, objNum); child = Link[child])
+		SetOwned(child);
 }
 
-int D_1C30[] = {
-	OBJ_075,OBJ_1A7,OBJ_10E,OBJ_0BA,OBJ_0EC,OBJ_0B6,OBJ_0CE,OBJ_080,OBJ_0B4,OBJ_060,
-	OBJ_083,OBJ_0FD,OBJ_07A,OBJ_091,OBJ_0DD,OBJ_12B,OBJ_084,OBJ_062,OBJ_087,OBJ_0B5,
-	OBJ_1AC,OBJ_120,OBJ_0C0,OBJ_09B,OBJ_1A4,OBJ_0D4,OBJ_0A4,OBJ_109,OBJ_108,OBJ_0EA,
-	OBJ_061,OBJ_04D,OBJ_05F,OBJ_085,OBJ_09D,OBJ_09C,OBJ_1AE,OBJ_1AF,OBJ_0B8,OBJ_03F,
-	OBJ_131,OBJ_10C,OBJ_09E,OBJ_074,OBJ_0D1,OBJ_049,OBJ_081,OBJ_129,OBJ_057,OBJ_099,
-	OBJ_116,OBJ_118,OBJ_067,OBJ_113,OBJ_0DF,OBJ_1A3,OBJ_19F,OBJ_0D2,OBJ_082,OBJ_0A9,
-	OBJ_0F2,OBJ_0F3,OBJ_0F4,OBJ_0F5,OBJ_0F6,OBJ_0F7,OBJ_0F8,OBJ_0F9,OBJ_14E,OBJ_05D,
-	OBJ_19C,OBJ_068,OBJ_139,OBJ_19E,OBJ_04E,OBJ_12C,OBJ_0AE,OBJ_09A,OBJ_05A,OBJ_040,
-	OBJ_03E,OBJ_0E9,OBJ_12A,OBJ_073,OBJ_128
+/*usable types (roughly in alphabetical order)*/
+/*1C30*/int UsableTypes[] = {
+	OBJ_ALE,OBJ_BALLOON_INFLATED,OBJ_BALLOON_PLANS,OBJ_OPEN_BARREL,OBJ_BELL,OBJ_BEEHIVE,OBJ_BRAZIER,OBJ_LOAF_OF_BREAD,OBJ_BUCKET_OF_MILK,OBJ_BUTTER,
+	OBJ_CAKE,OBJ_CAMPFIRE,OBJ_CANDLE,OBJ_CANDELABRA,OBJ_CANNON,OBJ_CEDAR_DOOR,OBJ_CHEESE,OBJ_OPEN_CHEST,OBJ_HORSE_CHOPS,OBJ_CHURN,
+	OBJ_COW,OBJ_CRANK,OBJ_OPEN_CRATE,OBJ_CRYSTAL_BALL,OBJ_BALLOON_DEFLATED,OBJ_FAN,OBJ_FIREPLACE,OBJ_FISH,OBJ_FISHING_POLE,OBJ_FOUNTAIN,
+	OBJ_GARGISH_VOCABULARY,OBJ_GEM,OBJ_BUNCH_OF_GRAPES,OBJ_HAM,OBJ_HARP,OBJ_HARPSICHORD,OBJ_HORSE,OBJ_MOUNTED_HORSE,OBJ_JAR_OF_HONEY,OBJ_LOCKPICK,
+	OBJ_LADDER,OBJ_LEVER,OBJ_LUTE,OBJ_MEAD,OBJ_MEAT_RIB,OBJ_MOONSTONE,OBJ_PORTION_OF_MEAT,OBJ_OAKEN_DOOR,OBJ_ORB_OF_THE_MOONS,OBJ_PANPIPES,
+	OBJ_PASSTHROUGH_116,OBJ_PASSTHROUGH_118,OBJ_PICK,OBJ_POTION,OBJ_POWDER_KEG,OBJ_PULL_CHAIN,OBJ_RAFT,OBJ_RIBS,OBJ_ROLLS,OBJ_RUBBER_DUCKY,
+	OBJ_RUNE_OF_HONESTY,OBJ_RUNE_OF_COMPASSION,OBJ_RUNE_OF_VALOR,OBJ_RUNE_OF_JUSTICE,OBJ_RUNE_OF_SACRIFICE,OBJ_RUNE_OF_HONOR,OBJ_RUNE_OF_SPIRITUALITY,OBJ_RUNE_OF_HUMILITY,OBJ_SECRET_DOOR,OBJ_SEXTANT,
+	OBJ_SHIP,OBJ_SHOVEL,OBJ_SILVER_HORN,OBJ_SKIFF,OBJ_STAFF,OBJ_STEEL_DOOR,OBJ_SWITCH,OBJ_TELESCOPE,OBJ_TORCH,OBJ_KEY,
+	OBJ_VORTEX_CUBE,OBJ_WELL,OBJ_WINDOWED_DOOR,OBJ_WINE,OBJ_XYLOPHONE
 };
 
-/*usable objects?*/
-C_27A1_01DE(int typeObject) {
-	int si;
+/*can objects of type typeObject be "use"d (one of UsableTypes)?*/
+/*C_27A1_01DE*/IsUsableType(int typeObject) {
+	int i;
 
-	for(si = 0; si < 85; si ++)
-		if(D_1C30[si] == typeObject)
+	for(i = 0; i < 85; i ++)
+		if(UsableTypes[i] == typeObject)
 			return 1;
 	return 0;
 }
 
-/*string to int*/
-C_27A1_0205(unsigned char *bp08, int bp06) {
-	int si, di;
+/*parse a number typed by the player.
+ coordMode 0: plain number; returns the value, -1 for an empty line
+   accepted with <Enter>, -2 for an escaped line or a bad character.
+ coordMode 1: latitude "<deg>N|S" (S positive, N negative),
+ coordMode 2: longitude "<deg>E|W" (E positive, W negative);
+   returns 100 when the direction letter is missing/wrong.*/
+/*C_27A1_0205*/ParseNumberInput(unsigned char *str, int coordMode) {
+	int i, value;
 
-	di = 0;
-	for(si = 0; si < strlen(bp08); si ++) {
-		if(bp08[si] >= '0' && bp08[si] <= '9') {
-			di = di * 10 + (bp08[si] - '0');
+	value = 0;
+	for(i = 0; i < strlen(str); i ++) {
+		if(str[i] >= '0' && str[i] <= '9') {
+			value = value * 10 + (str[i] - '0');
 			continue;
 		}
-		if(bp06 == 1) {/*latitude*/
-			if(toupper(bp08[si]) == 'S')
-				return di;
-			else if(toupper(bp08[si]) == 'N')
-				return -di;
+		if(coordMode == 1) {/*latitude*/
+			if(toupper(str[i]) == 'S')
+				return value;
+			else if(toupper(str[i]) == 'N')
+				return -value;
 			else
 				return 100;
 		}
-		if(bp06 == 2) {/*longitude*/
-			if(toupper(bp08[si]) == 'E')
-				return di;
-			else if(toupper(bp08[si]) == 'W')
-				return -di;
+		if(coordMode == 2) {/*longitude*/
+			if(toupper(str[i]) == 'E')
+				return value;
+			else if(toupper(str[i]) == 'W')
+				return -value;
 			else
 				return 100;
 		}
 		return -2;
 	}
-	if(bp06)
+	if(coordMode)
 		return 100;
-	if(si == 0 && D_04AD == 0)
+	/*GetsAborted is set by CON_gets when the input was escaped*/
+	if(i == 0 && GetsAborted == 0)
 		return -1;
-	if(si == 0 && D_04AD)
+	if(i == 0 && GetsAborted)
 		return -2;
-	return di;
+	return value;
 }
 
-/*display character's portrait/inventory*/
-C_27A1_02D9(int objNum) {
-	int si;
-	int bp_12, bp_10, bp_0e, shrineTyp, isGeneric, bp_08, showInven, bp_04;
-	char *bp_02;
+/*display the portrait/equipment/inventory of objNum in the status
+ area (used by "look" on a person and by conversations), wait for a key
+ and restore the previous status display.
+ Party members and monsters with readied items show their equipment;
+ shrines and the 3 statues show the portrait given by their quality.*/
+/*C_27A1_02D9*/ShowPortraitAndInventory(int objNum) {
+	int slotOrType;
+	int item, i, partyIdx, shrineTyp, isGeneric, savedInvenMember, showInven, savedStatus;
+	char *nameStr;
 
 	shrineTyp = 0;
 	isGeneric = 0;
 	showInven = 0;
 	HideMouse
-	bp_04 = StatusDisplay;
-	NPC_1Hand = 0;
+	savedStatus = StatusDisplay;
+	NPC_2Handed = 0;
 	if(IsPlrControl(objNum)) {
+		/*party member: make him the displayed member (StatusMember)*/
 		ShowNPCInven = 0;
-		for(bp_10 = 0; bp_10 < 0x10; bp_10 ++) {
-			if(Party[bp_10] == objNum) {
-				D_04B3 = bp_0e = bp_10;
+		for(i = 0; i < 0x10; i ++) {
+			if(Party[i] == objNum) {
+				StatusMember = partyIdx = i;
 				break;
 			}
 		}
@@ -188,276 +230,302 @@ C_27A1_02D9(int objNum) {
 		ShowNPCInven = objNum;
 	}
 
-	for(bp_10 = 0; bp_10 < 8; bp_10 ++)
-		Equipment[bp_10] = 0;
-	for(bp_12 = FindInv(objNum); bp_12 >= 0; bp_12 = NextInv()) {
-		if(GetCoordUse(bp_12) == EQUIP && GetType(bp_12) != OBJ_151 && GetType(bp_12) != OBJ_150) {
+	/*fill Equipment[] with the readied objects (a two-handed weapon
+	takes the right hand and marks the left one with 1)*/
+	for(i = 0; i < 8; i ++)
+		Equipment[i] = 0;
+	for(item = FindInv(objNum); item >= 0; item = NextInv()) {
+		if(GetCoordUse(item) == EQUIP && GetType(item) != OBJ_EFFECT && GetType(item) != OBJ_CHARGE) {
 			showInven = 1;
-			si = STAT_GetEquipSlot(bp_12);
-			if(si == SLOT_2HND) {
-				si = SLOT_RHND;
+			slotOrType = STAT_GetEquipSlot(item);
+			if(slotOrType == SLOT_2HND) {
+				slotOrType = SLOT_RHND;
 				Equipment[SLOT_LHND] = 1;
 				if(IsPlrControl(objNum))
-					Party_1Hand[bp_0e] = 1;
+					Party_2Handed[partyIdx] = 1;
 				else
-					NPC_1Hand = 1;
-			} else if(si == SLOT_RHND && Equipment[SLOT_RHND]) {
-				si = SLOT_LHND;
-			} else if(si == SLOT_LHND && Equipment[SLOT_LHND]) {
-				si = SLOT_RHND;
-			} else if(si == SLOT_RING) {
+					NPC_2Handed = 1;
+			} else if(slotOrType == SLOT_RHND && Equipment[SLOT_RHND]) {
+				slotOrType = SLOT_LHND;
+			} else if(slotOrType == SLOT_LHND && Equipment[SLOT_LHND]) {
+				slotOrType = SLOT_RHND;
+			} else if(slotOrType == SLOT_RING) {
 				if(Equipment[SLOT_RFNG])
-					si = SLOT_LFNG;
+					slotOrType = SLOT_LFNG;
 				else
-					si = SLOT_RFNG;
+					slotOrType = SLOT_RFNG;
 			}
-			Equipment[si] = bp_12;
+			Equipment[slotOrType] = item;
 		}
 	}
 
-	bp_08 = D_04B3;
-	si = GetType(objNum);
-	if(si == OBJ_189 || si == OBJ_18D || si == OBJ_18E || si == OBJ_18F)
+	savedInvenMember = StatusMember;
+	slotOrType = GetType(objNum);
+	if(slotOrType == OBJ_SHRINE || slotOrType == OBJ_STATUE_OF_MONDAIN || slotOrType == OBJ_STATUE_OF_MINAX || slotOrType == OBJ_STATUE_OF_EXODUS)
 		shrineTyp = GetQual(objNum);
-	else if(si == OBJ_175 || si == OBJ_17E || si == OBJ_16B)
+	else if(slotOrType == OBJ_WISP || slotOrType == OBJ_GUARD || slotOrType == OBJ_GARGOYLE)
 		isGeneric = 1;
 	if(showInven || objNum < 0xe0 || shrineTyp || isGeneric) {
-		GR_06(D_2A54);
-		GR_12(168, 6, 311, 103);
-		CON_setClip(&D_B6B5[1]);
-		C_2FC1_19C5();
+		GR_SET_COLOR(ColorPaper);
+		GR_FILL_RECT(168, 6, 311, 103);
+		CON_setClip(&TextWindows[1]);
+		DrawSkyBar();
 	}
 	if(showInven && (objNum < 0xe0 || isGeneric)) {
-		C_2FC1_1C19(objNum, 248, 24);/*draw portrait*/
-		C_2FC1_1EAF(192, 40);/*draw equipment*/
-		C_155D_08F4(0, 8);/*draw inventory*/
+		DrawPortrait(objNum, 248, 24);/*draw portrait*/
+		DrawPaperDoll(192, 40);/*draw equipment*/
+		STAT_DrawEquipment(0, 8);/*draw inventory*/
 		StatusDirty ++;
 	} else if(showInven) {
-		C_2FC1_1EAF(224, 40);/*draw equipment*/
-		C_155D_08F4(32, 8);/*draw inventory*/
+		DrawPaperDoll(224, 40);/*draw equipment*/
+		STAT_DrawEquipment(32, 8);/*draw inventory*/
 		StatusDirty ++;
 	} else if(objNum < 0xe0 || isGeneric) {
-		C_2FC1_1C19(objNum, 216, 24);/*draw portrait*/
+		DrawPortrait(objNum, 216, 24);/*draw portrait*/
 		StatusDirty ++;
 	} else if(shrineTyp) {
-		C_2FC1_1C19(shrineTyp, 216, 24);/*draw portrait*/
+		DrawPortrait(shrineTyp, 216, 24);/*draw portrait*/
 		StatusDirty ++;
 	}
-	D_04B3 = bp_08;
+	StatusMember = savedInvenMember;
 	if(showInven || objNum < 0xe0 || shrineTyp || isGeneric) {
 		if(objNum == 0)
 			objNum = 0x82;/*pushme/pullyu?*/
+		/*generic name unless already met; bug: "(!TalkFlags[] & 1)" is
+		"TalkFlags[] == 0" instead of "!(TalkFlags[] & 1)" (met flag)*/
 		if(shrineTyp || (!TalkFlags[objNum] & 1)/*bug?*/)
-			bp_02 = GetObjectString(objNum);
+			nameStr = GetObjectString(objNum);
 		else
-			bp_02 = C_1703_0116(objNum);
-		CON_gotoxy((17 - strlen(bp_02)) / 2, 10);
-		CON_printf(/*1D6D*/"%s\n", bp_02);
-		StatusDisplay = CMD_9E;
+			nameStr = TALK_GetCharName(objNum);
+		CON_gotoxy((17 - strlen(nameStr)) / 2, 10);
+		CON_printf(/*1D6D*/"%s\n", nameStr);
+		StatusDisplay = CMD_STAT_TALK;
 		if(!IsInConversation)
 			CON_getch();
 	}
-	CON_setClip(&D_B6B5[3]);
+	CON_setClip(&TextWindows[3]);
 	ShowMouse
 	ShowNPCInven = 0;
-	NPC_1Hand = 0;
-	StatusDisplay = bp_04;
+	NPC_2Handed = 0;
+	StatusDisplay = savedStatus;
 }
 
-C_27A1_061E(int numTile) {
-	switch(D_B3EF[numTile] & TILE_FLAG2_C0) {
+/*print the article ("a ", "an " or "the ") of tile numTile*/
+/*C_27A1_061E*/PrintTileArticle(int numTile) {
+	switch(TileFlag2[numTile] & TILE_FLAG2_ARTICLE) {
 		case 0x40: CON_printf(/*1D71*/"a "); break;
 		case 0x80: CON_printf(/*1D74*/"an "); break;
 		case 0xc0: CON_printf(/*1D78*/"the "); break;
 	}
 }
 
-int D_1CDA[] = {
-	OBJ_097,
-	OBJ_03D,
-	OBJ_098,
-	OBJ_10E,
-	OBJ_03B
+/*1CDA*/int BookTypes[] = {
+	OBJ_BOOK,
+	OBJ_BOOK_OF_CIRCLES,
+	OBJ_NOTE,
+	OBJ_BALLOON_PLANS,
+	OBJ_CODEX
 };
 
-/*IsReadableBook?*/
-C_27A1_066D(int objNum) {
-	int si, di;
+/*is objNum a readable book (one of BookTypes)?*/
+/*C_27A1_066D*/IsBook(int objNum) {
+	int i, objTyp;
 
-	di = GetType(objNum);
-	for(si = 0; si < 5; si ++) {
-		if(D_1CDA[si] == di)
+	objTyp = GetType(objNum);
+	for(i = 0; i < 5; i ++) {
+		if(BookTypes[i] == objTyp)
 			return 1;
 	}
 	return 0;
 }
 
-int D_1CE4[] = {
-	OBJ_14C,
-	OBJ_14D,
-	OBJ_08F,
-	OBJ_0FE,
-	OBJ_0FF
+/*1CE4*/int SignTypes[] = {
+	OBJ_SIGN,
+	OBJ_GARGOYLE_SIGN,
+	OBJ_PICTURE,
+	OBJ_CROSS,
+	OBJ_TOMBSTONE
 };
 
-/*IsReadableSign?*/
-C_27A1_06A2(int objNum) {
-	int si, di;
+/*is objNum a readable sign (one of SignTypes)?*/
+/*C_27A1_06A2*/IsSign(int objNum) {
+	int i, objTyp;
 
-	di = GetType(objNum);
-	for(si = 0; si < 5; si ++) {
-		if(D_1CE4[si] == di)
+	objTyp = GetType(objNum);
+	for(i = 0; i < 5; i ++) {
+		if(SignTypes[i] == objTyp)
 			return 1;
 	}
 	return 0;
 }
 
-/*CanRead?*/
-C_27A1_06D7(int si/*bp06*/) {
+/*can objNum be read by the active character?
+ books must be carried or adjacent; signs can be read from afar*/
+/*C_27A1_06D7*/CanReadObj(int objNum/*bp06*/) {
 	int x, y;
 
 	x = GetX(Party[Active]);
 	y = GetY(Party[Active]);
-	if(C_27A1_066D(si)) {
+	if(IsBook(objNum)) {
+		/*(tests Selection.obj, which is always objNum here)*/
 		if(GetCoordUse(Selection.obj) != LOCXYZ)
 			return 1;
-		if(CLOSE_ENOUGH(1, GetX(si), GetY(si), x, y))
+		if(CLOSE_ENOUGH(1, GetX(objNum), GetY(objNum), x, y))
 			return 1;
 		else
 			return 0;
 	}
-	if(C_27A1_06A2(si))
+	if(IsSign(objNum))
 		return 1;
 	return 0;
 }
 
-/*read book or sign?*/
-C_27A1_078F(int bp06) {
-	int si, di;
-	int bp_04, bp_02;
+/*print the text of book/sign objNum: its quality is the 1-based
+ index in BOOK.DAT (a table of 16-bit offsets followed by the texts)*/
+/*C_27A1_078F*/PrintBookText(int objNum) {
+	int fd, bookNum;
+	int bookBase, textOfs;
 
-	MUS_091A(0);
-	bp_04 = 0;
-	di = GetQual(bp06);
+	MUS_PlaySong(0);
+	bookBase = 0;
+	bookNum = GetQual(objNum);
 	CON_printf(/*1D7D*/"\n\n");
-	DISK_confirm(DISK_6);
-	si = OSI_open(/*1D80*/"BOOK.DAT");
-	OSI_read(si, (long)(bp_04 + di - 1) << 1, 2, &bp_02);
-	OSI_read(si, (long)bp_02, 0x2800, TalkBuf);
-	D_04DF->_attr |= 0x10;
+	DISK_confirm(DISK_POPULACE_A);
+	fd = OSI_open(/*1D80*/"BOOK.DAT");
+	/*offset table entry, then the text itself*/
+	OSI_read(fd, (long)(bookBase + bookNum - 1) << 1, 2, &textOfs);
+	OSI_read(fd, (long)textOfs, 0x2800, TalkBuf);
+	/*text attribute 0x10 until the next prompt (EndPagingAtPrompt requests the reset)*/
+	CurClip->attrFlags |= 0x10;
 	CON_printf(TalkBuf);
-	D_049F = 1;
-	OSI_close(si);
-	MUS_09A8();
+	EndPagingAtPrompt = 1;
+	OSI_close(fd);
+	MUS_PlayAreaSong();
 }
 
-/*display object number?*/
-C_27A1_0841(int objNum) {
-	int si;
-	int bp_02;
+/*print the count (stackables, gold) or the article of objNum before
+ its name; returns the count (1 for a single object)*/
+/*C_27A1_0841*/PrintObjCountOrArticle(int objNum) {
+	int count;
+	int quanType;
 
-	bp_02 = QuanType(GetType(objNum));
-	if(bp_02 == 4) {
-		si = Amount[objNum];
-		CON_printf(/*1D89*/"%d ", si);
-	} else if(bp_02 == 2 && !IsLit(objNum)) {
-		si = GetQuan(objNum);
-		CON_printf(/*1D89*/"%d ", si);
+	/*QuanType: 4 = gold (the whole Amount is the count),
+	2 = stackable (low byte), 0 = single object*/
+	quanType = QuanType(GetType(objNum));
+	if(quanType == 4) {
+		count = Amount[objNum];
+		CON_printf(/*1D89*/"%d ", count);
+	} else if(quanType == 2 && !IsLit(objNum)) {
+		/*(a lit torch uses its quantity as burning time)*/
+		count = GetQuan(objNum);
+		CON_printf(/*1D89*/"%d ", count);
 	} else {
-		si = 1;
-		C_27A1_061E(TILE_FRAME(objNum));
+		count = 1;
+		PrintTileArticle(TILE_FRAME(objNum));
 	}
-	return si;
+	return count;
 }
 
-C_27A1_08D3(int objNum) {
-	int si, di;
+/*is objNum a closed chest/crate/barrel or a spellbook, i.e. a
+ container whose content can not be found by searching?*/
+/*C_27A1_08D3*/IsClosedContainer(int objNum) {
+	int objTyp, objFrm;
 
-	si = GetType(objNum);
-	di = GetFrame(objNum);
-	if(si == OBJ_062 || si == OBJ_0C0 || si == OBJ_0BA) {
-		if(di)
+	objTyp = GetType(objNum);
+	objFrm = GetFrame(objNum);
+	if(objTyp == OBJ_OPEN_CHEST || objTyp == OBJ_OPEN_CRATE || objTyp == OBJ_OPEN_BARREL) {
+		if(objFrm)
 			return 1;
 	}
-	if(si == OBJ_039)
+	if(objTyp == OBJ_SPELLBOOK)
 		return 1;
 	return 0;
 }
 
-C_27A1_0919(int objNum) {
-	int si;
+/*first object at objNum's location (other than objNum) whose tile is not
+ flagged "ignore", skipping NPCs; -1 if none.
+ (used to select the real object under an ignorable one)*/
+/*C_27A1_0919*/FindNonIgnoredObjAt(int objNum) {
+	int other;
 
-	for(si = FindLoc(GetX(objNum), GetY(objNum), MapZ); si >= 0; si = NextLoc()) {
-		if(si == objNum)
+	for(other = FindLoc(GetX(objNum), GetY(objNum), MapZ); other >= 0; other = NextLoc()) {
+		if(other == objNum)
 			continue;
-		if(!IsTileIg(TILE_FRAME(si))) {
-			if(si > 0xff)
+		if(!IsTileIg(TILE_FRAME(other))) {
+			if(other > 0xff)
 				break;
 		}
 	}
-	return si;
+	return other;
 }
 
-/*searching ...*/
-C_27A1_09A1(int objNum, int x, int y) {
-	int di;
-	int bp_0e, bp_0c, bp_0a, objTyp, objFrm;
-	int found, bp_02;
+/*"search" objNum at (x,y) (done after looking at something adjacent):
+ reveals a closed secret door, or empties the content of an open
+ container on the ground and lists what was found*/
+/*C_27A1_09A1*/SearchObj(int objNum, int x, int y) {
+	int item;
+	int actor, actorX, actorY, objTyp, objFrm;
+	int found, nextItem;
 
 	found = 0;
-	bp_0e = Party[Active];
-	bp_0c = GetX(bp_0e);
-	bp_0a = GetY(bp_0e);
+	actor = Party[Active];
+	actorX = GetX(actor);
+	actorY = GetY(actor);
 	objTyp = GetType(objNum);
 	objFrm = GetFrame(objNum);
-	if(!CLOSE_ENOUGH(1, x, y, bp_0c, bp_0a))
+	if(!CLOSE_ENOUGH(1, x, y, actorX, actorY))
 		return;
 	if(objNum < 0x100)
 		return;
 	if(IsTerrainDamage(TILE_FRAME(objNum)))
 		return;
-	if(objTyp == OBJ_039)
+	if(objTyp == OBJ_SPELLBOOK)
 		return;
 	CON_printf(/*1D8D*/"\nSearching here, you find ");
-	if(objTyp == OBJ_14E) {
+	if(objTyp == OBJ_SECRET_DOOR) {
+		/*frame bit 0 set = discovered/open*/
 		if(!(objFrm & 1)) {
 			CON_printf(/*1DA8*/"a secret door");
 			SetFrame(objNum, objFrm ^ 1);
-			C_1100_0306();
-			OtherAnimations();
+			VIS_UpdateView();
+			DisplayTick();
 			found = 1;
 		}
 	} else {
 		if(IsTileIg(TILE_FRAME(objNum))) {
-			objNum = C_27A1_0919(objNum);
+			objNum = FindNonIgnoredObjAt(objNum);
 			objTyp = GetType(objNum);
 			objFrm = GetFrame(objNum);
 		}
-		if(!C_27A1_08D3(objNum)) {
-			di = FindInv(objNum);
-			while(di >= 0) {
-				objTyp = GetType(di);
-				if(objTyp != OBJ_150 && objTyp != OBJ_151) {
-					MoveObj(di, GetX(objNum), GetY(objNum), MapZ);
-					MoveObj(bp_0e, bp_0c, bp_0a, MapZ);
-					C_1100_0306();
-					OtherAnimations();
+		if(!IsClosedContainer(objNum)) {
+			/*drop every visible content object (not charges/effects)
+			on the container's tile*/
+			item = FindInv(objNum);
+			while(item >= 0) {
+				objTyp = GetType(item);
+				if(objTyp != OBJ_CHARGE && objTyp != OBJ_EFFECT) {
+					MoveObj(item, GetX(objNum), GetY(objNum), MapZ);
+					MoveObj(actor, actorX, actorY, MapZ);
+					VIS_UpdateView();
+					DisplayTick();
+					/*the list changed: restart from the first remaining
+					visible content to know whether this is the last one*/
 					for(
-						bp_02 = FindInv(objNum);
-						bp_02 >= 0 && (GetType(bp_02) == OBJ_150 || GetType(bp_02) == OBJ_151);
-						bp_02 = NextInv()
+						nextItem = FindInv(objNum);
+						nextItem >= 0 && (GetType(nextItem) == OBJ_CHARGE || GetType(nextItem) == OBJ_EFFECT);
+						nextItem = NextInv()
 					);
-					if(found && bp_02 >= 0)
+					if(found && nextItem >= 0)
 						CON_printf(/*1DB6*/", ");
-					else if(found && bp_02 == -1)
+					else if(found && nextItem == -1)
 						CON_printf(/*1DB9*/" and ");
-					C_27A1_0841(di);
-					CON_printf((char *)GetObjectString(di));
+					PrintObjCountOrArticle(item);
+					CON_printf((char *)GetObjectString(item));
 					found = 1;
-					di = bp_02;
+					item = nextItem;
 					continue;
 				}
-				di = NextInv();
+				item = NextInv();
 			}
 		}
 	}
@@ -468,37 +536,42 @@ C_27A1_09A1(int objNum, int x, int y) {
 	CON_printf(/*1DC6*/".\n");
 }
 
-/*"look"*/
-C_27A1_0C67() {
+/*"look" command: describe the selected object/tile (name, weight,
+ damage/armor points), read books and signs, show spellbook pages
+ and clocks/sundials, then search the place if adjacent*/
+/*C_27A1_0C67*/CmdLook() {
 	int objTyp, weight;
 	unsigned char numTile, ch;
-	int x, y, i, bp_16;
-	int bp_14, bp_12, bp_10, spellNum, bp_0c;
-	int bp_0a;
-	unsigned char bp_07;
-	int bp_06, bp_04, bp_02;
+	int x, y, i, dir;
+	int numOrDamage, armor, savedStatus, spellNum, savedActive;
+	int owner;
+	unsigned char reagents;
+	int other, readSomething, tileNum;
 
-	bp_04 = 0;
-	D_04DF->_attr |= 0x10;
+	readSomething = 0;
+	CurClip->attrFlags |= 0x10;
 	CON_printf(/*1DC9*/"Thou dost see ");
-	bp_16 = MkDirection(PointerX, PointerY);
-	if(bp_16 != -1) {
-		C_1E0F_0664(Party[Active], bp_16);
-		C_1100_0306();
+	dir = MkDirection(PointerX, PointerY);
+	if(dir != -1) {
+		UpdateMoveFrame(Party[Active], dir);
+		VIS_UpdateView();
 	}
-	if(D_B6DF) {
+	/*SelectionIsDark: the pointed tile is hidden/dark*/
+	if(SelectionIsDark) {
 		CON_printf(/*1DD8*/"darkness.\n");
-		D_049F = 1;
+		EndPagingAtPrompt = 1;
 		return;
 	}
 	x = GetX(Party[Active]);
 	y = GetY(Party[Active]);
 	if(Selection.obj == -1 || IsInvisible(Selection.obj)) {
+		/*no object: describe the map tile under the pointer
+		(inside the 11x11 map window)*/
 		if(PointerX < 168 && PointerY < 168) {
 			Selection.x = MapX - 5 + SCR2TIL(PointerX);
 			Selection.y = MapY - 5 + SCR2TIL(PointerY);
 			numTile = GetTileAtXYZ(Selection.x, Selection.y, MapZ);
-			C_27A1_061E(numTile);
+			PrintTileArticle(numTile);
 			CON_printf((char *)GetTileString(numTile));
 		} else {
 			CON_printf(/*1DE3*/"nothing");
@@ -506,80 +579,86 @@ C_27A1_0C67() {
 		CON_printf(/*1DC6*/".\n");
 		if(CLOSE_ENOUGH(1, Selection.x, Selection.y, x, y))
 			CON_printf(/*1DEB*/"\nSearching here, you find nothing.\n");
-		D_049F = 1;
+		EndPagingAtPrompt = 1;
 		return;
 	}
 	objTyp = GetType(Selection.obj);
-	if(Selection.obj < 0x100 || objTyp == OBJ_1AE)
+	if(Selection.obj < 0x100 || objTyp == OBJ_HORSE)
 		Selection.obj = COMBAT_getHead(Selection.obj);
-	if(objTyp == OBJ_18D || objTyp == OBJ_18E || objTyp == OBJ_18F || Selection.obj < 0x100) {
+	if(objTyp == OBJ_STATUE_OF_MONDAIN || objTyp == OBJ_STATUE_OF_MINAX || objTyp == OBJ_STATUE_OF_EXODUS || Selection.obj < 0x100) {
+		/*a person/creature (or statue): name and portrait*/
 		if(!IsPlrControl(Selection.obj) || IN_VEHICLE)
-			C_27A1_0841(Selection.obj);
+			PrintObjCountOrArticle(Selection.obj);
 		CON_printf((char *)GetObjectString(Selection.obj));
 		CON_putch('\n');
 		if(!IN_VEHICLE)
-			C_27A1_02D9(Selection.obj);
+			ShowPortraitAndInventory(Selection.obj);
 	} else {
-		bp_02 = TILE_FRAME(Selection.obj);
-		bp_14 = C_27A1_0841(Selection.obj);
-		if(bp_02 == TIL_4DC)
+		tileNum = TILE_FRAME(Selection.obj);
+		numOrDamage = PrintObjCountOrArticle(Selection.obj);
+		/*right/bottom half of a 2-tile sign: use the main part*/
+		if(tileNum == TIL_SIGN_4)
 			Selection.obj = FindLoc(Selection.x, Selection.y - 1, MapZ);
-		else if(bp_02 == TIL_4DD)
+		else if(tileNum == TIL_SIGN_5)
 			Selection.obj = FindLoc(Selection.x - 1, Selection.y, MapZ);
 		CON_printf((char *)GetObjectString(Selection.obj));
+		/*weights are in tenths of stones*/
 		weight = GetWeight(Selection.obj) + Encumbrance(Selection.obj);
 		if(weight != 0 && weight < 255) {
-			if(bp_14 == 1)
+			if(numOrDamage == 1)
 				CON_printf(/*1E0F*/". It weighs");
 			else
 				CON_printf(/*1E1B*/". They weigh");
 			CON_printf(/*1E28*/" %d.%d stones", weight / 10, weight % 10);
 		}
-		bp_14 = GetDamagePoints(Selection.obj);
-		bp_12 = GetArmorPoints(Selection.obj);
-		if(bp_14 > 0) {
+		numOrDamage = GetDamagePoints(Selection.obj);
+		armor = GetArmorPoints(Selection.obj);
+		if(numOrDamage > 0) {
 			if(!(weight != 0 && weight < 255))
 				CON_printf(/*1E36*/". It");
-			else if(bp_12)
+			else if(armor)
 				CON_printf(/*1E3B*/",");
 			else
 				CON_printf(/*1E3D*/" and");
-			CON_printf(/*1E42*/" can do %d point\\s of damage", bp_14);
+			CON_printf(/*1E42*/" can do %d point\\s of damage", numOrDamage);
 		}
-		if(bp_12 > 0)
-			CON_printf(/*1E5F*/" and can absorb %d point\\s of damage", bp_12);
-		if(C_27A1_06D7(Selection.obj)) {
+		if(armor > 0)
+			CON_printf(/*1E5F*/" and can absorb %d point\\s of damage", armor);
+		if(CanReadObj(Selection.obj)) {
 			if(GetCoordUse(Selection.obj) != LOCXYZ) {
 				if(GetQual(Selection.obj)) {
-					if(!bp_04)
+					if(!readSomething)
 						CON_printf(/*1E84*/":");
-					C_27A1_078F(Selection.obj);
-					bp_04 = 1;
+					PrintBookText(Selection.obj);
+					readSomething = 1;
 				}
 			} else {
-				for(bp_06 = FindLoc(Selection.x, Selection.y, MapZ); bp_06 >= 0; bp_06 = NextLoc()) {
-					if(GetQual(bp_06) == 0)
+				/*on the map: read every text object on that tile*/
+				for(other = FindLoc(Selection.x, Selection.y, MapZ); other >= 0; other = NextLoc()) {
+					if(GetQual(other) == 0)
 						continue;
-					if(!bp_04)
+					if(!readSomething)
 						CON_printf(/*1E84*/":");
-					C_27A1_078F(bp_06);
-					bp_04 = 1;
+					PrintBookText(other);
+					readSomething = 1;
 				}
 			}
 			CON_putch('\n');
 		} else if(
-			objTyp == OBJ_039 && FindInv(Selection.obj) >= 0 &&
+			objTyp == OBJ_SPELLBOOK && FindInv(Selection.obj) >= 0 &&
 			(
 				CLOSE_ENOUGH(1, Selection.x, Selection.y, x, y) ||
 				GetCoordUse(Selection.obj) != LOCXYZ
 			)
 		) {
+			/*browse the spellbook (as its owner); selecting a spell
+			shows its words of power and reagents*/
 			Spellbook[0] = Selection.obj;
 			Spellbook[1] = 0;
-			bp_0c = Active;
-			bp_0a = GetAssoc(Selection.obj);
+			savedActive = Active;
+			owner = GetAssoc(Selection.obj);
 			for(i = 0; i < 8; i ++) {
-				if(Party[i] == bp_0a) {
+				if(Party[i] == owner) {
 					Active = i;
 					break;
 				}
@@ -587,36 +666,38 @@ C_27A1_0C67() {
 			SPELL_RefreshList();
 			SPELL_DrawBG();
 			SPELL_RefreshPage();
-			bp_10 = StatusDisplay;
-			StatusDisplay = CMD_A1;
+			savedStatus = StatusDisplay;
+			StatusDisplay = CMD_STAT_SPELLBOOK;
 			ch = CON_getch();
-			if(ch == CMD_8E && Selection.obj != -1) {
-				spellNum = D_EBB6[Selection.obj];
+			if(ch == CMD_TARGET && Selection.obj != -1) {
+				/*here Selection.obj is the index in the page's spell list*/
+				spellNum = SpellbookPage[Selection.obj];
 				CON_printf(/*1D7D*/"\n\n");
 				CON_printf(/*1E86*/"%s-", SpellName[spellNum]);
 				i = 0;
 				ch = SpellCode[spellNum][i++];
-				CON_printf(/*1E8A*/"%s", D_0BF0[ch - 'A']);
+				CON_printf(/*1E8A*/"%s", MagicWords[ch - 'A']);
 				while(ch = SpellCode[spellNum][i++])
-					CON_printf(/*1E8D*/" %s", D_0BF0[ch - 'A']);
+					CON_printf(/*1E8D*/" %s", MagicWords[ch - 'A']);
 				CON_printf(/*1E91*/"\nIngredients: \n");
-				bp_07 = Reagents_needed[spellNum];
-				if(bp_07 == 0)
+				/*one bit per reagent*/
+				reagents = Reagents_needed[spellNum];
+				if(reagents == 0)
 					CON_printf(/*1EA1*/"None\n");
 				for(i = 0; i < 8; i ++) {
-					if((bp_07 >> i) & 1)
+					if((reagents >> i) & 1)
 						CON_printf(/*1EA7*/" %s\n", Reagents_name[i]);
 				}
 			} else {
 				CON_printf(/*1DC6*/".\n");
 			}
-			Active = bp_0c;
-			StatusDisplay = bp_10;
-			D_04B3 = 0;
+			Active = savedActive;
+			StatusDisplay = savedStatus;
+			StatusMember = 0;
 			StatusDirty = 1;
 		} else if(
-			objTyp == OBJ_09F ||
-			(objTyp == OBJ_0EB && Time_H >= 5 && Time_H < 20)
+			objTyp == OBJ_CLOCK ||
+			(objTyp == OBJ_SUNDIAL && Time_H >= 5 && Time_H < 20)/*sundial: daytime only*/
 		) {
 			CON_printf(/*1EAC*/"\n\nThe time is ");
 			if(Time_H == 0)
@@ -631,12 +712,14 @@ C_27A1_0C67() {
 			CON_printf(/*1DC6*/".\n");
 		}
 	}
-	if(!bp_04)
-		C_27A1_09A1(Selection.obj, Selection.x, Selection.y);
-	D_049F = 1;
+	if(!readSomething)
+		SearchObj(Selection.obj, Selection.x, Selection.y);
+	EndPagingAtPrompt = 1;
 }
 
-static C_27A1_1330(int x, int y) {
+/*is there an object at (x,y) with a "supporting" tile (e.g. a table)
+ on which things can be placed? (stops at an impassable object)*/
+/*C_27A1_1330*/static HasSupportAt(int x, int y) {
 	int objNum;
 
 	for(objNum = FindLoc(x, y, MapZ); objNum >= 0; objNum = NextLoc()) {
@@ -648,226 +731,245 @@ static C_27A1_1330(int x, int y) {
 	return 0;
 }
 
-C_27A1_13BE(int objNum) {
-	int si, di;
-	char bp_0e[5];
-	int bp_08, bp_06, bp_04, bp_02;
+/*ask "How many?" for a stack of objNum (not when readied);
+ returns the quantity chosen (all on empty input, 0 if invalid),
+ 1 for a single object*/
+/*C_27A1_13BE*/AskHowMany(int objNum) {
+	int answer, available;
+	char buf[5];
+	int quanType, cursorY, savedSel, savedSelMode;
 
-	bp_08 = QuanType(GetType(objNum));
-	if(bp_08 && GetCoordUse(objNum) != EQUIP) {
-		if(bp_08 == 2)
-			di = GetQuan(objNum);
+	quanType = QuanType(GetType(objNum));
+	if(quanType && GetCoordUse(objNum) != EQUIP) {
+		if(quanType == 2)
+			available = GetQuan(objNum);
 		else
-			di = Amount[objNum];
-		if(di != 1) {
-			bp_04 = Selection.obj;
-			bp_06 = D_04DF->_cury;
+			available = Amount[objNum];
+		if(available != 1) {
+			savedSel = Selection.obj;
+			cursorY = CurClip->curY;
 			CON_printf(/*1EF3*/"How many? ");
-			bp_02 = (char)SelectMode;
-			C_0C9C_1AE5(0);
+			savedSelMode = (char)SelectMode;
+			DrawSlotCursor(0);
 			SelectMode = 0;
-			CON_gets(bp_0e, 4);
-			SelectMode = bp_02;
-			Selection.obj = bp_04;
-			si = C_27A1_0205(&bp_0e, 0);
-			if(si == -1) {
-				CON_gotoxy(10, bp_06);
-				CON_printf(/*1EFE*/"%d\n", di);
-				return di;
+			CON_gets(buf, 4);
+			SelectMode = savedSelMode;
+			Selection.obj = savedSel;
+			answer = ParseNumberInput(&buf, 0);
+			if(answer == -1) {
+				CON_gotoxy(10, cursorY);
+				CON_printf(/*1EFE*/"%d\n", available);
+				return available;
 			}
-			if(si > di || si == 0 || si == -2) {
-				CON_gotoxy(10, bp_06);
+			if(answer > available || answer == 0 || answer == -2) {
+				CON_gotoxy(10, cursorY);
 				CON_printf(/*1F02*/"0   \n");
 				return 0;
 			}
 			CON_putch('\n');
-			return si;
+			return answer;
 		}
 	}
-	si = 1;
-	return si;
+	answer = 1;
+	return answer;
 }
 
-/*"drop"*/
-C_27A1_14DA() {
-	int si, di;
-	int bp_16, bp_14, bp_12, bp_10, bp_0e;
+/*"drop" command: drop/throw the selected inventory object of the
+ displayed party member to a location within 8 tiles; fragile objects
+ break when thrown farther than an adjacent tile*/
+/*C_27A1_14DA*/CmdDrop() {
+	int obj, actor;
+	int objTyp, destX, destY, newObj, target;
 	struct coord xyz;
-	int bp_08, bp_06, bp_04, bp_02;
+	int qtyCode, count, quanType, cantDrop;
 
-	if(Selection.obj == -1 || GetCoordUse(Selection.obj) == LOCXYZ || Selection.obj == D_E709) {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[5]);
+	if(Selection.obj == -1 || GetCoordUse(Selection.obj) == LOCXYZ || Selection.obj == InvenOwner) {
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[5]);
 		return;
 	}
 	CON_printf((char *)GetObjectString(Selection.obj));
 	CON_putch('\n');
-	bp_16 = GetType(Selection.obj);
-	bp_04 = QuanType(bp_16);
-	di = Party[D_04B3];
-	si = Selection.obj;
-	bp_02 = C_155D_1666(si, di);
-	if(bp_02 == 0) {
-		bp_06 = C_27A1_13BE(Selection.obj);
-		if(bp_06 == 0)
+	objTyp = GetType(Selection.obj);
+	quanType = QuanType(objTyp);
+	actor = Party[StatusMember];
+	obj = Selection.obj;
+	cantDrop = STAT_CheckUnready(obj, actor);
+	if(cantDrop == 0) {
+		count = AskHowMany(Selection.obj);
+		if(count == 0)
 			return;
 		CON_printf(/*1F08*/"Location: ");
 		MouseMode = 1;
 		if(SelectMode != 0) {
-			C_0C9C_1AE5(0);
+			DrawSlotCursor(0);
 			SelectMode = 1;
 		}
 		CON_getch();
 		CON_putch('\n');
-		bp_0e = FindLoc(Selection.x, Selection.y, MapZ);
+		/*target: top object at the destination (maybe a container)*/
+		target = FindLoc(Selection.x, Selection.y, MapZ);
 		if(Selection.x == -1 || Selection.y == -1) {
-			CON_printf(/*1F13*/"\n%s\n", D_0DDC[6]);
+			CON_printf(/*1F13*/"\n%s\n", SpellMessages[6]);
 			return;
 		}
-		if(!C_1E0F_000F(si, Selection.x, Selection.y) && !C_27A1_1330(Selection.x, Selection.y)) {
+		if(!CanMoveTo(obj, Selection.x, Selection.y) && !HasSupportAt(Selection.x, Selection.y)) {
 			if(
-				bp_0e == -1 ||
-				(bp_0e != -1 && !C_27A1_00A9(bp_0e, si))
+				target == -1 ||
+				(target != -1 && !CanPutInContainer(target, obj))
 			) {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[6]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[6]);
 				return;
 			}
 		}
-		if(!COMBAT_Missile(di, &Selection.x, &Selection.y, 8, 0)) {
-			CON_printf(/*1F13*/"\n%s\n", D_0DDC[6]);
+		/*is there a clear line of throw (no animation)?*/
+		if(!COMBAT_Missile(actor, &Selection.x, &Selection.y, 8, 0)) {
+			CON_printf(/*1F13*/"\n%s\n", SpellMessages[6]);
 			return;
 		}
-		C_155D_16E7(si, di);
-		if(GetCoordUse(si) == EQUIP) {
-			Equipment[C_155D_13F4(si)] = 0;
-			if(STAT_GetEquipSlot(si) == SLOT_2HND) {
-				Party_1Hand[D_04B3] = 0;
+		/*unready it*/
+		STAT_StopEquipEffect(obj, actor);
+		if(GetCoordUse(obj) == EQUIP) {
+			Equipment[STAT_FindEquipSlot(obj)] = 0;
+			if(STAT_GetEquipSlot(obj) == SLOT_2HND) {
+				Party_2Handed[StatusMember] = 0;
 				Equipment[SLOT_LHND] = 0;
 			}
 		}
-		C_155D_0748(di);
-		SubMov(di, 3);
-		bp_14 = Selection.x;
-		bp_12 = Selection.y;
-		COMBAT_Missile(di, &bp_14, &bp_12, 8, TILE_FRAME(si));
+		STAT_ComputeWeights(actor);
+		SubMov(actor, 3);
+		/*animate the throw; destX/destY = where it lands*/
+		destX = Selection.x;
+		destY = Selection.y;
+		COMBAT_Missile(actor, &destX, &destY, 8, TILE_FRAME(obj));
 		if(
-			!CLOSE_ENOUGH(1, Selection.x, Selection.y, GetX(di), GetY(di)) &&
-			C_27A1_012C(bp_16)
+			!CLOSE_ENOUGH(1, Selection.x, Selection.y, GetX(actor), GetY(actor)) &&
+			IsBreakableType(objTyp)
 		) {
-			if(bp_04 != 0) {
-				if(bp_04 == 2)
-					bp_08 = QualQuan(GetQual(si), bp_06);
+			if(quanType != 0) {
+				if(quanType == 2)
+					qtyCode = QualQuan(GetQual(obj), count);
 				else
-					bp_08 = bp_06;
-				TakeObj(di, bp_16, bp_08);
+					qtyCode = count;
+				TakeObj(actor, objTyp, qtyCode);
 			} else {
-				if(bp_16 == OBJ_1A1) {
-					SetFrame(si, 1);
-					MoveObj(si, bp_14, bp_12, MapZ);
-					SetOkToGet(si);
-				} else if(bp_16 == OBJ_07B) {
-					SetFrame(si, 2);
-					MoveObj(si, bp_14, bp_12, MapZ);
-					SetOkToGet(si);
+				/*broken dragon egg / broken mirror remain on the ground*/
+				if(objTyp == OBJ_DRAGON_EGG) {
+					SetFrame(obj, 1);
+					MoveObj(obj, destX, destY, MapZ);
+					SetOkToGet(obj);
+				} else if(objTyp == OBJ_MIRROR) {
+					SetFrame(obj, 2);
+					MoveObj(obj, destX, destY, MapZ);
+					SetOkToGet(obj);
 				} else {
-					DeleteObj(si);
+					DeleteObj(obj);
 				}
 			}
-			MUS_0065(15, 0);
+			MUS_PlaySfx(15, 0);
 			CON_printf(/*1F18*/"\nIt broke!\n");
 		} else {
-			if(C_27A1_00A9(bp_0e, si) && !C_27A1_1330(Selection.x, Selection.y)) {
-				if(bp_04) {
-					if(bp_04 == 2)
-						bp_08 = QualQuan(GetQual(si), bp_06);
+			if(CanPutInContainer(target, obj) && !HasSupportAt(Selection.x, Selection.y)) {
+				/*into the container at the destination*/
+				if(quanType) {
+					if(quanType == 2)
+						qtyCode = QualQuan(GetQual(obj), count);
 					else
-						bp_08 = bp_06;
-					bp_10 = GiveObj(bp_0e, bp_16, bp_08);
-					if(bp_10 != -1)
-						SetOkToGet(bp_10);
-					TakeObj(di, bp_16, bp_08);
+						qtyCode = count;
+					newObj = GiveObj(target, objTyp, qtyCode);
+					if(newObj != -1)
+						SetOkToGet(newObj);
+					TakeObj(actor, objTyp, qtyCode);
 				} else {
-					InsertObj(si, bp_0e, CONTAINED);
-					SetOkToGet(si);
+					InsertObj(obj, target, CONTAINED);
+					SetOkToGet(obj);
 				}
 			} else {
-				if(bp_04) {
-					if(bp_04 == 2)
-						bp_08 = QualQuan(GetQual(si), bp_06);
+				/*on the ground (a new stack for a partial quantity)*/
+				if(quanType) {
+					if(quanType == 2)
+						qtyCode = QualQuan(GetQual(obj), count);
 					else
-						bp_08 = bp_06;
-					SetCoordXYZ(xyz, bp_14, bp_12, MapZ);
-					bp_10 = AddObj(0, xyz, bp_16, 0, bp_08);
-					SetOkToGet(bp_10);
-					TakeObj(di, bp_16, bp_08);
+						qtyCode = count;
+					SetCoordXYZ(xyz, destX, destY, MapZ);
+					newObj = AddObj(0, xyz, objTyp, 0, qtyCode);
+					SetOkToGet(newObj);
+					TakeObj(actor, objTyp, qtyCode);
 				} else {
-					MoveObj(si, bp_14, bp_12, MapZ);
-					SetOkToGet(si);
+					MoveObj(obj, destX, destY, MapZ);
+					SetOkToGet(obj);
 				}
 			}
 		}
-		C_1100_0306();
+		VIS_UpdateView();
 		StatusDirty = 0;
 	}
-	C_155D_1022(D_E709);
+	STAT_RefreshInventory(InvenOwner);
 }
 
-/*"get"*/
-C_27A1_18F5() {
-	int si, di;
-	int weight, bp_0e, bp_0c, bp_0a, bp_08;
-	int bp_06, tileNum, bp_02;
+/*"get" command: pick up the selected adjacent object; taking an object
+ not flagged OWNED ("ok to take") on the surface is stealing*/
+/*C_27A1_18F5*/CmdGet() {
+	int objTyp, actor;
+	int weight, strength, actorX, actorY, dir;
+	int idx, tileNum, caught;
 
-	bp_02 = 0;
-	di = Party[Active];
+	caught = 0;
+	actor = Party[Active];
+	/*pointing at an NPC or an "ignore" tile: take what is under it*/
 	if(
 		(Selection.obj <= 0xff && Selection.x != -1) ||
 		(IsTileIg(TILE_FRAME(Selection.obj)))
-	) Selection.obj = C_27A1_0919(Selection.obj);
+	) Selection.obj = FindNonIgnoredObjAt(Selection.obj);
 	if(Selection.obj == -1 || GetCoordUse(Selection.obj) != LOCXYZ) {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[5]);
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[5]);
 		return;
 	}
-	bp_08 = MkDirection(PointerX, PointerY);
-	if(bp_08 != -1) {
-		C_1E0F_0664(di, bp_08);
-		C_1100_0306();
+	dir = MkDirection(PointerX, PointerY);
+	if(dir != -1) {
+		UpdateMoveFrame(actor, dir);
+		VIS_UpdateView();
 	}
-	C_27A1_0841(Selection.obj);
+	PrintObjCountOrArticle(Selection.obj);
 	CON_printf((char *)GetObjectString(Selection.obj));
 	CON_putch('\n');
-	bp_0c = GetX(di);
-	bp_0a = GetY(di);
-	if(!CLOSE_ENOUGH(1, Selection.x, Selection.y, bp_0c, bp_0a)) {
-		CON_printf(/*1F24*/"\n%s!\n", D_0DDC[3]);
+	actorX = GetX(actor);
+	actorY = GetY(actor);
+	if(!CLOSE_ENOUGH(1, Selection.x, Selection.y, actorX, actorY)) {
+		CON_printf(/*1F24*/"\n%s!\n", SpellMessages[3]);
 		return;
 	}
 	tileNum = TILE_FRAME(Selection.obj);
 	if(IsTerrainDamage(tileNum)) {
-		CON_printf(/*1F2A*/"\n%s", D_0DDC[6]);
-		TerrainDamage(di, tileNum);
+		CON_printf(/*1F2A*/"\n%s", SpellMessages[6]);
+		TerrainDamage(actor, tileNum);
 		CON_putch('\n');
-		COMBAT_displaySeverity(di);
+		COMBAT_displaySeverity(actor);
 		return;
 	}
 	weight = GetWeight(Selection.obj) + Encumbrance(Selection.obj);
-	bp_0e = STREN[Party[Active]];
-	if(Active != D_04B3 || StatusDisplay != CMD_92)
-		C_155D_0748(Party[Active]);
-	si = GetType(Selection.obj);
+	strength = STREN[Party[Active]];
+	if(Active != StatusMember || StatusDisplay != CMD_STAT_EQUIP)
+		STAT_ComputeWeights(Party[Active]);
+	objTyp = GetType(Selection.obj);
+	/*weight 0 (except light reagents/gold) or 10000 (255 in the table)
+	means "can not be taken"; a character carries 2 x STR stones
+	(weights are in tenths of stones)*/
 	if(
-		(weight == 0 && !C_155D_063A(si)) ||
-		weight >= 10000 || Selection.obj < 0x100 || si == OBJ_19B
+		(weight == 0 && !IsWeightPer10Type(objTyp)) ||
+		weight >= 10000 || Selection.obj < 0x100 || objTyp == OBJ_DRAGON
 	) {
-		CON_printf(/*1F13*/"\n%s\n", D_0DDC[6]);
-	} else if(bp_0e * 20 < weight + WeightInven + WeightEquip) {
+		CON_printf(/*1F13*/"\n%s\n", SpellMessages[6]);
+	} else if(strength * 20 < weight + WeightInven + WeightEquip) {
 		CON_printf(/*1F2E*/"\nThe total is too heavy.\n");
 	} else {
-		SubMov(di, 3);
-		if(QuanType(si) && (si != OBJ_05A || GetFrame(Selection.obj) == 0)) {
-			if(GiveObj(di, si, Amount[Selection.obj]) >= 0)
+		SubMov(actor, 3);
+		if(QuanType(objTyp) && (objTyp != OBJ_TORCH || GetFrame(Selection.obj) == 0)) {
+			/*stackable: merge into the inventory*/
+			if(GiveObj(actor, objTyp, Amount[Selection.obj]) >= 0)
 				DeleteObj(Selection.obj);
-		} else if(si == OBJ_05A && GetFrame(Selection.obj) == 1) {
-			if(Active == D_04B3) {
+		} else if(objTyp == OBJ_TORCH && GetFrame(Selection.obj) == 1) {
+			/*a lit torch goes directly into a free hand*/
+			if(Active == StatusMember) {
 				if(Equipment[SLOT_RHND] == 0) {
 					Equipment[SLOT_RHND] = Selection.obj;
 				} else if(Equipment[SLOT_LHND] == 0) {
@@ -877,211 +979,231 @@ C_27A1_18F5() {
 					return;
 				}
 			}
-			InsertObj(Selection.obj, di, EQUIP);
+			InsertObj(Selection.obj, actor, EQUIP);
 		} else {
-			InsertObj(Selection.obj, di, INVEN);
-			if(si == OBJ_07A || si == OBJ_091) {
-				SetFrame(Selection.obj, 0);
-			} else if(si == OBJ_062 && GetFrame(Selection.obj) == 0) {
-				SetFrame(Selection.obj, 1);
-			} else if(si == OBJ_049) {
-				bp_06 = GetFrame(Selection.obj);
-				D_2C74[bp_06][0] = 0;
-				D_2C74[bp_06][1] = 0;
-				D_2C74[bp_06][2] = 0;
-			} else if(si == OBJ_1A7) {
-				SetType(Selection.obj, OBJ_1A4);
+			InsertObj(Selection.obj, actor, INVEN);
+			if(objTyp == OBJ_CANDLE || objTyp == OBJ_CANDELABRA) {
+				SetFrame(Selection.obj, 0);/*doused*/
+			} else if(objTyp == OBJ_OPEN_CHEST && GetFrame(Selection.obj) == 0) {
+				SetFrame(Selection.obj, 1);/*closed*/
+			} else if(objTyp == OBJ_MOONSTONE) {
+				/*no longer buried: forget its moongate position*/
+				idx = GetFrame(Selection.obj);
+				MoonstonePos[idx][0] = 0;
+				MoonstonePos[idx][1] = 0;
+				MoonstonePos[idx][2] = 0;
+			} else if(objTyp == OBJ_BALLOON_INFLATED) {
+				SetType(Selection.obj, OBJ_BALLOON_DEFLATED);
 			}
 		}
-		if(Active == D_04B3 && StatusDisplay == CMD_92)
-			C_155D_1022(Party[D_04B3]);
+		if(Active == StatusMember && StatusDisplay == CMD_STAT_EQUIP)
+			STAT_RefreshInventory(Party[StatusMember]);
 		if(!IsOkToGet(Selection.obj) && MapZ == 0) {
+			/*stealing: lose karma; any awake neutral NPC on screen
+			calls the guards*/
 			SetOkToGet(Selection.obj);
 			SubKarma(1);
-			MUS_0065(13, 0);
-			for(bp_06 = 1; bp_06 < 0xe0; bp_06 ++) {
+			MUS_PlaySfx(13, 0);
+			for(idx = 1; idx < 0xe0; idx ++) {
 				if(
-					GetAlignment(bp_06) == NEUTRAL &&
-					C_1703_0153(bp_06) &&
-					!IsAsleep(bp_06)
+					GetAlignment(idx) == NEUTRAL &&
+					IsNpcOnScreen(idx) &&
+					!IsAsleep(idx)
 				) {
 					CON_printf(/*1F56*/"\n\"Stop Thief!!!\"\n");
-					C_2337_1B0E();
-					bp_02 = 1;
+					COMBAT_RaiseAlarm();
+					caught = 1;
 					break;
 				}
 			}
-			if(!bp_02)
+			if(!caught)
 				CON_printf(/*1F68*/"\nStealing!!!\n");
 		}
-		C_1100_0306();
+		VIS_UpdateView();
 	}
-	if(Active != D_04B3)
-		C_155D_0748(Party[D_04B3]);
+	if(Active != StatusMember)
+		STAT_ComputeWeights(Party[StatusMember]);
 	MouseMode = 0;
 }
 
-C_27A1_1DAB(int bp0c, int bp0a, int bp08, int si/*bp06*/) {
-	int di;
-	int bp_0a, bp_08, bp_06, bp_04, bp_02;
+/*is the push of objNum from (x,y) in direction dir blocked?
+ the destination must be passable or hold a supporting object; for a
+ diagonal push both orthogonal neighbours must be free too.
+ returns 1 if blocked*/
+/*C_27A1_1DAB*/IsPushBlocked(int objNum, int x, int y, int dir/*bp06*/) {
+	int destX;
+	int destY, sideX1, sideY1, sideX2, sideY2;
 
-	di = DirIncrX[si] + bp0a;
-	bp_0a = DirIncrY[si] + bp08;
-	if(!C_1E0F_000F(bp0c, di, bp_0a) && !C_27A1_1330(di, bp_0a))
+	destX = DirIncrX[dir] + x;
+	destY = DirIncrY[dir] + y;
+	if(!CanMoveTo(objNum, destX, destY) && !HasSupportAt(destX, destY))
 		return 1;
-	if(!(si & 1))
+	/*odd directions are the diagonals*/
+	if(!(dir & 1))
 		return 0;
-	bp_08 = DirIncrX[si-1] + bp0a;
-	bp_06 = DirIncrY[si-1] + bp08;
-	bp_04 = DirIncrX[si+1] + bp0a;
-	bp_02 = DirIncrY[si+1] + bp08;
-	if(C_1E0F_000F(bp0c, bp_08, bp_06) || C_27A1_1330(bp_08, bp_06))
+	sideX1 = DirIncrX[dir-1] + x;
+	sideY1 = DirIncrY[dir-1] + y;
+	sideX2 = DirIncrX[dir+1] + x;
+	sideY2 = DirIncrY[dir+1] + y;
+	if(CanMoveTo(objNum, sideX1, sideY1) || HasSupportAt(sideX1, sideY1))
 		return 0;
-	if(C_1E0F_000F(bp0c, bp_04, bp_02) || C_27A1_1330(bp_04, bp_02))
+	if(CanMoveTo(objNum, sideX2, sideY2) || HasSupportAt(sideX2, sideY2))
 		return 0;
 	return 1;
 }
 
-C_27A1_1E69(int objNum) {
+/*the outermost holder of objNum: the first object up the containment
+ chain that lies on the map*/
+/*C_27A1_1E69*/GetOuterHolder(int objNum) {
 	do
 		objNum = GetAssoc(objNum);
 	while(GetCoordUse(objNum) != LOCXYZ);
 	return objNum;
 }
 
-/*"move"*/
-C_27A1_1E8B() {
+/*"move" command: push an object on the map by one tile, or move an
+ inventory object to another party member or into/out of a container*/
+/*C_27A1_1E8B*/CmdMove() {
 	/*1c*/
-	int si, di;
-	unsigned char bp_1b;
-	int bp_1a, bp_18, bp_16, bp_14, bp_12, bp_10;
-	int bp_0e, bp_0c, bp_0a, bp_08, bp_06, bp_04, bp_02;
+	int obj, objTyp;
+	unsigned char ch;
+	int quanType, destX, destY, objX, objY, dir;
+	int weight, count, qtyCode, srcMember, target, actor, cantMove;
 
-	if(Selection.obj == -1 || Selection.obj == D_E709) {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[5]);
+	if(Selection.obj == -1 || Selection.obj == InvenOwner) {
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[5]);
 		return;
 	}
 	CON_printf((char *)GetObjectString(Selection.obj));
 	CON_putch('\n');
-	di = GetType(Selection.obj);
-	bp_1a = QuanType(di);
+	objTyp = GetType(Selection.obj);
+	quanType = QuanType(objTyp);
 	if(GetCoordUse(Selection.obj) == LOCXYZ) {
 		if(!CLOSE_ENOUGH(1, Selection.x, Selection.y, MapX, MapY)) {
-			CON_printf(/*1F24*/"\n%s!\n", D_0DDC[3]);
+			CON_printf(/*1F24*/"\n%s!\n", SpellMessages[3]);
 			return;
 		}
-		bp_10 = MkDirection(PointerX, PointerY);
-		if(bp_10 != -1) {
-			C_1E0F_0664(Party[Active], bp_10);
-			C_1100_0306();
+		dir = MkDirection(PointerX, PointerY);
+		if(dir != -1) {
+			UpdateMoveFrame(Party[Active], dir);
+			VIS_UpdateView();
 		}
-		bp_14 = GetX(Selection.obj);
-		bp_12 = GetY(Selection.obj);
+		objX = GetX(Selection.obj);
+		objY = GetY(Selection.obj);
 		MouseMode = 0;
-		D_04CA = 88 + TIL2SCR(bp_14 - MapX);
-		D_04CB = 88 + TIL2SCR(bp_12 - MapY);
+		/*center the mouse direction cursor on the object
+		(88,88 = center of the map window)*/
+		DirOriginX = 88 + TIL2SCR(objX - MapX);
+		DirOriginY = 88 + TIL2SCR(objY - MapY);
 		CON_printf(/*1F76*/"To ");
-		if(CON_getch() != CMD_80) {
+		if(CON_getch() != CMD_DIRECTION) {
 			CON_printf(/*1F7A*/"nowhere.\n");
 			MouseMode = 0;
-			D_04CA = 88;
-			D_04CB = 88;
-			C_0C9C_01FB();
+			DirOriginX = 88;
+			DirOriginY = 88;
+			CON_UpdateMousePointer();
 			return;
 		}
 		CON_printf(/*1F84*/"%s.\n", DirNames[AdvanceDir]);
-		bp_04 = Party[Active];
-		bp_0e = GetWeight(Selection.obj) + Encumbrance(Selection.obj);
-		if(TypeWeight[GetType(Selection.obj)] == 0 || GetType(Selection.obj) == OBJ_19B) {
-			CON_printf(/*1F13*/"\n%s\n", D_0DDC[6]);
+		actor = Party[Active];
+		weight = GetWeight(Selection.obj) + Encumbrance(Selection.obj);
+		if(TypeWeight[GetType(Selection.obj)] == 0 || GetType(Selection.obj) == OBJ_DRAGON) {
+			CON_printf(/*1F13*/"\n%s\n", SpellMessages[6]);
 			goto c_2237;
 		}
-		if(Selection.obj < 0x100 && (C_1944_01EC(bp_04, Selection.obj) || bp_04 == Selection.obj ||
-			((GetFrame(Selection.obj) & 3) == 3 && GetType(Selection.obj) != OBJ_153))) {
-			CON_printf(/*1F13*/"\n%s\n", D_0DDC[1]);
+		/*an NPC resists being pushed (strength contest), can't push
+		oneself; (frame & 3) == 3: lying NPC?*/
+		if(Selection.obj < 0x100 && (SPELL_ResistStrVsStr(actor, Selection.obj) || actor == Selection.obj ||
+			((GetFrame(Selection.obj) & 3) == 3 && GetType(Selection.obj) != OBJ_DEAD_BODY))) {
+			CON_printf(/*1F13*/"\n%s\n", SpellMessages[1]);
 			MouseMode = 0;
-			D_04CA = 88;
-			D_04CB = 88;
-			C_0C9C_01FB();
+			DirOriginX = 88;
+			DirOriginY = 88;
+			CON_UpdateMousePointer();
 			return;
 		}
 		SubMov(Party[Active], 5);
-		bp_18 = DirIncrX[AdvanceDir] + bp_14;
-		bp_16 = DirIncrY[AdvanceDir] + bp_12;
-		bp_06 = FindLoc(bp_18, bp_16, MapZ);
-		if(bp_06 != -1 && C_27A1_00A9(bp_06, Selection.obj) && bp_0e < 0xff) {
-			InsertObj(Selection.obj, bp_06, CONTAINED);
+		destX = DirIncrX[AdvanceDir] + objX;
+		destY = DirIncrY[AdvanceDir] + objY;
+		target = FindLoc(destX, destY, MapZ);
+		/*pushed onto a container: put it inside*/
+		if(target != -1 && CanPutInContainer(target, Selection.obj) && weight < 0xff) {
+			InsertObj(Selection.obj, target, CONTAINED);
 		} else {
-			if(C_27A1_1DAB(Selection.obj, bp_14, bp_12, AdvanceDir)) {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[4]);
-				if(GetType(Selection.obj) == OBJ_0DD &&
+			if(IsPushBlocked(Selection.obj, objX, objY, AdvanceDir)) {
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[4]);
+				if(GetType(Selection.obj) == OBJ_CANNON &&
 					((GetFrame(Selection.obj) != (AdvanceDir >> 1)) & 3)/*parenthesis problem:bug?*/
 					) {
 					SetFrame(Selection.obj, (AdvanceDir >> 1) & 3);
 				}
 /*c_21a8:*/
 				MouseMode = 0;
-				D_04CA = 88;
-				D_04CB = 88;
-				C_0C9C_01FB();
+				DirOriginX = 88;
+				DirOriginY = 88;
+				CON_UpdateMousePointer();
 				return;
 			}
 /*21c0*/
-			if(GetType(Selection.obj) == OBJ_0DD &&
+			/*a cannon is first turned towards the push direction
+			(frame = direction / 2), then moved*/
+			if(GetType(Selection.obj) == OBJ_CANNON &&
 				((GetFrame(Selection.obj) != (AdvanceDir >> 1)) & 3)/*parenthesis problem:bug?*/
 				) {
 				SetFrame(Selection.obj, (AdvanceDir >> 1) & 3);
 			} else {
-				MoveObj(Selection.obj, bp_18, bp_16, MapZ);
+				MoveObj(Selection.obj, destX, destY, MapZ);
 			}
 		}
 /*c_2232:*/
-		C_1100_0306();
+		VIS_UpdateView();
 c_2237:
-		D_04CA = 88;
-		D_04CB = 88;
-		C_0C9C_01FB();
+		DirOriginX = 88;
+		DirOriginY = 88;
+		CON_UpdateMousePointer();
 	} else {
-		bp_02 = C_155D_1666(Selection.obj, Party[D_04B3]);
-		if(bp_02) {
-			C_155D_1022(D_E709);
+		/*inventory object of the displayed member StatusMember*/
+		cantMove = STAT_CheckUnready(Selection.obj, Party[StatusMember]);
+		if(cantMove) {
+			STAT_RefreshInventory(InvenOwner);
 			return;
 		}
-		if(!C_1703_0153(Party[D_04B3])) {
+		if(!IsNpcOnScreen(Party[StatusMember])) {
 			CON_printf(/*1F89*/"\nThis person is not around!\n");
 			return;
 		}
-		bp_0c = C_27A1_13BE(Selection.obj);
-		if(!bp_0c)
+		count = AskHowMany(Selection.obj);
+		if(!count)
 			return;
 		CON_printf(/*1F76*/"To ");
-		si = Selection.obj;
-		bp_08 = D_04B3;
-		if(di == OBJ_04C) {
-			CON_printf(/*1FA6*/"\n\n%s\n", D_0DDC[12]);
+		obj = Selection.obj;
+		srcMember = StatusMember;
+		if(objTyp == OBJ_AMULET_OF_SUBMISSION) {
+			CON_printf(/*1FA6*/"\n\n%s\n", SpellMessages[12]);
 			return;
 		}
 		if(SelectMode != 0) {
 			SelectRange = 7;
-			C_0C9C_1AE5(0);
+			DrawSlotCursor(0);
 			SelectMode = 1;
 		}
-		bp_1b = CON_getch();
-		if(bp_1b != CMD_8E || Selection.obj == -1) {
+		ch = CON_getch();
+		if(ch != CMD_TARGET || Selection.obj == -1) {
 			CON_printf(/*1FAC*/"nobody.\n");
 			return;
 		}
 		if(GetCoordUse(Selection.obj) == LOCXYZ && (
-			(Selection.obj < 0x100 && !C_1703_0153(Selection.obj)) ||
+			(Selection.obj < 0x100 && !IsNpcOnScreen(Selection.obj)) ||
 			(Selection.obj >= 0x100 && !CLOSE_ENOUGH(1, Selection.x, Selection.y, MapX, MapY)))) {
-			CON_printf(/*1FB5*/"\n\n%s!\n", D_0DDC[3]);
+			CON_printf(/*1FB5*/"\n\n%s!\n", SpellMessages[3]);
 			return;
 		}
 		if(Selection.obj < 0x100) {
-			if(Party[bp_08] != Selection.obj) {
+			/*give to another party member*/
+			if(Party[srcMember] != Selection.obj) {
 				CON_printf((char *)GetObjectString(Selection.obj));
 				CON_printf(/*1DC6*/".\n");
-				if(!C_1703_0153(Selection.obj)) {
+				if(!IsNpcOnScreen(Selection.obj)) {
 					CON_printf(/*1F89*/"\nThis person is not around!\n");
 					return;
 				}
@@ -1089,360 +1211,385 @@ c_2237:
 					CON_printf(/*1FBC*/"\nOnly within the party!\n");
 					return;
 				}
-				C_155D_0748(Selection.obj);
-				if(bp_1a) {
-					if(C_155D_063A(di))
-						bp_0e = TypeWeight[di] * bp_0c / 10;
+				STAT_ComputeWeights(Selection.obj);
+				if(quanType) {
+					if(IsWeightPer10Type(objTyp))
+						weight = TypeWeight[objTyp] * count / 10;
 					else
-						bp_0e = TypeWeight[di] * bp_0c;
+						weight = TypeWeight[objTyp] * count;
 				} else {
-					bp_0e = GetWeight(si) + Encumbrance(si);
+					weight = GetWeight(obj) + Encumbrance(obj);
 				}
-				if(STREN[Selection.obj] * 20 < bp_0e + WeightInven + WeightEquip) {
+				if(STREN[Selection.obj] * 20 < weight + WeightInven + WeightEquip) {
 					CON_printf(/*1FD5*/"\nCan't carry!\n");
-					C_155D_0748(Party[D_04B3]);
+					STAT_ComputeWeights(Party[StatusMember]);
 					return;
 				}
-				C_155D_16E7(si, Party[bp_08]);
-				if(GetCoordUse(si) == EQUIP && Party[bp_08] != Selection.obj) {
-					Equipment[C_155D_13F4(si)] = 0;
-					if(STAT_GetEquipSlot(si) == SLOT_2HND) {
-						Party_1Hand[bp_08] = 0;
+				STAT_StopEquipEffect(obj, Party[srcMember]);
+				if(GetCoordUse(obj) == EQUIP && Party[srcMember] != Selection.obj) {
+					Equipment[STAT_FindEquipSlot(obj)] = 0;
+					if(STAT_GetEquipSlot(obj) == SLOT_2HND) {
+						Party_2Handed[srcMember] = 0;
 						Equipment[SLOT_LHND] = 0;
 					}
 				}
-				if(bp_1a) {
-					if(bp_1a == 2)
-						bp_0a = QualQuan(GetQual(si), bp_0c);
+				if(quanType) {
+					if(quanType == 2)
+						qtyCode = QualQuan(GetQual(obj), count);
 					else
-						bp_0a = bp_0c;
-					GiveObj(Selection.obj, di, bp_0a);
-					TakeObj(GetAssoc(si), di, bp_0a);
+						qtyCode = count;
+					GiveObj(Selection.obj, objTyp, qtyCode);
+					TakeObj(GetAssoc(obj), objTyp, qtyCode);
 				} else {
-					InsertObj(si, Selection.obj, INVEN);
+					InsertObj(obj, Selection.obj, INVEN);
 				}
-				C_155D_0748(Party[D_04B3]);
+				STAT_ComputeWeights(Party[StatusMember]);
 			} else {
 				CON_printf(/*1FE4*/"yourself.\n");
 			}
-			bp_10 = MkDirection(PointerX, PointerY);
-			if(bp_10 != -1) {
-				C_1E0F_0664(Party[Active], bp_10);
-				C_1100_0306();
+			dir = MkDirection(PointerX, PointerY);
+			if(dir != -1) {
+				UpdateMoveFrame(Party[Active], dir);
+				VIS_UpdateView();
 			}
 			SubMov(Party[Active], 5);
 		} else {
+			/*into (or out of) a container of the same owner*/
 			if(GetCoordUse(Selection.obj) == LOCXYZ) {
 				CON_printf(/*1FAC*/"nobody.\n");
 				return;
 			}
-			if(!C_27A1_0082(GetType(Selection.obj))) {
+			if(!IsContainerType(GetType(Selection.obj))) {
 				CON_printf(/*1FEF*/"\n\nnot a container\n");
 				return;
 			}
-			if(C_27A1_1E69(Selection.obj) != C_27A1_1E69(si)) {
+			if(GetOuterHolder(Selection.obj) != GetOuterHolder(obj)) {
 				CON_printf(/*2002*/"\n\nCan't move to another person's bag.\n");
 				return;
 			}
-			if(si < 0x100) {
+			if(obj < 0x100) {
 				CON_printf(/*2029*/"\n\nIt's too big to fit inside a container.\n");
 				return;
 			}
-			if(GetCoordUse(si) == EQUIP) {
+			if(GetCoordUse(obj) == EQUIP) {
 				CON_printf(/*2054*/"\n\nYou have to unready it first.\n");
 				return;
 			}
-			if(Selection.obj == si) {
+			if(Selection.obj == obj) {
 				CON_printf(/*2075*/"\n\nHow can a container go into itself!\n");
 				return;
 			}
-			if(GetType(Selection.obj) == OBJ_039 && GetType(si) != OBJ_03A) {
+			if(GetType(Selection.obj) == OBJ_SPELLBOOK && GetType(obj) != OBJ_SPELL) {
 				CON_printf(/*209C*/"\n\nOnly spells can go into the spellbook.\n");
 				return;
 			}
-			if(GetType(Selection.obj) == OBJ_03E && GetType(si) != OBJ_049) {
+			if(GetType(Selection.obj) == OBJ_VORTEX_CUBE && GetType(obj) != OBJ_MOONSTONE) {
 				CON_printf(/*20C6*/"\n\nOnly moonstones can go into the vortex cube.\n");
 				return;
 			}
-			if(GetAssoc(si) == Selection.obj) {
-				if(GetType(Selection.obj) == OBJ_039 && GetType(si) == OBJ_03A) {
+			if(GetAssoc(obj) == Selection.obj) {
+				/*already in it: move it out to the container's holder
+				(GetQual() below may read obj after DeleteObj(), which
+				does not clear Amount[]; same in the "into" case)*/
+				if(GetType(Selection.obj) == OBJ_SPELLBOOK && GetType(obj) == OBJ_SPELL) {
 					CON_printf(/*20F6*/"\n\nSpells are not suppose to be taken out from the Spellbook.\n");
 					return;
 				}
 				CON_printf(/*2134*/"out of ");
 				SubMov(Party[Active], 5);
-				if(bp_1a) {
-					if(bp_1a == 2) {
-						if(GetQuan(si) == bp_0c)
-							DeleteObj(si);
+				if(quanType) {
+					if(quanType == 2) {
+						if(GetQuan(obj) == count)
+							DeleteObj(obj);
 						else
-							SubQuan(si, bp_0c);
-						bp_0a = QualQuan(GetQual(si), bp_0c);
+							SubQuan(obj, count);
+						qtyCode = QualQuan(GetQual(obj), count);
 					} else {
-						if(Amount[si] == bp_0c)
-							DeleteObj(si);
+						if(Amount[obj] == count)
+							DeleteObj(obj);
 						else
-							Amount[si] -= bp_0c;
-						bp_0a = bp_0c;
+							Amount[obj] -= count;
+						qtyCode = count;
 					}
-					GiveObj(GetAssoc(Selection.obj), di, bp_0a);
+					GiveObj(GetAssoc(Selection.obj), objTyp, qtyCode);
 				} else {
-					InsertObj(si, GetAssoc(Selection.obj), CONTAINED);
+					InsertObj(obj, GetAssoc(Selection.obj), CONTAINED);
 				}
 			} else {
 				CON_printf(/*213C*/"into ");
 				SubMov(Party[Active], 5);
-				if(bp_1a) {
-					if(bp_1a == 2) {
-						if(GetQuan(si) == bp_0c)
-							DeleteObj(si);
+				if(quanType) {
+					if(quanType == 2) {
+						if(GetQuan(obj) == count)
+							DeleteObj(obj);
 						else
-							SubQuan(si, bp_0c);
-						bp_0a = QualQuan(GetQual(si), bp_0c);
+							SubQuan(obj, count);
+						qtyCode = QualQuan(GetQual(obj), count);
 					} else {
-						if(Amount[si] == bp_0c)
-							DeleteObj(si);
+						if(Amount[obj] == count)
+							DeleteObj(obj);
 						else
-							Amount[si] -= bp_0c;
-						bp_0a = bp_0c;
+							Amount[obj] -= count;
+						qtyCode = count;
 					}
-					GiveObj(Selection.obj, di, bp_0a);
+					GiveObj(Selection.obj, objTyp, qtyCode);
 				} else {
-					InsertObj(si, Selection.obj, CONTAINED);
+					InsertObj(obj, Selection.obj, CONTAINED);
 				}
 			}
 			InvenSize --;
 			CON_printf((char *)GetObjectString(Selection.obj));
 			CON_putch('\n');
 		}
-		if(StatusDisplay == CMD_92)
-			C_155D_1022(D_E709);
+		if(StatusDisplay == CMD_STAT_EQUIP)
+			STAT_RefreshInventory(InvenOwner);
 	}
 /*c_2892*/
 	StatusDirty = 0;
 	MouseMode = 0;
 }
 
-/*trapped object(door, chest, ...)*/
-C_27A1_28A3(int objNum) {
-	int si;
-	int bp_08, x, y;
-	int far *bp_04;
+/*spring the trap (OBJ_EFFECT with quality SPELL_TRAP) set on objNum:
+ acid, poison, bomb or gas, then remove the trap*/
+/*C_27A1_28A3*/SpringTrap(int objNum) {
+	int victim;
+	int trapKind, x, y;
+	int far *hit;
 
+	/*on the map the active character is hit, in an inventory the
+	displayed member StatusMember*/
 	if(GetCoordUse(objNum) == LOCXYZ) {
-		si = C_27A1_0008(Active);
-		x = C_27A1_0028(objNum);
-		y = C_27A1_0051(objNum);
+		victim = GetPartyObjOrVehicle(Active);
+		x = GetObjXOrVehicle(objNum);
+		y = GetObjYOrVehicle(objNum);
 	} else {
-		si = C_27A1_0008(D_04B3);
-		x = C_27A1_0028(si);
-		y = C_27A1_0051(si);
+		victim = GetPartyObjOrVehicle(StatusMember);
+		x = GetObjXOrVehicle(victim);
+		y = GetObjYOrVehicle(victim);
 	}
-	bp_08 = OSI_rand(0, 3);
-	switch(bp_08) {
+	trapKind = OSI_rand(0, 3);
+	switch(trapKind) {
 		case 0:
 			CON_printf(/*2142*/"Acid!\n");
-			LooseHP(si, OSI_rand(1, 20));
+			LoseHP(victim, OSI_rand(1, 20));
 			CON_putch('\n');
-			COMBAT_displaySeverity(si);
+			COMBAT_displaySeverity(victim);
 		break;
 		case 1:
 			CON_printf(/*2149*/"Poison!\n");
-			SetPoisoned(si);
-			COMBAT_showHit(si);
+			SetPoisoned(victim);
+			COMBAT_showHit(victim);
 		break;
 		case 2:
 			CON_printf(/*2152*/"Bomb!\n");
-			for(bp_04 = Explosion(x, y, TIL_17E); *bp_04 >= 0; bp_04 ++) {
-				if(*bp_04 < 0x100) {
-					LooseHP(*bp_04, OSI_rand(1, 20));
+			for(hit = Explosion(x, y, TIL_FIRE_MISSILE); *hit >= 0; hit ++) {
+				if(*hit < 0x100) {
+					LoseHP(*hit, OSI_rand(1, 20));
 					CON_putch('\n');
-					COMBAT_displaySeverity(*bp_04);
+					COMBAT_displaySeverity(*hit);
 				}
 			}
 		break;
 		case 3:
 			CON_printf(/*2159*/"Gas!\n");
-			for(bp_04 = Explosion(x, y, TIL_17C); *bp_04 >= 0; bp_04 ++) {
-				if(*bp_04 < 0x100) {
-					SetPoisoned(*bp_04);
-					COMBAT_showHit(*bp_04);
+			for(hit = Explosion(x, y, TIL_POISON_MISSILE); *hit >= 0; hit ++) {
+				if(*hit < 0x100) {
+					SetPoisoned(*hit);
+					COMBAT_showHit(*hit);
 				}
 			}
 		break;
 	}
-	DeleteObj(C_1944_0A43(objNum, OBJ_151, SPELL_16));
-	if(StatusDisplay == CMD_91 || StatusDisplay == CMD_90)
+	DeleteObj(OBJ_FindInContainer(objNum, OBJ_EFFECT, SPELL_TRAP));
+	if(StatusDisplay == CMD_STAT_PARTY || StatusDisplay == CMD_STAT_PORTRAIT)
 		StatusDirty ++;
 }
 
-/*use door*/
-C_27A1_2A44(int objNum, int bp0a, int bp08, int bp06) {
-	int di;
+/*use/lock/unlock door objNum and print the result.
+ door frames: 0-3 open, 4-7 closed, 8-11 locked, 12-15 magically
+ locked (low 2 bits = orientation/part).
+ withKey: (un)lock with key/lockpick; magicLock: "lock" spell;
+ magicUnlock: "unlock magic" spell; all 0: open/close*/
+/*C_27A1_2A44*/UseDoor(int objNum, int withKey, int magicLock, int magicUnlock) {
+	int frame;
 
 	CON_putch('\n');
-	di = GetFrame(objNum);
-	if(di < 4) {
-		if(!bp0a && !bp08 && !bp06) {
+	frame = GetFrame(objNum);
+	/*state changes are done by xor-ing the state bits 2-3:
+	^4 open<->closed, ^0xc closed<->locked, ^8 closed<->magic locked,
+	^4 locked->magic locked*/
+	if(frame < 4) {
+		if(!withKey && !magicLock && !magicUnlock) {
 			CON_printf(/*215F*/"closed!\n");
-			SetFrame(objNum, di ^ 4);
+			SetFrame(objNum, frame ^ 4);
 		} else {
 			CON_printf(/*2168*/"Can't (Un)lock an opened door\n");
 		}
-	} else if(di >= 4 && di < 8) {
-		if(bp0a) {
+	} else if(frame >= 4 && frame < 8) {
+		if(withKey) {
 			CON_printf(/*2187*/"locked!\n");
-			SetFrame(objNum, di ^ 0xc);
-		} else if(bp08) {
+			SetFrame(objNum, frame ^ 0xc);
+		} else if(magicLock) {
 			CON_printf(/*2190*/"magically locked!\n");
-			SetFrame(objNum, di ^ 8);
+			SetFrame(objNum, frame ^ 8);
 		} else {
-			if(FindInvType(objNum, OBJ_151, SPELL_16) != -1)
-				C_27A1_28A3(objNum);
+			/*plain use (or "unlock magic" on a closed door): open it,
+			springing its trap if any*/
+			if(FindInvType(objNum, OBJ_EFFECT, SPELL_TRAP) != -1)
+				SpringTrap(objNum);
 			else
 				CON_printf(/*21A3*/"opened!\n");
-			SetFrame(objNum, di ^ 4);
+			SetFrame(objNum, frame ^ 4);
 		}
-	} else if(di >= 8 && di < 0xc) {
-		if(bp0a) {
+	} else if(frame >= 8 && frame < 0xc) {
+		if(withKey) {
 			CON_printf(/*21AC*/"unlocked!\n");
-			SetFrame(objNum, di ^ 0xc);
-		} else if(bp08) {
+			SetFrame(objNum, frame ^ 0xc);
+		} else if(magicLock) {
 			CON_printf(/*2190*/"magically locked!\n");
-			SetFrame(objNum, di ^ 4);
+			SetFrame(objNum, frame ^ 4);
 		} else {
+			/*("unlock magic" does not open a key lock)*/
 			CON_printf(/*21B7*/"locked\n");
 		}
 	} else {
-		if(bp06) {
+		/*magically locked: only "unlock magic" helps*/
+		if(magicUnlock) {
 			CON_printf(/*21AC*/"unlocked!\n");
-			SetFrame(objNum, di ^ 8);
+			SetFrame(objNum, frame ^ 8);
 		} else {
 			CON_printf(/*2190*/"magically locked!\n");
 		}
 	}
 }
 
-/*use chest?*/
-C_27A1_2BBC(int objNum, int bp0a, int bp08, int bp06) {
-	int di;
+/*use/lock/unlock chest objNum and print the result.
+ chest frames: 0 open, 1 closed, 2 locked, 3 magically locked.
+ parameters as for UseDoor; opening a chest also searches it*/
+/*C_27A1_2BBC*/UseChest(int objNum, int withKey, int magicLock, int magicUnlock) {
+	int frame;
 
 	CON_putch('\n');
-	di = GetFrame(objNum);
-	if(di == 0) {
-		if(!bp0a && !bp08 && !bp06) {
+	frame = GetFrame(objNum);
+	if(frame == 0) {
+		if(!withKey && !magicLock && !magicUnlock) {
 			CON_printf(/*215F*/"closed!\n");
 			SetFrame(objNum, 1);
 		} else {
-			CON_printf(/*1D6D*/"%s\n", D_0DDC[2]);
+			CON_printf(/*1D6D*/"%s\n", SpellMessages[2]);
 		}
-	} else if(di == 1) {
-		if(!bp0a && !bp08 && !bp06) {
-			if(FindInvType(objNum, OBJ_151, SPELL_16) != -1)
-				C_27A1_28A3(objNum);
+	} else if(frame == 1) {
+		if(!withKey && !magicLock && !magicUnlock) {
+			if(FindInvType(objNum, OBJ_EFFECT, SPELL_TRAP) != -1)
+				SpringTrap(objNum);
 			else
 				CON_printf(/*21A3*/"opened!\n");
 			SetFrame(objNum, 0);
-			C_27A1_09A1(objNum, GetX(objNum), GetY(objNum));
-		} else if(bp0a) {
+			SearchObj(objNum, GetX(objNum), GetY(objNum));
+		} else if(withKey) {
 			CON_printf(/*2187*/"locked!\n");
 			SetFrame(objNum, 2);
-		} else if(bp08) {
+		} else if(magicLock) {
 			CON_printf(/*2190*/"magically locked!\n");
 			SetFrame(objNum, 3);
 		} else {
-			CON_printf(/*1D6D*/"%s\n", D_0DDC[2]);
+			CON_printf(/*1D6D*/"%s\n", SpellMessages[2]);
 		}
-	} else if(di == 2) {
-		if(bp0a) {
+	} else if(frame == 2) {
+		if(withKey) {
 			CON_printf(/*21AC*/"unlocked!\n");
 			SetFrame(objNum, 1);
 		} else
-		if(bp08) {
+		if(magicLock) {
 			CON_printf(/*2190*/"magically locked!\n");
 			SetFrame(objNum, 3);
 		} else {
-			CON_printf(/*1D6D*/"%s\n", D_0DDC[2]);
+			CON_printf(/*1D6D*/"%s\n", SpellMessages[2]);
 		}
 	} else {
-		if(bp06) {
+		if(magicUnlock) {
 			CON_printf(/*21AC*/"unlocked!\n");
 			SetFrame(objNum, 1);
 		} else {
-			CON_printf(/*1D6D*/"%s\n", D_0DDC[2]);
+			CON_printf(/*1D6D*/"%s\n", SpellMessages[2]);
 		}
 	}
 	if(GetCoordUse(objNum) != LOCXYZ)
-		C_155D_0CF5();
+		STAT_DrawInventory();
 }
 
-/*dexterity test?*/
-C_27A1_2D34(int bp06) {
-	return OSI_rand(1, 30) < ((45 - bp06) / 2);
+/*does a dexterity check fail? (true -> the lockpick breaks)
+ chance of failure: (45 - dexterity) / 2 out of 30*/
+/*C_27A1_2D34*/FailsDexCheck(int dexterity) {
+	return OSI_rand(1, 30) < ((45 - dexterity) / 2);
 }
 
-/*intelligence test?*/
-C_27A1_2D61(int bp06) {
-	return OSI_rand(1, 30) < ((45 - bp06) / 2);
+/*does an intelligence check fail? (true -> the crystal ball hurts you)*/
+/*C_27A1_2D61*/FailsIntCheck(int intelligence) {
+	return OSI_rand(1, 30) < ((45 - intelligence) / 2);
 }
 
-/*use lockpick/key*/
-C_27A1_2D8E(int objNum) {
-	int di;
-	int bp_0a, x, y, bp_04, bp_02;
+/*use key/lockpick objNum: ask for a door or chest and (un)lock it.
+ a key works if its quality matches the lock's, a lockpick only on
+ locks of quality 0 and may break*/
+/*C_27A1_2D8E*/UseKeyOrLockpick(int objNum) {
+	int targetTyp;
+	int ch, x, y, toolTyp, actor;
 
-	bp_02 = Party[Active];
-	bp_04 = GetType(objNum);
+	actor = Party[Active];
+	toolTyp = GetType(objNum);
 	CON_printf(/*21BF*/"On ");
 	if(SelectMode != 0) {
-		C_0C9C_1AE5(0);
+		DrawSlotCursor(0);
 		SelectMode = 1;
 	}
-	bp_0a = CON_getch();
-	if(bp_0a == CMD_8E && Selection.obj != -1) {
+	ch = CON_getch();
+	if(ch == CMD_TARGET && Selection.obj != -1) {
 		CON_printf((char *)GetObjectString(Selection.obj));
 		CON_putch('\n');
-		di = GetType(Selection.obj);
-		x = GetX(bp_02);
-		y = GetY(bp_02);
+		targetTyp = GetType(Selection.obj);
+		x = GetX(actor);
+		y = GetY(actor);
 		if(GetCoordUse(Selection.obj) == LOCXYZ && !CLOSE_ENOUGH(1, Selection.x, Selection.y, x, y)) {
-			CON_printf(/*1F25*/"%s!\n", D_0DDC[3]);
-		} else if((di >= OBJ_129 && di <= OBJ_12C) || di == OBJ_062) {
-			if(bp_04 == OBJ_03F && C_27A1_2D34(GetDex(bp_02))) {
-				MUS_0065(13, 0);
+			CON_printf(/*1F25*/"%s!\n", SpellMessages[3]);
+		} else if((targetTyp >= OBJ_OAKEN_DOOR && targetTyp <= OBJ_STEEL_DOOR) || targetTyp == OBJ_OPEN_CHEST) {
+			/*the lockpick may break first (one of the stack is lost)*/
+			if(toolTyp == OBJ_LOCKPICK && FailsDexCheck(GetDex(actor))) {
+				MUS_PlaySfx(13, 0);
 				CON_printf(/*21C3*/"\nKey broke.\n");
 				if(GetQuan(objNum) == 1)
 					DeleteObj(objNum);
 				else
 					SetQuan(objNum, GetQuan(objNum) - 1);
-				if(StatusDisplay == CMD_92)
-					C_155D_0CF5();
+				if(StatusDisplay == CMD_STAT_EQUIP)
+					STAT_DrawInventory();
 			} else if(
-				(bp_04 == OBJ_040 && GetQual(Selection.obj) && GetQual(objNum) == GetQual(Selection.obj)) ||
-				(bp_04 == OBJ_03F && GetQual(Selection.obj) == 0)
+				(toolTyp == OBJ_KEY && GetQual(Selection.obj) && GetQual(objNum) == GetQual(Selection.obj)) ||
+				(toolTyp == OBJ_LOCKPICK && GetQual(Selection.obj) == 0)
 			) {
-				if(di == OBJ_062)
-					C_27A1_2BBC(Selection.obj, 1, 0, 0);
+				if(targetTyp == OBJ_OPEN_CHEST)
+					UseChest(Selection.obj, 1, 0, 0);
 				else
-					C_27A1_2A44(Selection.obj, 1, 0, 0);
+					UseDoor(Selection.obj, 1, 0, 0);
 			} else {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 			}
 		} else {
-			CON_printf(/*1D6D*/"%s\n", D_0DDC[2]);
+			CON_printf(/*1D6D*/"%s\n", SpellMessages[2]);
 		}
 	} else {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[5]);
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[5]);
 	}
 }
 
-/*use torch?*/
-C_27A1_2FD1(int objNum) {
-	int di;
-	int bp_06;
+/*use torch objNum: light it (taking one torch off a stack and readying
+ it in a free hand); using a lit torch puts it out (it is consumed)*/
+/*C_27A1_2FD1*/UseTorch(int objNum) {
+	int stackObj;
+	int quantity;
 	struct coord xyz;
 
-	bp_06 = GetQuan(objNum);
+	quantity = GetQuan(objNum);
 	if(IsLit(objNum)) {
 		DeleteObj(objNum);
 		CON_putch('\n');
@@ -1452,306 +1599,329 @@ C_27A1_2FD1(int objNum) {
 	if(Equipment[SLOT_RHND] && Equipment[SLOT_LHND]) {
 		CON_printf(/*21D0*/"\nNo free hand to hold the torch.\n");
 	} else {
-		if(bp_06 > 1) {
-			di = objNum;
+		if(quantity > 1) {
+			/*split one torch off the stack*/
+			stackObj = objNum;
 			if(GetCoordUse(objNum) == LOCXYZ) {
-				SetCoordXYZ(xyz, GetX(di), GetY(di), MapZ);
-				objNum = AddObj(GetCoordUse(di), xyz, OBJ_05A, GetFrame(di), QualQuan(GetQual(di), 1));
+				SetCoordXYZ(xyz, GetX(stackObj), GetY(stackObj), MapZ);
+				objNum = AddObj(GetCoordUse(stackObj), xyz, OBJ_TORCH, GetFrame(stackObj), QualQuan(GetQual(stackObj), 1));
 			} else {
-				objNum = AddInvObj(OBJ_05A, EQUIP, 1, Party[D_04B3]);
+				objNum = AddInvObj(OBJ_TORCH, EQUIP, 1, Party[StatusMember]);
 			}
-			SetQuan(di, bp_06 - 1);
+			SetQuan(stackObj, quantity - 1);
 		}
 		if(GetCoordUse(objNum) != LOCXYZ) {
+			/*ready it in a free hand*/
 			if(GetCoordUse(objNum) == INVEN || GetCoordUse(objNum) == CONTAINED) {
 				if(Equipment[SLOT_RHND] == 0)
 					Equipment[SLOT_RHND] = objNum;
 				else
 					Equipment[SLOT_LHND] = objNum;
 				SetCoordUse(objNum, EQUIP);
-				C_155D_0748(Party[D_04B3]);
+				STAT_ComputeWeights(Party[StatusMember]);
 			}
 		}
+		/*a lit torch's quantity is its remaining burning time*/
 		SetLit(objNum);
 		SetFrame(objNum, 1);
 		SetQuan(objNum, 200);
-		C_0A33_1355(0);
+		PassTime(0);/*refresh the time-dependent state (light)*/
 		CON_printf(/*21F2*/"\nTorch is lit.\n");
 	}
-	if(StatusDisplay == CMD_92)
-		C_155D_0CF5();
+	if(StatusDisplay == CMD_STAT_EQUIP)
+		STAT_DrawInventory();
 }
 
-C_27A1_319F(int objNum) {
-	int di;
+/*use gem objNum (or the "peer" spell when objNum is 0): show the
+ surroundings map and consume one gem*/
+/*C_27A1_319F*/UseGem(int objNum) {
+	int quantity;
 
-	C_2FC1_1FD6();/*peer?*/
+	PeerMap();/*"peer" map view*/
 	if(objNum) {
-		if((di = GetQuan(objNum)) > 1)
-			SetQuan(objNum, di - 1);
+		if((quantity = GetQuan(objNum)) > 1)
+			SetQuan(objNum, quantity - 1);
 		else
 			DeleteObj(objNum);
 	}
-	if(StatusDisplay == CMD_92)
-		C_155D_0CF5();
+	if(StatusDisplay == CMD_STAT_EQUIP)
+		STAT_DrawInventory();
 }
 
-C_27A1_31F6(int objNum) {
-	int di;
-	int bp_02;
+/*use a light source (fireplace, brazier, candelabra, campfire, candle):
+ toggle frame bit 0 (lit/doused)*/
+/*C_27A1_31F6*/UseLightSource(int objNum) {
+	int objFrm;
+	int objTyp;
 
-	bp_02 = GetType(objNum);
-	di = GetFrame(objNum);
+	objTyp = GetType(objNum);
+	objFrm = GetFrame(objNum);
 	CON_putch('\n');
-	switch(bp_02) {
-		case OBJ_0A4: CON_printf(/*2202*/"fireplace"); break;
-		case OBJ_0CE: CON_printf(/*220C*/"brazier"); break;
-		case OBJ_091: CON_printf(/*2214*/"candelabra"); break;
-		case OBJ_0FD: CON_printf(/*221F*/"campfire"); break;
-		case OBJ_07A: CON_printf(/*2228*/"candle"); break;
+	switch(objTyp) {
+		case OBJ_FIREPLACE: CON_printf(/*2202*/"fireplace"); break;
+		case OBJ_BRAZIER: CON_printf(/*220C*/"brazier"); break;
+		case OBJ_CANDELABRA: CON_printf(/*2214*/"candelabra"); break;
+		case OBJ_CAMPFIRE: CON_printf(/*221F*/"campfire"); break;
+		case OBJ_CANDLE: CON_printf(/*2228*/"candle"); break;
 	}
-	if(di & 1) {
-		SetFrame(objNum, di & 2);
+	/*frame bit 0: lit; bit 1 (variant) is kept*/
+	if(objFrm & 1) {
+		SetFrame(objNum, objFrm & 2);
 		CON_printf(/*222F*/" is doused.\n");
 	} else {
-		SetFrame(objNum, di | 1);
+		SetFrame(objNum, objFrm | 1);
 		CON_printf(/*21F8*/" is lit.\n");
 	}
 }
 
-C_27A1_32FA(int objNum) {
-	int di;
+/*use secret door objNum: toggle it open/closed (frame bit 0)*/
+/*C_27A1_32FA*/UseSecretDoor(int objNum) {
+	int objFrm;
 
-	di = GetFrame(objNum);
-	if(di & 1)
-		SetFrame(objNum, di & 2);
+	objFrm = GetFrame(objNum);
+	if(objFrm & 1)
+		SetFrame(objNum, objFrm & 2);
 	else
-		SetFrame(objNum, di | 1);
+		SetFrame(objNum, objFrm | 1);
 }
 
-/*scale frequencies*/
-int D_1CEE[] = {0x1EAB,0x0C2C,0x0DA9,0x0F56,0x103F,0x123C,0x1478,0x16FA,0x1857,0x1B53};
+/*note frequencies for the keys '0'..'9' of the instruments*/
+/*1CEE*/int NoteFrequencies[] = {0x1EAB,0x0C2C,0x0DA9,0x0F56,0x103F,0x123C,0x1478,0x16FA,0x1857,0x1B53};
 
-/*"music instrument" interface?*/
-static C_27A1_335A(int bp06) {
-	int si;
+/*play a musical instrument: each digit key '0'-'9' plays a note of
+ NoteFrequencies with speaker sound soundId, any other key stops*/
+/*C_27A1_335A*/static PlayInstrument(int soundId) {
+	int ch;
 
 	SelectMode = 0;
-	while(isdigit(si = CON_getch()))
-		MUS_0065(bp06, D_1CEE[si - '0']);
+	while(isdigit(ch = CON_getch()))
+		MUS_PlaySfx(soundId, NoteFrequencies[ch - '0']);
 }
 
-/*use bell/pull chain*/
-static C_27A1_338D() {
-	int si, di;
+/*use bell/pull chain: animate the bell tile and play the bell sound*/
+/*C_27A1_338D*/static UseBell() {
+	int i, step;
 
-	for(si = 0; si < NumAnimData; si ++) {
-		if(D_67E4[si] == BaseTile[OBJ_0EC]) {
-			for(di = 0; di < 0x10; di ++) {
-				GR_4B(D_67E4[si], D_9DF5[si] + (di >> 2));
-				C_0A33_09CE(1);
+	/*find the bell's tile animation and swing it through 4 frames*/
+	for(i = 0; i < NumAnimData; i ++) {
+		if(AnimTile[i] == BaseTile[OBJ_BELL]) {
+			for(step = 0; step < 0x10; step ++) {
+				GR_SET_ANIM_FRAME(AnimTile[i], AnimFirstFrame[i] + (step >> 2));
+				DrawMapWindow(1);
 				PaletteAnimation();
 			}
-			GR_4B(D_67E4[si], D_9DF5[si]);
+			GR_SET_ANIM_FRAME(AnimTile[i], AnimFirstFrame[i]);
 			break;
 		}
 	}
-	OtherAnimations();
+	DisplayTick();
 	OSI_playWavedNote(2000, 1, 16000, 20000, -1);
 }
 
-/*use moonstone?*/
-C_27A1_3425(int objNum) {
+/*use moonstone objNum: bury it under the active character if he stands
+ on a diggable ground tile, and remember its position for the
+ moongates in MoonstonePos*/
+/*C_27A1_3425*/UseMoonstone(int objNum) {
 	int x, y;
-	int numTile, bp_02;
+	int numTile, stoneNum;
 
 	x = GetX(Party[Active]);
 	y = GetY(Party[Active]);
 	numTile = GetTileAtXYZ(x, y, MapZ);
+	/*grass/earth-like ground tiles*/
 	if(
 		(numTile >= TIL_001 && numTile <= TIL_007) ||
 		(numTile >= TIL_010 && numTile <= TIL_06F)
 	) {
 		CON_printf(/*223C*/"buried.\n");
-		bp_02 = GetFrame(objNum);
-		D_2C74[bp_02][0] = x;
-		D_2C74[bp_02][1] = y;
-		D_2C74[bp_02][2] = MapZ;
-		C_155D_0748(Party[D_04B3]);
+		stoneNum = GetFrame(objNum);
+		MoonstonePos[stoneNum][0] = x;
+		MoonstonePos[stoneNum][1] = y;
+		MoonstonePos[stoneNum][2] = MapZ;
+		STAT_ComputeWeights(Party[StatusMember]);
+		/*put it on the ground, then move the character back on top*/
 		MoveObj(objNum, x, y, MapZ);
 		MoveObj(Party[Active], x, y, MapZ);
-		if(StatusDisplay == CMD_92)
-			C_155D_0CF5();
+		if(StatusDisplay == CMD_STAT_EQUIP)
+			STAT_DrawInventory();
 	} else {
 		CON_printf(/*2245*/"Cannot be buried here!\n");
 	}
 }
 
-static C_27A1_3537(int objNum) {
-	int spellNum, di;
-	int bp_04;
-	unsigned char bp_01;
+/*use (readied) staff objNum: cast the spell of its first OBJ_CHARGE
+ (quality = spell number) and consume that charge*/
+/*C_27A1_3537*/static UseStaff(int objNum) {
+	int spellNum, i;
+	int charge;
+	unsigned char letter;
 
-	bp_04 = FindInv(objNum);
-	if(bp_04  == -1) {
-		CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+	charge = FindInv(objNum);
+	if(charge  == -1) {
+		CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 		return;
 	}
-	spellNum = GetQual(bp_04);
+	spellNum = GetQual(charge);
+	/*print the words of power ("With An Flam ...")*/
 	CON_printf(/*225D*/"With ");
-	di = 0;
-	bp_01 = SpellCode[spellNum][di++];
-	CON_printf(/*1E8A*/"%s", D_0BF0[bp_01 - 'A']);
-	while(bp_01 = SpellCode[spellNum][di++])
-		CON_printf(/*1E8D*/" %s", D_0BF0[bp_01 - 'A']);
+	i = 0;
+	letter = SpellCode[spellNum][i++];
+	CON_printf(/*1E8A*/"%s", MagicWords[letter - 'A']);
+	while(letter = SpellCode[spellNum][i++])
+		CON_printf(/*1E8D*/" %s", MagicWords[letter - 'A']);
 	if(SelectMode != 0)
 		SelectRange = 7;
-	C_1944_43D5(spellNum, 0);
-	TakeObj(objNum, OBJ_150, QualQuan(spellNum, 1));
+	SPELL_Execute(spellNum, 0);
+	TakeObj(objNum, OBJ_CHARGE, QualQuan(spellNum, 1));
 }
 
-/*uncalled?*/
-__27A1_3617() {
+/*uncalled: cast a fireball as from a fire wand*/
+/*__27A1_3617*/UseFireWand() {
 	if(SelectMode != 0)
 		SelectRange = 7;
-	C_1944_12FC(SPELL_22, TIL_17E, 8, 1, 0);/*fireball?*/
+	SPELL_CastMissile(SPELL_FIREBALL, TIL_FIRE_MISSILE, 8, 1, 0);/*fireball?*/
 }
 
-/*uncalled?*/
-__27A1_363C() {
+/*uncalled: cast a lightning bolt as from a lightning wand*/
+/*__27A1_363C*/UseLightningWand() {
 	if(SelectMode != 0)
 		SelectRange = 7;
-	C_1944_12FC(SPELL_44, TIL_188, 8, 1, 0);/*lightning?*/
+	SPELL_CastMissile(SPELL_LIGHTNING, TIL_MISSILE_0, 8, 1, 0);/*lightning?*/
 }
 
-C_27A1_3661() {
-	int si, di;
+/*use well: fill an empty bucket carried by the active character*/
+/*C_27A1_3661*/UseWell() {
+	int actor, bucket;
 
-	si = C_27A1_0008(Active);
-	di = FindInvType(si, OBJ_0B2, 0);
-	if(di == -1) {
+	actor = GetPartyObjOrVehicle(Active);
+	bucket = FindInvType(actor, OBJ_BUCKET, 0);
+	if(bucket == -1) {
 		CON_printf(/*2263*/"\nYou need a bucket.\n");
 		return;
 	}
-	C_155D_0748(si);
-	if(STREN[si] * 20 < (WeightInven + WeightEquip + 32)) {
+	STAT_ComputeWeights(actor);
+	/*a full bucket weighs 3.2 stones more*/
+	if(STREN[actor] * 20 < (WeightInven + WeightEquip + 32)) {
 		CON_printf(/*2278*/"\nThe bucket of water is too heavy for you.\n");
 		return;
 	}
-	DeleteObj(di);
-	GiveObj(si, OBJ_0B3, 1);/*bucket of water*/
-	CON_printf(/*1F13*/"\n%s\n", D_0DDC[7]);
+	DeleteObj(bucket);
+	GiveObj(actor, OBJ_BUCKET_OF_WATER, 1);/*bucket of water*/
+	CON_printf(/*1F13*/"\n%s\n", SpellMessages[7]);
 }
 
-/*use cow?*/
-C_27A1_36E7() {
-	int si, di;
+/*use cow: milk it into an empty bucket*/
+/*C_27A1_36E7*/UseCow() {
+	int actor, bucket;
 
-	si = C_27A1_0008(Active);
-	di = FindInvType(si, OBJ_0B2, 0);
-	if(di == -1) {
+	actor = GetPartyObjOrVehicle(Active);
+	bucket = FindInvType(actor, OBJ_BUCKET, 0);
+	if(bucket == -1) {
 		CON_printf(/*2263*/"\nYou need a bucket.\n");
 		return;
 	}
-	C_155D_0748(si);
-	if(STREN[si] * 20 < (WeightInven + WeightEquip + 32)) {
+	STAT_ComputeWeights(actor);
+	if(STREN[actor] * 20 < (WeightInven + WeightEquip + 32)) {
 		CON_printf(/*22A4*/"\nThe bucket of milk is too heavy for you.\n");
 		return;
 	}
-	DeleteObj(di);
-	GiveObj(si, OBJ_0B4, 1);
-	CON_printf(/*1F13*/"\n%s\n", D_0DDC[7]);
+	DeleteObj(bucket);
+	GiveObj(actor, OBJ_BUCKET_OF_MILK, 1);
+	CON_printf(/*1F13*/"\n%s\n", SpellMessages[7]);
 }
 
-/*use churn?*/
-C_27A1_376D() {
-	int si, di;
+/*use churn: turn a bucket of milk into butter (and an empty bucket)*/
+/*C_27A1_376D*/UseChurn() {
+	int actor, milk;
 
-	si = C_27A1_0008(Active);
-	di = FindInvType(si, OBJ_0B4, 0);
-	if(di == -1) {
+	actor = GetPartyObjOrVehicle(Active);
+	milk = FindInvType(actor, OBJ_BUCKET_OF_MILK, 0);
+	if(milk == -1) {
 		CON_printf(/*22CF*/"\nYou need some milk.\n");
 		return;
 	}
-	DeleteObj(di);
-	GiveObj(si, OBJ_060, 1);/*butter*/
-	GiveObj(si, OBJ_0B2, 1);
-	CON_printf(/*1F13*/"\n%s\n", D_0DDC[7]);
+	DeleteObj(milk);
+	GiveObj(actor, OBJ_BUTTER, 1);/*butter*/
+	GiveObj(actor, OBJ_BUCKET, 1);
+	CON_printf(/*1F13*/"\n%s\n", SpellMessages[7]);
 }
 
-/*use beehive?*/
-C_27A1_37D3() {
-	int si, di;
+/*use beehive: fill an empty honey jar*/
+/*C_27A1_37D3*/UseBeehive() {
+	int jar, actor;
 
-	di = C_27A1_0008(Active);
-	si = FindInvType(di, OBJ_0B7, 0);
-	if(si == -1) {
+	actor = GetPartyObjOrVehicle(Active);
+	jar = FindInvType(actor, OBJ_HONEY_JAR, 0);
+	if(jar == -1) {
 		CON_printf(/*22E5*/"\nYou need a honey jar.\n");
 		return;
 	}
-	SetType(si, OBJ_0B8);/*full honey jar*/
-	CON_printf(/*1F13*/"\n%s\n", D_0DDC[7]);
-	C_155D_0CF5();
+	SetType(jar, OBJ_JAR_OF_HONEY);/*full honey jar*/
+	CON_printf(/*1F13*/"\n%s\n", SpellMessages[7]);
+	STAT_DrawInventory();
 }
 
-/*use potion?*/
-C_27A1_3832(int objNum) {
-	int si;
+/*use (drink) potion objNum on a party member; the color (frame)
+ gives the effect. the potion is consumed*/
+/*C_27A1_3832*/UsePotion(int objNum) {
+	int color;
 
-	CON_printf(/*1E8A*/"%s", D_0DDC[9]);
+	CON_printf(/*1E8A*/"%s", SpellMessages[9]);
 	MouseMode = 1;
 	if(SelectMode != 0) {
-		C_0C9C_1AE5(0);
+		DrawSlotCursor(0);
 		SelectMode = 1;
 		SelectRange = 7;
 	}
 	CON_getch();
 	if(Selection.obj == -1 || Selection.x == -1 || Selection.y == -1) {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[5]);
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[5]);
 		return;
 	}
 	CON_printf((char *)GetObjectString(Selection.obj));
 	CON_putch('\n');
 	if(!IsPlrControl(Selection.obj)) {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[2]);
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[2]);
 		return;
 	}
-	si = GetFrame(objNum);
-	switch(si) {
+	/*the frame is the potion's color*/
+	color = GetFrame(objNum);
+	switch(color) {
 		case 0:/*orange - awaken*/
 			if(IsAsleep(Selection.obj)) {
 				ClrAsleep(Selection.obj);
 				ObjShapeType[Selection.obj] = OrigShapeType[Selection.obj];
 			} else {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 			}
 		break;
 		case 1:/*red - cure*/
 			if(IsPoisoned(Selection.obj)) {
 				ClrPoisoned(Selection.obj);
 			} else {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 			}
 		break;
 		case 2:/*yellow - heal*/
-			C_1944_114D(SPELL_06);
+			SPELL_DoHeal(SPELL_HEAL);
 		break;
-		case 3:/*green - poison*/
-			if(!IsMonster_0004(GetMonsterClass(GetType(Selection.obj)))) {
+		case 3:/*green - poison (unless immune to poison)*/
+			if(!IsMonsterImmunePoison(GetMonsterClass(GetType(Selection.obj)))) {
 				SetPoisoned(Selection.obj);
 				COMBAT_showHit(Selection.obj);
 			} else {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 			}
 		break;
 		case 4:/*blue - sleep*/
-			/*bug?should be IsMonster_0001?*/
-			if(!IsMonster_0080(GetMonsterClass(GetType(Selection.obj)))) {
+			/*bug?should be IsMonsterImmuneSleep (immune to sleep)? this tests
+			MONSTER_UNDEAD (undead)*/
+			if(!IsMonsterUndead(GetMonsterClass(GetType(Selection.obj)))) {
 				COMBAT_showHit(Selection.obj);
 				SetAsleep(Selection.obj);
 				SetTypeUnconscious(Selection.obj);
 			} else {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 			}
 		break;
 		case 5:/*purple - protection*/
@@ -1759,7 +1929,7 @@ C_27A1_3832(int objNum) {
 				SetProtected(Selection.obj);
 				MagicalHalo(Selection.obj, 1);
 			} else {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 			}
 		break;
 		case 6:/*black - invisibility*/
@@ -1767,167 +1937,189 @@ C_27A1_3832(int objNum) {
 				SetInvisible(Selection.obj);
 				MagicalHalo(Selection.obj, 1);
 			} else {
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 			}
 		break;
 		case 7:/*white - xray vision*/
-			C_1944_310C(SPELL_49);
+			SPELL_XRay(SPELL_X_RAY);
 		break;
 	}
 	DeleteObj(objNum);
-	if(StatusDisplay == CMD_91 || StatusDisplay == CMD_90)
+	if(StatusDisplay == CMD_STAT_PARTY || StatusDisplay == CMD_STAT_PORTRAIT)
 		StatusDirty ++;
 }
 
-char D_1D02[] = { 0, 1, 0, -1};
-char D_1D06[] = {-1, 0, 1,  0};
+/*cannon frame (N,E,S,W) -> x/y step*/
+/*1D02*/char CannonDirX[] = { 0, 1, 0, -1};
+/*1D06*/char CannonDirY[] = {-1, 0, 1,  0};
 
-C_27A1_3A35(int objNum) {
-	int si, di;
-	int x, y, bp_04, bp_02;
+/*use (fire) cannon objNum in the direction given by its frame
+ (CannonDirX/CannonDirY); the cannon ball hits the first NPC within 5 tiles*/
+/*C_27A1_3A35*/UseCannon(int objNum) {
+	int dir, dist;
+	int x, y, target, reached;
 
 	CON_printf(/*22FD*/"\nFire!\n");
-	si = GetFrame(objNum);
+	dir = GetFrame(objNum);
 	x = GetX(objNum);
 	y = GetY(objNum);
-	for(di = 1; di < 6; di ++) {
-		bp_04 = FindLoc(D_1D02[si] * di + x, D_1D06[si] * di + y, MapZ);
-		if(bp_04 >= 0 && bp_04 < 0x100)
+	/*aim at the first NPC in line (or 6 tiles away)*/
+	for(dist = 1; dist < 6; dist ++) {
+		target = FindLoc(CannonDirX[dir] * dist + x, CannonDirY[dir] * dist + y, MapZ);
+		if(target >= 0 && target < 0x100)
 			break;
 	}
-	x += D_1D02[si] * di;
-	y += D_1D06[si] * di;
-	bp_02 = COMBAT_Missile(objNum, &x, &y, 5, TIL_18F);
-	if(!bp_02) {
-		D_EBFE[0] += D_1D02[si];
-		D_EBFE[1] += D_1D06[si];
-		Explosion(D_EBFE[0], D_EBFE[1], TIL_189);
+	x += CannonDirX[dir] * dist;
+	y += CannonDirY[dir] * dist;
+	reached = COMBAT_Missile(objNum, &x, &y, 5, TIL_MISSILE_7);
+	/*MissileEnd: last position of the missile; when stopped by an
+	obstacle, explode on the obstacle*/
+	if(!reached) {
+		MissileEnd[0] += CannonDirX[dir];
+		MissileEnd[1] += CannonDirY[dir];
+		Explosion(MissileEnd[0], MissileEnd[1], TIL_MISSILE_1);
 	}
-	bp_04 = FindLoc(D_EBFE[0], D_EBFE[1], MapZ);
-	if(bp_04 >= 0 && !QuanType(GetType(bp_04)))
-		LooseHP(bp_04, OSI_rand(1, 60));
+	/*1-60 damage to what is hit (stackable items are spared)*/
+	target = FindLoc(MissileEnd[0], MissileEnd[1], MapZ);
+	if(target >= 0 && !QuanType(GetType(target)))
+		LoseHP(target, OSI_rand(1, 60));
 }
 
-/*use powder keg*/
-static C_27A1_3B59(int objNum) {
+/*use powder keg objNum: light the fuse (KegFuse = minutes left,
+ KegObject = the keg); only one keg may burn at a time*/
+/*C_27A1_3B59*/static UsePowderKeg(int objNum) {
+	/*frame 1: fuse burning (the explosion is triggered by the clock)*/
 	if(GetFrame(objNum) == 0) {
-		if(D_2CA4) {
+		if(KegFuse) {
 			CON_printf(/*2305*/"\nNot now\n");
 			return;
 		}
 		SetFrame(objNum, 1);
-		D_2CA4 = 3;
-		D_2CA6 = objNum;
+		KegFuse = 3;
+		KegObject = objNum;
 		CON_printf(/*230F*/"\nPowder lit!\n");
 		if(GetCoordUse(objNum) == LOCXYZ) {
-			C_1100_0306();
-			OtherAnimations();
+			VIS_UpdateView();
+			DisplayTick();
 		} else {
-			C_155D_0CF5();
+			STAT_DrawInventory();
 		}
 	} else {
-		CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+		CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 	}
 }
 
+/*after an explosion at (x,y): detonate nearby powder kegs and blow up
+ nearby doors that are not magically locked*/
 /*C_27A1_3BE1*/AfterExplosion(int x, int y) {
 	int objNum;
 	int i, j;
 
+	/*(note: y + 2 is excluded: a 5x4 area)*/
 	for(i = x - 2; i <= x + 2; i ++) {
 		for(j = y - 2; j < y + 2; j ++) {
 			/*detonate other kegs*/
-			objNum = __SearchTypeAt(i, j, MapZ, OBJ_0DF);
+			objNum = FindTypeAt(i, j, MapZ, OBJ_POWDER_KEG);
 			if(objNum >= 0) {
 				SetFrame(objNum, 1);
-				C_1100_0306();
-				OtherAnimations();
+				VIS_UpdateView();
+				DisplayTick();
 				Detonate(objNum);
 			}
-			/*blow the doors*/
-			objNum = __SearchTypeAt(i, j, MapZ, OBJ_12C);
+			/*blow the doors (first door type found that is not
+			magically locked, frames 12-15)*/
+			objNum = FindTypeAt(i, j, MapZ, OBJ_STEEL_DOOR);
 			if(objNum == -1 || (GetFrame(objNum) & 0xc) == 0xc)
-				objNum = __SearchTypeAt(i, j, MapZ, OBJ_129);
+				objNum = FindTypeAt(i, j, MapZ, OBJ_OAKEN_DOOR);
 			if(objNum == -1 || (GetFrame(objNum) & 0xc) == 0xc)
-				objNum = __SearchTypeAt(i, j, MapZ, OBJ_12A);
+				objNum = FindTypeAt(i, j, MapZ, OBJ_WINDOWED_DOOR);
 			if(objNum == -1 || (GetFrame(objNum) & 0xc) == 0xc)
-				objNum = __SearchTypeAt(i, j, MapZ, OBJ_12B);
+				objNum = FindTypeAt(i, j, MapZ, OBJ_CEDAR_DOOR);
 			if(objNum >= 0 && (GetFrame(objNum) & 0xc) != 0xc) {
 				DeleteObj(objNum);
-				C_1100_0306();
-				OtherAnimations();
+				VIS_UpdateView();
+				DisplayTick();
 				CON_printf(/*231D*/"\nThe door is blown up!\n");
 			}
 		}
 	}
 }
 
+/*powder keg objNum explodes (on the map or in an inventory):
+ damage everything around and chain-react via AfterExplosion*/
 /*C_27A1_3D2B*/Detonate(int objNum) {
-	int si;
+	int holder;
 	int x, y;
-	int far *bp_04;
+	int far *hit;
 
 	if(GetCoordUse(objNum) == LOCXYZ) {
 		x = GetX(objNum);
 		y = GetY(objNum);
 	} else {
-		si = objNum;
+		holder = objNum;
 		do
-			si = GetAssoc(si);
-		while(GetCoordUse(si) != LOCXYZ);
-		x = GetX(si);
-		y = GetY(si);
+			holder = GetAssoc(holder);
+		while(GetCoordUse(holder) != LOCXYZ);
+		x = GetX(holder);
+		y = GetY(holder);
 	}
+	/*Explosion() returns the -1 terminated list of objects hit*/
 	DeleteObj(objNum);
-	for(bp_04 = Explosion(x, y, TIL_189); *bp_04 >= 0; bp_04 ++) {
-		if(!QuanType(GetType(*bp_04)))
-			LooseHP(*bp_04, OSI_rand(1, 60));
+	for(hit = Explosion(x, y, TIL_MISSILE_1); *hit >= 0; hit ++) {
+		if(!QuanType(GetType(*hit)))
+			LoseHP(*hit, OSI_rand(1, 60));
 	}
 	AfterExplosion(x, y);
-	C_1100_0306();
-	OtherAnimations();
+	VIS_UpdateView();
+	DisplayTick();
 }
 
-static /*C_27A1_3E21*/__SearchTypeAt(int x, int y, int z, int objTyp) {
-	int si;
+/*first object of type objTyp at (x,y,z), -1 if none*/
+static /*C_27A1_3E21*/FindTypeAt(int x, int y, int z, int objTyp) {
+	int objNum;
 
-	for(si = FindLoc(x, y, z); si >= 0 && GetType(si) != objTyp; si = NextLoc());
-	return si;
+	for(objNum = FindLoc(x, y, z); objNum >= 0 && GetType(objNum) != objTyp; objNum = NextLoc());
+	return objNum;
 }
 
-/*drawbridge related*/
-static C_27A1_3E59(int x, int y, int z) {
+/*first object at (x,y,z) that is not part of a drawbridge (something
+ standing on the bridge), 0 if none*/
+/*C_27A1_3E59*/static FindObjOnBridgeAt(int x, int y, int z) {
 	int objNum;
 	
-	for(objNum = FindLoc(x, y, z); objNum >= 0 && GetType(objNum) == OBJ_10D; objNum = NextLoc());
+	for(objNum = FindLoc(x, y, z); objNum >= 0 && GetType(objNum) == OBJ_DRAWBRIDGE; objNum = NextLoc());
 	if(objNum == -1)
 		return 0;
 	return objNum;
 }
 
-C_27A1_3E9A(int x, int y, int z) {
-	int si;
+/*first NPC (object < 0x100) at (x,y,z), 0 if none*/
+/*C_27A1_3E9A*/FindNPCAt(int x, int y, int z) {
+	int objNum;
 	
-	for(si = FindLoc(x, y, z); si >= 0 && si >= 0x100; si = NextLoc());
-	if(si == -1)
+	for(objNum = FindLoc(x, y, z); objNum >= 0 && objNum >= 0x100; objNum = NextLoc());
+	if(objNum == -1)
 		return 0;
-	return si;
+	return objNum;
 }
 
-unsigned char D_1D0A[] = {TIL_010,TIL_01C,TIL_020,TIL_02C,TIL_0D6};
+/*ground tiles on which a lowered drawbridge ends*/
+/*1D0A*/unsigned char BridgeEndTiles[] = {TIL_010,TIL_01C,TIL_020,TIL_02C,TIL_0D6};
 
-C_27A1_3ED1(int bp06) {
-	int si;
+/*is tileNum one of the BridgeEndTiles tiles where a lowered drawbridge ends?*/
+/*C_27A1_3ED1*/IsBridgeEndTile(int tileNum) {
+	int i;
 
-	for(si = 0; si < 5; si ++) {
-		if(D_1D0A[si] == bp06)
+	for(i = 0; i < 5; i ++) {
+		if(BridgeEndTiles[i] == tileNum)
 			return 1;
 	}
 	return 0;
 }
 
-/*add permanent part: bridge related*/
-static C_27A1_3EF6(int x, int y, int typeObject, int shapeNum) {
+/*create a permanent (not LOCAL) object of type typeObject/frame
+ shapeNum at (x,y,MapZ); returns its number*/
+/*C_27A1_3EF6*/static AddPermanentObj(int x, int y, int typeObject, int shapeNum) {
 	int numObject;
 	struct coord xyz;
 
@@ -1938,10 +2130,17 @@ static C_27A1_3EF6(int x, int y, int typeObject, int shapeNum) {
 	return numObject;
 }
 
-/*try to activate drawbrige*/
-static C_27A1_3F47(int objNum) {
+/*raise or lower the drawbridge whose top-left part is objNum.
+ lowered bridge (top-left frame 3): rows of frames 3,4..4,5 and a last
+ row 0,1..1,2 on the first BridgeEndTiles tile row; raised bridge (top-left
+ frame 6): a single row 6,7..7,8 one tile up and left, one part wider.
+ the first part (of each row) carries the quality that links the
+ bridge to its crank; the new parts are permanent objects.
+ returns 0 nothing happens, 1 raised, 2 lowered,
+ 3 can't raise (something on it), 4 can't lower (something below)*/
+/*C_27A1_3F47*/static ToggleDrawbridge(int objNum) {
 	register int tmp_x, tmp_y;
-	int obj_x, obj_y, bp_0e, objQual, tmp_num, objFrm, numTile, bp_04, bp_02;
+	int obj_x, obj_y, k, objQual, tmp_num, objFrm, numTile, width, lastPart;
 
 	objQual = GetQual(objNum);
 	objFrm = GetFrame(objNum);
@@ -1958,55 +2157,59 @@ static C_27A1_3F47(int objNum) {
 		/*is there something on the bridge?*/
 		while(tmp_num >= 0) {
 			while(tmp_num >= 0) {
-				if(C_27A1_3E59(tmp_x, tmp_y, MapZ))
-					return 3;/*can't close*/
-				tmp_num = __SearchTypeAt(++tmp_x, tmp_y, MapZ, OBJ_10D);
+				if(FindObjOnBridgeAt(tmp_x, tmp_y, MapZ))
+					return 3;/*can't close (raise)*/
+				tmp_num = FindTypeAt(++tmp_x, tmp_y, MapZ, OBJ_DRAWBRIDGE);
 			}
 			tmp_x = obj_x;
-			tmp_num = __SearchTypeAt(tmp_x, ++tmp_y, MapZ, OBJ_10D);
+			tmp_num = FindTypeAt(tmp_x, ++tmp_y, MapZ, OBJ_DRAWBRIDGE);
 		}
 		/*close it*/
 		tmp_num = objNum;
 		tmp_x = obj_x;
 		tmp_y = obj_y;
-		objNum = C_27A1_3EF6(tmp_x - 1, tmp_y - 1, OBJ_10D, 6);
+		objNum = AddPermanentObj(tmp_x - 1, tmp_y - 1, OBJ_DRAWBRIDGE, 6);
 		SetQual(objNum, objQual);
 		while(tmp_num >= 0) {
 			DeleteObj(tmp_num);
-			bp_02 = C_27A1_3EF6(tmp_x ++, tmp_y - 1, OBJ_10D, 7);
-			tmp_num = __SearchTypeAt(tmp_x, tmp_y, MapZ, OBJ_10D);
+			lastPart = AddPermanentObj(tmp_x ++, tmp_y - 1, OBJ_DRAWBRIDGE, 7);
+			tmp_num = FindTypeAt(tmp_x, tmp_y, MapZ, OBJ_DRAWBRIDGE);
 		}
-		DeleteObj(bp_02);
-		C_27A1_3EF6(tmp_x - 1, tmp_y - 1, OBJ_10D, 8);
+		DeleteObj(lastPart);
+		AddPermanentObj(tmp_x - 1, tmp_y - 1, OBJ_DRAWBRIDGE, 8);
 		tmp_x = obj_x;
 		tmp_y = obj_y + 1;
-		tmp_num = __SearchTypeAt(tmp_x, tmp_y, MapZ, OBJ_10D);
+		tmp_num = FindTypeAt(tmp_x, tmp_y, MapZ, OBJ_DRAWBRIDGE);
 		while(tmp_num >= 0) {
 			while(tmp_num >= 0) {
 				DeleteObj(tmp_num);
-				tmp_num = __SearchTypeAt(++tmp_x, tmp_y, MapZ, OBJ_10D);
+				tmp_num = FindTypeAt(++tmp_x, tmp_y, MapZ, OBJ_DRAWBRIDGE);
 			}
 			tmp_x = obj_x;
-			tmp_num = __SearchTypeAt(tmp_x, ++tmp_y, MapZ, OBJ_10D);
+			tmp_num = FindTypeAt(tmp_x, ++tmp_y, MapZ, OBJ_DRAWBRIDGE);
 		}
-		C_1100_0306();
-		return 1;/*can close*/
+		VIS_UpdateView();
+		return 1;/*closed (raised)*/
 	}
 	/**********/
 	/*try open*/
 	/**********/
 	if(objFrm == 6) {
-		bp_04 = 1;
+		/*width = number of parts in the raised row + 1, so that a
+		lowered row is 1 + (width - 4) + 1 parts*/
+		width = 1;
 		while(tmp_num >= 0) {
-			bp_04 ++;
-			tmp_num = __SearchTypeAt(++tmp_x, tmp_y, MapZ, OBJ_10D);
+			width ++;
+			tmp_num = FindTypeAt(++tmp_x, tmp_y, MapZ, OBJ_DRAWBRIDGE);
 		}
+		/*is something in the way of the bridge? (only the middle
+		parts are checked)*/
 		tmp_x = obj_x + 1;
 		tmp_y = obj_y + 1;
-		while(!C_27A1_3ED1(numTile = GetTileAtXYZ(tmp_x, tmp_y, MapZ))) {
-			for(bp_0e = 0; bp_0e < bp_04 - 4; bp_0e ++) {
-				if(C_27A1_3E59(tmp_x, tmp_y, MapZ))
-					return 4;/*can't open*/
+		while(!IsBridgeEndTile(numTile = GetTileAtXYZ(tmp_x, tmp_y, MapZ))) {
+			for(k = 0; k < width - 4; k ++) {
+				if(FindObjOnBridgeAt(tmp_x, tmp_y, MapZ))
+					return 4;/*can't open (lower)*/
 				tmp_x ++;
 			}
 			tmp_x = obj_x + 1;
@@ -2018,266 +2221,279 @@ static C_27A1_3F47(int objNum) {
 		tmp_y = obj_y;
 		while(tmp_num >= 0) {
 			DeleteObj(tmp_num);
-			tmp_num = __SearchTypeAt(++tmp_x, tmp_y, MapZ, OBJ_10D);
+			tmp_num = FindTypeAt(++tmp_x, tmp_y, MapZ, OBJ_DRAWBRIDGE);
 		}
 		tmp_x = obj_x + 1;
 		tmp_y = obj_y + 1;
-		while(!C_27A1_3ED1(numTile = GetTileAtXYZ(tmp_x, tmp_y, MapZ))) {
-			objNum = C_27A1_3EF6(tmp_x++, tmp_y, OBJ_10D, 3);
+		while(!IsBridgeEndTile(numTile = GetTileAtXYZ(tmp_x, tmp_y, MapZ))) {
+			objNum = AddPermanentObj(tmp_x++, tmp_y, OBJ_DRAWBRIDGE, 3);
 			SetQual(objNum, objQual);
-			for(bp_0e = 0; bp_0e < bp_04 - 4; bp_0e ++)
-				C_27A1_3EF6(tmp_x ++, tmp_y, OBJ_10D, 4);
-			C_27A1_3EF6(tmp_x, tmp_y, OBJ_10D, 5);
+			for(k = 0; k < width - 4; k ++)
+				AddPermanentObj(tmp_x ++, tmp_y, OBJ_DRAWBRIDGE, 4);
+			AddPermanentObj(tmp_x, tmp_y, OBJ_DRAWBRIDGE, 5);
 			tmp_x = obj_x + 1;
 			tmp_y ++;
 		}
-		C_27A1_3EF6(tmp_x ++, tmp_y, OBJ_10D, 0);
-		tmp_num = C_27A1_3E59(tmp_x - 1, tmp_y, MapZ);
+		/*last row; objects already standing there are moved in place
+		again to put them back on top of the new bridge parts*/
+		AddPermanentObj(tmp_x ++, tmp_y, OBJ_DRAWBRIDGE, 0);
+		tmp_num = FindObjOnBridgeAt(tmp_x - 1, tmp_y, MapZ);
 		if(tmp_num)
 			MoveObj(tmp_num, GetX(tmp_num), GetY(tmp_num), MapZ);
-		for(bp_0e = 0; bp_0e < bp_04 - 4; bp_0e ++) {
-			C_27A1_3EF6(tmp_x ++, tmp_y, OBJ_10D, 1);
-			tmp_num = C_27A1_3E59(tmp_x - 1, tmp_y, MapZ);
+		for(k = 0; k < width - 4; k ++) {
+			AddPermanentObj(tmp_x ++, tmp_y, OBJ_DRAWBRIDGE, 1);
+			tmp_num = FindObjOnBridgeAt(tmp_x - 1, tmp_y, MapZ);
 			if(tmp_num)
 				MoveObj(tmp_num, GetX(tmp_num), GetY(tmp_num), MapZ);
 		}
-		C_27A1_3EF6(tmp_x, tmp_y, OBJ_10D, 2);
-		tmp_num = C_27A1_3E59(tmp_x, tmp_y, MapZ);
+		AddPermanentObj(tmp_x, tmp_y, OBJ_DRAWBRIDGE, 2);
+		tmp_num = FindObjOnBridgeAt(tmp_x, tmp_y, MapZ);
 		if(tmp_num)
 			MoveObj(tmp_num, GetX(tmp_num), GetY(tmp_num), MapZ);
-		C_1100_0306();
-		return 2;/*can open*/
+		VIS_UpdateView();
+		return 2;/*opened (lowered)*/
 	}
 
-	return 0;/*nothine happens*/
+	return 0;/*nothing happens*/
 }
 
-/*use crank*/
-C_27A1_433D(int objNum) {
-	int si, di;
-	int bp_06, bp_04, bp_02;
+/*use crank objNum: operate the drawbridge with the same quality*/
+/*C_27A1_433D*/UseCrank(int objNum) {
+	int bridge, animOrResult;
+	int crankQual, bridgeFrm, i;
 
-	bp_06 = GetQual(objNum);
+	crankQual = GetQual(objNum);
 	for(
-		si = SearchArea(0, 0, 0x3ff, 0x3ff);
-		si >= 0 && (GetType(si) != OBJ_10D || GetQual(si) != bp_06);
-		si = NextArea()
+		bridge = SearchArea(0, 0, 0x3ff, 0x3ff);
+		bridge >= 0 && (GetType(bridge) != OBJ_DRAWBRIDGE || GetQual(bridge) != crankQual);
+		bridge = NextArea()
 	);
-	if(si == -1) {
+	if(bridge == -1) {
 		CON_printf(/*2335*/"\nNo correspondent drawbridge\n");
 		return;
 	}
-	bp_04 = GetFrame(si);
-	if(bp_04 == 3)
-		di = 2;
+	/*animate crank and chain (turning one way or the other)*/
+	bridgeFrm = GetFrame(bridge);
+	if(bridgeFrm == 3)
+		animOrResult = 2;
 	else
-		di = 1;
-	SetTileAnimation(TIL_3F1, di);
-	SetTileAnimation(TIL_3FC, di);
-	for(bp_02 = 0; bp_02 < 20; bp_02 ++)
-		OtherAnimations();
-	di = C_27A1_3F47(si);
-	switch(di) {
+		animOrResult = 1;
+	SetTileAnimation(TIL_CRANK, animOrResult);
+	SetTileAnimation(TIL_CHAIN, animOrResult);
+	for(i = 0; i < 20; i ++)
+		DisplayTick();
+	animOrResult = ToggleDrawbridge(bridge);
+	switch(animOrResult) {
 		case 0: CON_printf(/*2353*/"\nStrange, nothing happened.\n"); break;
 		case 1: CON_printf(/*2370*/"\nClose the drawbridge.\n"); break;
 		case 2: CON_printf(/*2388*/"\nOpen the drawbridge.\n"); break;
 		case 3: CON_printf(/*239F*/"\nCan't close the drawbridge.\n"); break;
 		case 4: CON_printf(/*23BD*/"\nCan't open the drawbridge.\n"); break;
 	}
-	SetTileAnimation(TIL_3F1, 0);
-	SetTileAnimation(TIL_3FC, 0);
+	SetTileAnimation(TIL_CRANK, 0);
+	SetTileAnimation(TIL_CHAIN, 0);
 }
 
-/*use lever*/
-C_27A1_4479(int objNum) {
-	int si, di;
-	int objQual, bp_0a, bp_08, bp_06;
+/*use lever objNum: toggle the portcullis on every doorway that has the
+ lever's quality*/
+/*C_27A1_4479*/UseLever(int objNum) {
+	int doorway, portcullis;
+	int objQual, doorX, doorY, result;
 	struct coord xyz;
 
-	bp_06 = 0;
+	result = 0;
 	CON_printf(/*23DA*/"\nSwitch the lever, ");
 	SetFrame(objNum, GetFrame(objNum) ^ 1);
 	objQual = GetQual(objNum);
 	if(objQual) {
-		si = SearchArea(0, 0, 0x3ff, 0x3ff);
-		while(si >= 0) {
-			while(si >= 0 && (GetType(si) != OBJ_12D || GetQual(si) != objQual))
-				si = NextArea();
-			if(si < 0)
+		doorway = SearchArea(0, 0, 0x3ff, 0x3ff);
+		while(doorway >= 0) {
+			while(doorway >= 0 && (GetType(doorway) != OBJ_DOORWAY || GetQual(doorway) != objQual))
+				doorway = NextArea();
+			if(doorway < 0)
 				continue;
-			bp_0a = GetX(si);
-			bp_08 = GetY(si);
-			di = __SearchTypeAt(bp_0a, bp_08, MapZ, OBJ_136);
-			if(di == -1) {
-				if(C_27A1_3E9A(bp_0a, bp_08, MapZ)) {
-					bp_06 = 2;
+			doorX = GetX(doorway);
+			doorY = GetY(doorway);
+			portcullis = FindTypeAt(doorX, doorY, MapZ, OBJ_PORTCULLIS);
+			if(portcullis == -1) {
+				/*close: not while someone stands in the doorway; the
+				portcullis frame follows the doorway's orientation*/
+				if(FindNPCAt(doorX, doorY, MapZ)) {
+					result = 2;
 					break;
 				}
-				if(GetFrame(si) & 2) {
-					SetCoordXYZ(xyz, bp_0a, bp_08, MapZ);
-					di = AddObj(0, xyz, OBJ_136, 3, 0);
+				if(GetFrame(doorway) & 2) {
+					SetCoordXYZ(xyz, doorX, doorY, MapZ);
+					portcullis = AddObj(0, xyz, OBJ_PORTCULLIS, 3, 0);
 				} else {
-					SetCoordXYZ(xyz, bp_0a, bp_08, MapZ);
-					di = AddObj(0, xyz, OBJ_136, 1, 0);
+					SetCoordXYZ(xyz, doorX, doorY, MapZ);
+					portcullis = AddObj(0, xyz, OBJ_PORTCULLIS, 1, 0);
 				}
-				ClrLocal(di);
+				ClrLocal(portcullis);
 			} else {
-				DeleteObj(di);
+				DeleteObj(portcullis);
 			}
-			bp_06 = 1;
-			si = NextArea();
+			result = 1;
+			doorway = NextArea();
 		}
 	}
-	if(bp_06 == 0)
+	if(result == 0)
 		CON_printf(/*23EE*/"strange, nothing happened.\n");
-	else if(bp_06 == 1)
+	else if(result == 1)
 		CON_printf(/*240A*/"you hear a noise.\n");
-	else if(bp_06 == 2)
+	else if(result == 2)
 		CON_printf(/*241D*/"can't close the portcullis.\n");
 }
 
-/*use switch*/
-C_27A1_4672(int objNum) {
-	int si, di;
-	int objQual, bp_0a, bp_08, bp_06;
+/*use switch objNum: toggle the electric field on every doorway that has
+ the switch's quality*/
+/*C_27A1_4672*/UseSwitch(int objNum) {
+	int doorway, field;
+	int objQual, doorX, doorY, result;
 	struct coord xyz;
 
-	bp_06 = 0;
+	result = 0;
 	CON_printf(/*243A*/"\nOperate the switch, ");
 	SetFrame(objNum, GetFrame(objNum) ^ 1);
 	objQual = GetQual(objNum);
 	if(objQual) {
-		si = SearchArea(0, 0, 0x3ff, 0x3ff);
-		while(si >= 0) {
-			while(si >= 0 && (GetType(si) != OBJ_12D || GetQual(si) != objQual))
-				si = NextArea();
-			if(si < 0)
+		doorway = SearchArea(0, 0, 0x3ff, 0x3ff);
+		while(doorway >= 0) {
+			while(doorway >= 0 && (GetType(doorway) != OBJ_DOORWAY || GetQual(doorway) != objQual))
+				doorway = NextArea();
+			if(doorway < 0)
 				continue;
-			bp_0a = GetX(si);
-			bp_08 = GetY(si);
-			di = __SearchTypeAt(bp_0a, bp_08, MapZ, OBJ_0AF);
-			if(di == -1) {
-				SetCoordXYZ(xyz, bp_0a, bp_08, MapZ);
-				di = AddObj(0, xyz, OBJ_0AF, 0, 0);
-				ClrLocal(di);
+			doorX = GetX(doorway);
+			doorY = GetY(doorway);
+			field = FindTypeAt(doorX, doorY, MapZ, OBJ_ELECTRIC_FIELD);
+			if(field == -1) {
+				SetCoordXYZ(xyz, doorX, doorY, MapZ);
+				field = AddObj(0, xyz, OBJ_ELECTRIC_FIELD, 0, 0);
+				ClrLocal(field);
 			} else {
-				DeleteObj(di);
+				DeleteObj(field);
 			}
-			bp_06 = 1;
-			si = NextArea();
+			result = 1;
+			doorway = NextArea();
 		}
 	}
-	if(bp_06 == 0)
+	if(result == 0)
 		CON_printf(/*23EE*/"strange, nothing happened.\n");
 	else
 		CON_printf(/*240A*/"you hear a noise.\n");
 }
 
-C_27A1_47E0() {
+/*use gargish vocabulary: the Avatar can now understand Gargish*/
+/*C_27A1_47E0*/UseGargishVocabulary() {
 	CON_printf(/*2450*/"\nYou study the scroll!\n");
-	D_2CA8 = 1;
+	SpeakGargish = 1;
 }
 
-/*use ballon plans*/
-C_27A1_47F3() {
-	int si, di;
-	int bp_10[4];
-	int bp_08, bp_06;
+/*use balloon plans: if the party carries a mammoth silk bag, a balloon
+ basket, a cauldron and a rope, assemble a deflated balloon*/
+/*C_27A1_47F3*/UseBalloonPlans() {
+	int missing, actor;
+	int parts[4];
+	int i, balloon;
 	struct coord xyz;
 
-	si = 0;
+	missing = 0;
 	CON_putch('\n');
-	for(bp_08 = 0; bp_08 < 4; bp_08 ++)
-		bp_10[bp_08] = 0;
-
-	bp_10[0] = C_1703_04C6(OBJ_1A5, 0);
-	if(bp_10[0] == -1) {
+	for(i = 0; i < 4; i ++)
+		parts[i] = 0;
+	/*parts[]: party member carrying each part*/
+	parts[0] = FindPartyMemberWithObj(OBJ_MAMMOTH_SILK_BAG, 0);
+	if(parts[0] == -1) {
 		CON_printf(/*2468*/"Missing a mammoth silk bag.\n");
-		si = 1;
+		missing = 1;
 	}
-	bp_10[1] = C_1703_04C6(OBJ_1A6, 0);
-	if(bp_10[1] == -1) {
+	parts[1] = FindPartyMemberWithObj(OBJ_BALLOON_BASKET, 0);
+	if(parts[1] == -1) {
 		CON_printf(/*2485*/"Missing a balloon basket.\n");
-		si = 1;
+		missing = 1;
 	}
-	bp_10[2] = C_1703_04C6(OBJ_093, 0);
-	if(bp_10[2] == -1) {
+	parts[2] = FindPartyMemberWithObj(OBJ_CAULDRON, 0);
+	if(parts[2] == -1) {
 		CON_printf(/*24A0*/"Missing a cauldron.\n");
-		si = 1;
+		missing = 1;
 	}
-	bp_10[3] = C_1703_04C6(OBJ_11C, 0);
-	if(bp_10[3] == -1) {
+	parts[3] = FindPartyMemberWithObj(OBJ_ROPE, 0);
+	if(parts[3] == -1) {
 		CON_printf(/*24A0*/"Missing a rope.\n");
-		si = 1;
+		missing = 1;
 	}
-	if(si)
+	if(missing)
 		return;
-	DeleteObj(C_1944_0A43(bp_10[0], OBJ_1A5, 0));
-	DeleteObj(C_1944_0A43(bp_10[1], OBJ_1A6, 0));
-	DeleteObj(C_1944_0A43(bp_10[2], OBJ_093, 0));
-	DeleteObj(C_1944_0A43(bp_10[3], OBJ_11C, 0));
-	di = Party[Active];
-	SetCoordXYZ(xyz, GetX(di), GetY(di), MapZ);
-	bp_06 = AddObj(0, xyz, OBJ_1A4, 0, 0);
-	SetOkToGet(bp_06);
-	ClrLocal(bp_06);
-	MoveObj(di, GetX(di), GetY(di), MapZ);
+	DeleteObj(OBJ_FindInContainer(parts[0], OBJ_MAMMOTH_SILK_BAG, 0));
+	DeleteObj(OBJ_FindInContainer(parts[1], OBJ_BALLOON_BASKET, 0));
+	DeleteObj(OBJ_FindInContainer(parts[2], OBJ_CAULDRON, 0));
+	DeleteObj(OBJ_FindInContainer(parts[3], OBJ_ROPE, 0));
+	actor = Party[Active];
+	SetCoordXYZ(xyz, GetX(actor), GetY(actor), MapZ);
+	balloon = AddObj(0, xyz, OBJ_BALLOON_DEFLATED, 0, 0);
+	SetOkToGet(balloon);
+	ClrLocal(balloon);
+	MoveObj(actor, GetX(actor), GetY(actor), MapZ);
 	CON_printf(/*24C6*/"Done!\n");
 }
 
-/*use deflated balloon*/
-C_27A1_49C3(int bp06) {
-	int si, di;
-	struct coord xyz, bp_0c/*unused?*/;
-	int bp_0a, bp_08, bp_06, bp_04, bp_02;
+/*use deflated balloon objNum: inflate it next to the active character*/
+/*C_27A1_49C3*/UseDeflatedBalloon(int objNum) {
+	int i, j;
+	struct coord xyz, xyzUnused/*unused?*/;
+	int balloon, actor, actorX, actorY, placed;
 
-	bp_02 = 0;
-	DeleteObj(bp06);
-	bp_08 = Party[Active];
-	bp_06 = GetX(bp_08);
-	bp_04 = GetY(bp_08);
-	SetCoordXYZ(xyz, GetX(bp_08), GetY(bp_08), MapZ);
-	bp_0a = AddObj(0, xyz, OBJ_1A7, 3, 0);
-	ClrLocal(bp_0a);
-	for(si = 0; si < 3; si ++) {
-		for(di = 0; di < 3; di ++) {
-			if(!si && !di)
+	placed = 0;
+	DeleteObj(objNum);
+	actor = Party[Active];
+	actorX = GetX(actor);
+	actorY = GetY(actor);
+	SetCoordXYZ(xyz, GetX(actor), GetY(actor), MapZ);
+	balloon = AddObj(0, xyz, OBJ_BALLOON_INFLATED, 3, 0);
+	ClrLocal(balloon);
+	/*first free neighbouring tile (bug?: this skips the corner (-1,-1)
+	instead of the character's own tile (i,j) == (1,1))*/
+	for(i = 0; i < 3; i ++) {
+		for(j = 0; j < 3; j ++) {
+			if(!i && !j)
 				continue;
-			if(C_1E0F_000F(bp_0a, bp_06 + si - 1, bp_04 + di - 1)) {
-				MoveObj(bp_0a, bp_06 + si - 1, bp_04 + di - 1, MapZ);
+			if(CanMoveTo(balloon, actorX + i - 1, actorY + j - 1)) {
+				MoveObj(balloon, actorX + i - 1, actorY + j - 1, MapZ);
 				CON_printf(/*24CD*/"\nDone!\n");
-				bp_02 = 1;
+				placed = 1;
 				break;
 			}
 		}
-		if(bp_02)
+		if(placed)
 			break;
 	}
-	if(!bp_02)
+	if(!placed)
 		CON_printf(/*24D5*/"\nNo room!\n");
-	if(StatusDisplay == CMD_92)
-		C_155D_1022(D_E709);
+	if(StatusDisplay == CMD_STAT_EQUIP)
+		STAT_RefreshInventory(InvenOwner);
 }
 
-/*destroy gargoyles eggs*/
-static C_27A1_4B0B(int x, int y) {
-	int si, di;
+/*remove all gargoyle eggs within 20 tiles of (x,y)*/
+/*C_27A1_4B0B*/static DestroyGargoyleEggs(int x, int y) {
+	int egg, content;
 
-	for(si = SearchArea(x - 20, y - 20, x + 20, y + 20); si >= 0; si = NextArea()) {
-		if(GetType(si) == OBJ_14F) {
-			di = FindInv(si);
-			if(GetType(di) == OBJ_16A || GetType(di) == OBJ_16B) {
-				while(di >= 0) {
-					DeleteObj(di);
-					di = FindInv(si);
+	for(egg = SearchArea(x - 20, y - 20, x + 20, y + 20); egg >= 0; egg = NextArea()) {
+		if(GetType(egg) == OBJ_EGG) {
+			/*an egg's content is the creature it hatches*/
+			content = FindInv(egg);
+			if(GetType(content) == OBJ_WINGED_GARGOYLE || GetType(content) == OBJ_GARGOYLE) {
+				while(content >= 0) {
+					DeleteObj(content);
+					content = FindInv(egg);
 				}
-				DeleteObj(si);
+				DeleteObj(egg);
 			}
 		}
 	}
 }
 
-char *D_1D0F[] = {
+/*mantras of the 8 virtues (honesty..humility, same order as the runes)*/
+/*1D0F*/char *Mantras[] = {
 	/*24E0*/"Ahm",
 	/*24E4*/"Mu",
 	/*24E7*/"Ra",
@@ -2287,107 +2503,116 @@ char *D_1D0F[] = {
 	/*24F7*/"Om",
 	/*24FA*/"Lum"
 };
-/*shrines coords?*/
-unsigned __1D1F[] = {0x3A4,0x200,0x090,0x124,0x334,0x144,0x000,0x39C};
-unsigned __1D2F[] = {0x108,0x170,0x394,0x02C,0x064,0x33C,0x000,0x360};
+/*shrines coords? (x, y) per virtue; unreferenced. spirituality (index 6)
+is 0,0: its shrine is not on the surface map*/
+unsigned ShrineX[] = {0x3A4,0x200,0x090,0x124,0x334,0x144,0x000,0x39C};
+unsigned ShrineY[] = {0x108,0x170,0x394,0x02C,0x064,0x33C,0x000,0x360};
 
-/*use rune?*/
-static C_27A1_4B98(int objNum) {
+/*use rune objNum: ask for the mantra; if it is right and the matching
+ moonstone lies next to the character (at a shrine), remove the force
+ field and the gargoyle eggs around it*/
+/*C_27A1_4B98*/static UseRune(int objNum) {
 	int i, j;
 	char mantra[5];
 	int virtue, x, y;
-	int moonstone, forcefield, bp_02;
+	int moonstone, forcefield, found;
 
-	bp_02 = 0;
-	virtue = GetType(objNum) - OBJ_0F2;
+	found = 0;
+	virtue = GetType(objNum) - OBJ_RUNE_OF_HONESTY;
 	CON_printf(/*24FE*/"Mantra: ");
 	CON_gets(mantra, 4);
 	CON_putch('\n');
 	for(i = 0; i < 8; i ++)
-		if(stricmp(mantra, D_1D0F[i]) == 0)
+		if(stricmp(mantra, Mantras[i]) == 0)
 			break;
 	if(i == 8 || i != virtue) {
 		CON_printf(/*2507*/"\nWrong mantra!\n");
 		return;
 	}
-	virtue = i;/*???*/
+	virtue = i;/*??? (already equal)*/
+	/*look for the virtue's moonstone around the character
+	(note: "break" only leaves the inner loop)*/
 	x = GetX(Party[Active]);
 	y = GetY(Party[Active]);
 	for(i = 0; i < 3; i ++) {
 		for(j = 0; j < 3; j ++) {
 			if(i != 1 || j != 1) {
-				moonstone = __SearchTypeAt(x + i - 1, y + j - 1, MapZ, OBJ_049);
+				moonstone = FindTypeAt(x + i - 1, y + j - 1, MapZ, OBJ_MOONSTONE);
 				if(moonstone >= 0 && GetFrame(moonstone) == virtue) {
 					/*delete forcefield*/
-					forcefield = __SearchTypeAt(x + i - 1, y + j - 1, MapZ, OBJ_033);
+					forcefield = FindTypeAt(x + i - 1, y + j - 1, MapZ, OBJ_FORCE_FIELD);
 					if(forcefield >= 0)
 						DeleteObj(forcefield);
 					/*destroy gargoyles eggs*/
-					C_27A1_4B0B(GetX(moonstone), GetY(moonstone));
+					DestroyGargoyleEggs(GetX(moonstone), GetY(moonstone));
 
-					bp_02 = 1;
+					found = 1;
 					break;
 				}
 			}
 		}
 	}
-	if(bp_02) {
-		C_1944_0085(1);
-		CON_printf(/*1F13*/"\n%s\n", D_0DDC[7]);
+	if(found) {
+		SPELL_CastEffect(1);
+		CON_printf(/*1F13*/"\n%s\n", SpellMessages[7]);
 	} else {
-		CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+		CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 	}
 }
 
-/*use fishing pole*/
-C_27A1_4D46() {
-	int si, di;
-	int bp_08, bp_06, bp_04, bp_02;
+/*use fishing pole: needs water next to the character; 1/5 chance to
+ catch a fish (at most one fish per game hour, see CaughtFish)*/
+/*C_27A1_4D46*/UseFishingPole() {
+	int i, actor;
+	int j, actorX, actorY, nearWater;
 
-	bp_02 = 0;
-	di = C_27A1_0008(Active);
-	bp_06 = C_27A1_0028(di);
-	bp_04 = C_27A1_0051(di);
-	for(si = 0; si < 3; si ++) {
-		for(bp_08 = 0; bp_08 < 3; bp_08 ++) {
-			if(si == 1 && bp_08 == 1)
+	nearWater = 0;
+	actor = GetPartyObjOrVehicle(Active);
+	actorX = GetObjXOrVehicle(actor);
+	actorY = GetObjYOrVehicle(actor);
+	for(i = 0; i < 3; i ++) {
+		for(j = 0; j < 3; j ++) {
+			if(i == 1 && j == 1)
 				continue;
-			if(IsTerrainWet(GetTileAtXYZ(bp_06 + si - 1, bp_04 + si - 1, MapZ))) {
+			/*bug: "actorY + i - 1" should be "actorY + j - 1", so only
+			the two diagonal neighbours are actually tested*/
+			if(IsTerrainWet(GetTileAtXYZ(actorX + i - 1, actorY + i - 1, MapZ))) {
 				if(!CaughtFish && OSI_rand(0, 4) == 0) {
-					C_155D_0748(di);
-					if(STREN[di] * 20 < WeightInven + WeightEquip + 5) {
+					STAT_ComputeWeights(actor);
+					if(STREN[actor] * 20 < WeightInven + WeightEquip + 5) {
 						CON_printf(/*2517*/"\nGot it, but can't carry it.\n");
 					} else {
 						CON_printf(/*2535*/"\nGot it!\n");
-						AddInvObj(OBJ_109, INVEN, 1, di);
+						AddInvObj(OBJ_FISH, INVEN, 1, actor);
 						CaughtFish = 1;
 					}
 				} else {
 					CON_printf(/*253F*/"\nDidn't get a fish.\n");
 				}
-				bp_02 = 1;
+				nearWater = 1;
 				break;
 			}
 		}
-		if(bp_02)
+		if(nearWater)
 			break;
 	}
-	if(bp_02 == 0)
+	if(nearWater == 0)
 		CON_printf(/*2554*/"\nYou need to stand next to water.\n");
-	if(StatusDisplay == CMD_92)
-		C_155D_0CF5();
+	if(StatusDisplay == CMD_STAT_EQUIP)
+		STAT_DrawInventory();
 }
 
-/*"use" alcool*/
-C_27A1_4E6F(int objNum) {
+/*drink wine/mead/ale objNum*/
+/*C_27A1_4E6F*/UseDrink(int objNum) {
 	DeleteObj(objNum);
 	DrunkCounter ++;
 	CON_printf(/*2577*/"\nYou drink it.\n");
-	if(StatusDisplay == CMD_92)
-		C_155D_0CF5();
+	if(StatusDisplay == CMD_STAT_EQUIP)
+		STAT_DrawInventory();
 }
 
-char *D_1D3F[] = {
+/*wishes the fountain may grant (all give food)*/
+/*1D3F*/char *FountainWishes[] = {
 	/*2587*/"Food",
 	/*258C*/"Mutton",
 	/*2593*/"Wine",
@@ -2395,58 +2620,64 @@ char *D_1D3F[] = {
 	/*259E*/"Meat"
 };
 
-/*use fountain*/
-C_27A1_4E9B() {
-	int si, di;
-	int bp_0e, bp_0c;
-	char bp_0a[10];
+/*use fountain: make a wish; wishing for food has a 1/5 chance to
+ give a portion of meat*/
+/*C_27A1_4E9B*/UseFountain() {
+	int i, actor;
+	int answer, matched;
+	char wish[10];
 
-	bp_0c = 0;
-	di = C_27A1_0008(Active);
+	matched = 0;
+	actor = GetPartyObjOrVehicle(Active);
 	CON_printf(/*25A3*/"Make a wish?");
-	bp_0e = CON_getch();
-	if(bp_0e == 'Y') {
+	answer = CON_getch();
+	if(answer == 'Y') {
 		CON_printf(/*25B0*/"\nWish for: ");
-		CON_gets(bp_0a, 9);
-		for(si = 0; si < 10/*bug?*/; si ++) {
-			if(stricmp(bp_0a, D_1D3F[si]) == 0) {
+		CON_gets(wish, 9);
+		/*bug: FountainWishes has only 5 entries, the loop reads 5 more pointers
+		past its end (whatever follows in the data segment)*/
+		for(i = 0; i < 10/*bug?*/; i ++) {
+			if(stricmp(wish, FountainWishes[i]) == 0) {
 				if(OSI_rand(0, 4) == 0) {
 					CON_printf(/*25BC*/"\n\nYou got food");
-					C_155D_0748(di);
-					if(STREN[di] * 20 < WeightInven + WeightEquip + 2) {
+					STAT_ComputeWeights(actor);
+					if(STREN[actor] * 20 < WeightInven + WeightEquip + 2) {
 						CON_printf(/*25CB*/", but you can't carry it.\n");
 					} else {
-						GiveObj(di, OBJ_081, 1);
+						GiveObj(actor, OBJ_PORTION_OF_MEAT, 1);
 						CON_printf(/*1DC6*/".\n");
 					}
 				} else {
-					CON_printf(/*1FA6*/"\n\n%s\n", D_0DDC[1]);
+					CON_printf(/*1FA6*/"\n\n%s\n", SpellMessages[1]);
 				}
-				bp_0c = 1;
+				matched = 1;
 				break;
 			}
 		}
-		if(!bp_0c)
-			CON_printf(/*1FA6*/"\n\n%s\n", D_0DDC[2]);
+		if(!matched)
+			CON_printf(/*1FA6*/"\n\n%s\n", SpellMessages[2]);
 	} else {
 		CON_printf(/*1D6F*/"\n");
 	}
-	if(StatusDisplay == CMD_92)
-		C_155D_0CF5();
+	if(StatusDisplay == CMD_STAT_EQUIP)
+		STAT_DrawInventory();
 }
 
-C_27A1_4FC6() {
+/*use readied pick/shovel: dig in a direction. digging at one spot on
+ the surface opens a hole (quality 0x13); on tiles TIL_06C..TIL_06F of
+ dungeon levels 1-4 digging may find a fountain (1/32) or a gold nugget (1/10)*/
+/*C_27A1_4FC6*/UseDiggingTool() {
 	int dig_x, dig_y;
-	int tile, bp_06;
+	int tile, hole;
 	struct coord xyz;
 
 	CON_printf(/*25E6*/"Direction:");
 	MouseMode = 0;
 	if(SelectMode != 0) {
-		C_0C9C_1AE5(0);
+		DrawSlotCursor(0);
 		SelectMode = 1;
 	}
-	if(CON_getch() != CMD_80) {
+	if(CON_getch() != CMD_DIRECTION) {
 		CON_printf(/*1F7A*/"nowhere.\n");
 		return;
 	}
@@ -2454,195 +2685,218 @@ C_27A1_4FC6() {
 	dig_x = DirIncrX[AdvanceDir] + MapX;
 	dig_y = DirIncrY[AdvanceDir] + MapY;
 	tile = GetTileAtXYZ(dig_x, dig_y, MapZ);
-	if(MapZ == 0 && dig_x == 0x2c3 && dig_y == 0x343 && __SearchTypeAt(dig_x, dig_y, MapZ, OBJ_134) == -1) {
-		/*Pirate Cave?*/
+	if(MapZ == 0 && dig_x == 0x2c3 && dig_y == 0x343 && FindTypeAt(dig_x, dig_y, MapZ, OBJ_HOLE) == -1) {
+		/*Pirate Cave? (the hole's quality 0x13 is probably its
+		destination/dungeon number)*/
 		SetCoordXYZ(xyz, dig_x, dig_y, MapZ);
-		bp_06 = AddObj(0, xyz, OBJ_134, 0, 0);
-		SetQual(bp_06, 0x13);
+		hole = AddObj(0, xyz, OBJ_HOLE, 0, 0);
+		SetQual(hole, 0x13);
 		CON_printf(/*25F1*/"\nYou dig a hole.\n");
 	} else if(MapZ >= 1 && MapZ <= 4 && tile >= TIL_06C && tile <= TIL_06F) {
 		if(OSI_rand(0, 31) == 0) {
 			SetCoordXYZ(xyz, dig_x, dig_y, MapZ);
-			AddObj(0, xyz, OBJ_0EA, 0, 0);
+			AddObj(0, xyz, OBJ_FOUNTAIN, 0, 0);
 			CON_printf(/*2603*/"\nYou find a water fountain.\n");
 		} else if(OSI_rand(0, 9) == 0) {
 			SetCoordXYZ(xyz, dig_x, dig_y, MapZ);
-			AddObj(0, xyz, OBJ_059, 0, 1);
+			AddObj(0, xyz, OBJ_GOLD_NUGGET, 0, 1);
 			CON_printf(/*2620*/"\nYou find a gold nugget.\n");
 		} else {
-			CON_printf(/*1F13*/"\n%s\n", D_0DDC[1]);
+			CON_printf(/*1F13*/"\n%s\n", SpellMessages[1]);
 		}
 	} else {
-		CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+		CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 	}
 }
 
-char D_1D49[] = { 0, 1, 1, 1, 0,-1,-1,-1};
-char D_1D51[] = {-1,-1, 0, 1, 1, 1, 0,-1};
+/*x/y step for the 8 directions (copy of DirIncrX/DirIncrY)*/
+/*1D49*/char UnboardDirX[] = { 0, 1, 1, 1, 0,-1,-1,-1};
+/*1D51*/char UnboardDirY[] = {-1,-1, 0, 1, 1, 1, 0,-1};
 
-static C_27A1_51C4(int bp0a, int bp08, int bp06) {
-	int si, di;
+/*can the party leave vehicle at (x,y)? a ship needs a passable tile on
+ its left or right side, other vehicles on any of the 8 neighbours*/
+/*C_27A1_51C4*/static CanLeaveVehicleAt(int x, int y, int vehicle) {
+	int dir, shipDir;
 
-	if(GetType(bp06) == OBJ_19C) {
-		di = GetFrame(bp06) & 2;
-		if(C_1E0F_000F(Party[0], D_1D49[(di + 2) & 7] + bp0a, D_1D51[(di + 2) & 7] + bp08))
+	if(GetType(vehicle) == OBJ_SHIP) {
+		/*test the two directions perpendicular to the ship's axis*/
+		shipDir = GetFrame(vehicle) & 2;
+		if(CanMoveTo(Party[0], UnboardDirX[(shipDir + 2) & 7] + x, UnboardDirY[(shipDir + 2) & 7] + y))
 			return 1;
-		if(C_1E0F_000F(Party[0], D_1D49[(di + 6) & 7] + bp0a, D_1D51[(di + 6) & 7] + bp08))
+		if(CanMoveTo(Party[0], UnboardDirX[(shipDir + 6) & 7] + x, UnboardDirY[(shipDir + 6) & 7] + y))
 			return 1;
 	} else {
-		for(si = 0; si < 8; si ++) {
-			if(C_1E0F_000F(Party[0], D_1D49[si] + bp0a, D_1D51[si] + bp08))
+		for(dir = 0; dir < 8; dir ++) {
+			if(CanMoveTo(Party[0], UnboardDirX[dir] + x, UnboardDirY[dir] + y))
 				return 1;
 		}
 	}
 	return 0;
 }
 
-/*use ship/.../balloon?*/
-static C_27A1_5289(int objNum) {
-	int di, x, y, bp_04, bp_02;
+/*use ship/skiff/raft/balloon objNum: board it, or leave it when
+ already aboard (only next to land, or onto the skiff of a ship)*/
+/*C_27A1_5289*/static UseVehicle(int objNum) {
+	int vehTyp, x, y, actor, actorTyp;
 
 	objNum = COMBAT_getHead(objNum);
-	di = GetType(objNum);
-	bp_04 = Party[Active];
-	bp_02 = GetType(bp_04);
+	vehTyp = GetType(objNum);
+	actor = Party[Active];
+	actorTyp = GetType(actor);
 	x = GetX(objNum);
 	y = GetY(objNum);
-	if(D_2CC3 != -1) {
+	if(SoloMember != -1) {
 		CON_printf(/*263A*/"Not in solo mode!\n");
 		return;
 	}
-	if(IN_VEHICLE && bp_04 == objNum) {
+	if(IN_VEHICLE && actor == objNum) {
 		/*try to unboard*/
-		if(C_27A1_51C4(MapX, MapY, objNum)) {
+		if(CanLeaveVehicleAt(MapX, MapY, objNum)) {
 			/*on land*/
 			objNum = Unboard(1);
-			if(di == OBJ_1A7) {
-				ObjShapeType[objNum] = TypeFrame(OBJ_1A4, 0);
-				C_155D_1022(D_E709);
+			if(vehTyp == OBJ_BALLOON_INFLATED) {
+				ObjShapeType[objNum] = TypeFrame(OBJ_BALLOON_DEFLATED, 0);
+				STAT_RefreshInventory(InvenOwner);
 			}
-		} else if(di == OBJ_19C && FindInvType(objNum, OBJ_19E, 0) != -1) {
+		} else if(vehTyp == OBJ_SHIP && FindInvType(objNum, OBJ_SKIFF, 0) != -1) {
 			/*at sea on skiff*/
 			objNum = Unboard(0);
 		} else {
 			CON_printf(/*264D*/"\nOnly next to land.\n");
 		}
 	} else if(
-		(di == OBJ_19C || di == OBJ_19E) &&
-		GetQual(objNum) != 0 && C_1703_04C6(OBJ_095, GetQual(objNum)) == -1
+		/*a ship/skiff with a quality needs the matching deed
+		(OBJ_SHIP_DEED is the "ship deed") carried by the party*/
+		(vehTyp == OBJ_SHIP || vehTyp == OBJ_SKIFF) &&
+		GetQual(objNum) != 0 && FindPartyMemberWithObj(OBJ_SHIP_DEED, GetQual(objNum)) == -1
 	) {
 		CON_printf(/*2662*/"\nA deed is required.\n");
 	} else if(!CLOSE_ENOUGH(1, MapX, MapY, x, y)) {
-		CON_printf(/*1F24*/"\n%s!\n", D_0DDC[3]);
+		CON_printf(/*1F24*/"\n%s!\n", SpellMessages[3]);
 	} else {
-		if(di == OBJ_19C && bp_02 == OBJ_19E)
-			InsertObj(bp_04, objNum, INVEN);
+		/*boarding a ship from a skiff: the skiff is stowed aboard*/
+		if(vehTyp == OBJ_SHIP && actorTyp == OBJ_SKIFF)
+			InsertObj(actor, objNum, INVEN);
 		Board(objNum);
 	}
 }
 
-C_27A1_5431(int objNum, int x, int y, int bp08, int bp06) {
-	int bp_08, bp_06;
+/*put NPC objNum on a horse at (x,y) with frame frame: the NPC becomes
+ the front half of a mounted horse; the rear half is the existing
+ horse rear (reuseRear) or a new object*/
+/*C_27A1_5431*/MountHorse(int objNum, int x, int y, int frame, int reuseRear) {
+	int dir, rear;
 	struct coord xyz;
 
 	MoveObj(objNum, x, y, MapZ);
-	ObjShapeType[objNum] = OBJ_1AF | (bp08 << 10);
+	ObjShapeType[objNum] = OBJ_MOUNTED_HORSE | (frame << 10);
 	MapX = x;
 	MapY = y;
-	bp_08 = bp08 & 6;
-	x -= DirIncrX[bp_08];
-	y -= DirIncrY[bp_08];
-	if(bp06) {
-		bp_06 = FindLoc(x, y, MapZ);
-		bp08 = GetFrame(bp_06);
-		ObjShapeType[bp_06] = OBJ_1AF | (bp08 << 10);
+	/*the rear half is one tile behind (frame & 6 = direction)*/
+	dir = frame & 6;
+	x -= DirIncrX[dir];
+	y -= DirIncrY[dir];
+	if(reuseRear) {
+		rear = FindLoc(x, y, MapZ);
+		frame = GetFrame(rear);
+		ObjShapeType[rear] = OBJ_MOUNTED_HORSE | (frame << 10);
 	} else {
 		SetCoordXYZ(xyz, x, y, MapZ);
-		AddObj(0, xyz, OBJ_1AF, bp08 + 8, 0);
+		AddObj(0, xyz, OBJ_MOUNTED_HORSE, frame + 8, 0);/*frames 8+ = rear half*/
 	}
-	C_101C_054C();
-	OtherAnimations();
+	MAP_LoadAround();
+	DisplayTick();
 }
 
-/*use un-mounted horse*/
-static C_27A1_5503(int si/*bp06*/) {
-	int di;
-	int bp_06, bp_04, bp_02;
+/*use (unmounted) horse: the active character mounts it*/
+/*C_27A1_5503*/static UseHorse(int horse/*bp06*/) {
+	int actor;
+	int horseX, horseY, horseFrm;
 
-	si = COMBAT_getHead(si);
-	if(si < 0xe0) {
+	horse = COMBAT_getHead(horse);
+	/*NPCs 0..0xdf are named characters: their horse can't be taken*/
+	if(horse < 0xe0) {
 		CON_printf(/*2678*/"\nNot boardable!\n");
 		return;
 	}
-	di = Party[Active];
-	if(di == /*NPC_*/0x09) {
+	actor = Party[Active];
+	if(actor == /*NPC_*/0x09) {
 		CON_printf(/*2689*/"\nSherry says: \"Eeek!!! I'm afraid of horses!\"\n");
 		return;
 	}
-	if(di == /*NPC_*/0xA4) {
+	if(actor == /*NPC_*/0xA4) {
 		CON_printf(/*26B8*/"\nBehLem says: \"Horses are for food!\"\n");
 		return;
 	}
-	if(GetType(di) == OBJ_1AF) {
+	if(GetType(actor) == OBJ_MOUNTED_HORSE) {
 		CON_printf(/*26DE*/"\nYou're already on a horse!\n");
 		return;
 	}
-	bp_06 = GetX(si);
-	bp_04 = GetY(si);
-	bp_02 = GetFrame(si);
-	SetType(si, OBJ_058);
-	DeleteObj(si);
-	C_27A1_5431(di, bp_06, bp_04, bp_02, 1);
+	horseX = GetX(horse);
+	horseY = GetY(horse);
+	horseFrm = GetFrame(horse);
+	/*change the type first so that DeleteObj does not also remove the
+	rear half (it is reused by MountHorse)*/
+	SetType(horse, OBJ_GOLD);
+	DeleteObj(horse);
+	MountHorse(actor, horseX, horseY, horseFrm, 1);
 }
 
-/*use mounted-horse*/
-C_27A1_55F0(int objNum) {
-	int di;
-	int bp_16, objTyp, cur_x, cur_y, bp_0e, bp_0c;
-	int dir, bp_08, i, j, bp_02;
+/*dismount mounted horse objNum: restore the rider's shape, delete the
+ rear half and generate a riderless horse next to him*/
+/*C_27A1_55F0*/DismountHorse(int objNum) {
+	int rear;
+	int newFrm, objTyp, cur_x, cur_y, rearX, rearY;
+	int dir, horse, i, j, placed;
 
-	bp_02 = 0;
+	placed = 0;
 	objNum = COMBAT_getHead(objNum);
 	cur_x = GetX(objNum);
 	cur_y = GetY(objNum);
 	dir = GetFrame(objNum) & 6;
+	/*the rider gets back his original shape, facing the same way*/
 	objTyp = OrigShapeType[objNum] & 0x3ff;
-	bp_16 = OBJ_MakeDirFrame(objTyp, GetDirection(objNum));
-	ObjShapeType[objNum] = objTyp | (bp_16 << 10);
+	newFrm = OBJ_MakeDirFrame(objTyp, GetDirection(objNum));
+	ObjShapeType[objNum] = objTyp | (newFrm << 10);
 
-	bp_0e = cur_x - DirIncrX[dir];
-	bp_0c = cur_y - DirIncrY[dir];
-	for(di = FindLoc(bp_0e, bp_0c, MapZ); di >= 0 && GetType(di) != OBJ_1AF; di = NextLoc());
-	if(di >= 0)
-		DeleteObj(di);
+	rearX = cur_x - DirIncrX[dir];
+	rearY = cur_y - DirIncrY[dir];
+	for(rear = FindLoc(rearX, rearY, MapZ); rear >= 0 && GetType(rear) != OBJ_MOUNTED_HORSE; rear = NextLoc());
+	if(rear >= 0)
+		DeleteObj(rear);
 	else
 		CON_printf(/*26FB*/"\nRear horse???\n");
 
-	bp_08 = EGG_generate(OBJ_1AE, 0, 0, MapZ);
+	/*a new (riderless) horse on the first free neighbouring tile*/
+	horse = EGG_generate(OBJ_HORSE, 0, 0, MapZ);
 	for(i = 0; i < 3; i ++) {
 		for(j = 0; j < 3; j ++) {
 			if(i == 1 && j == 1)
 				continue;
-			if(C_1E0F_000F(bp_08, cur_x + i - 1, cur_y + j - 1)) {
-				MoveObj(bp_08, cur_x + i - 1, cur_y + j - 1, MapZ);
-				bp_02 = 1;
+			if(CanMoveTo(horse, cur_x + i - 1, cur_y + j - 1)) {
+				MoveObj(horse, cur_x + i - 1, cur_y + j - 1, MapZ);
+				placed = 1;
 				break;
 			}
 		}
-		if(bp_02)/*unnecessary?*/
+		if(placed)/*leave the outer loop too*/
 			break;
 	}
-	if(!bp_02) {
+	if(!placed) {
 		CON_printf(/*24D5*/"\nNo room!\n");
-		DeleteObj(bp_08);
+		DeleteObj(horse);
 	}
-	OtherAnimations();
+	DisplayTick();
 }
 
-C_27A1_5789() {
-	int si, di;
+/*use orb of the moons (once Lord British explained it): create a red
+ moongate within 2 tiles; its quality (from the relative position)
+ selects the destination*/
+/*C_27A1_5789*/UseOrbOfTheMoons() {
+	int gate, dest;
 	struct coord xyz;
 
+	/*conversation flag 5 of NPC 5 (Lord British?)*/
 	if(!((TalkFlags[5] >> 5) & 1)) {
 		CON_printf(/*270B*/"\nYou can't figure out how to use it.\n");
 		return;
@@ -2650,7 +2904,7 @@ C_27A1_5789() {
 	CON_printf(/*2731*/"Where: ");
 	MouseMode = 1;
 	if(SelectMode != 0) {
-		C_0C9C_1AE5(0);
+		DrawSlotCursor(0);
 		SelectMode = 1;
 		SelectRange = 7;
 	}
@@ -2659,504 +2913,540 @@ C_27A1_5789() {
 		MapX - 2 <= Selection.x && MapX + 2 >= Selection.x &&
 		MapY - 2 <= Selection.y && MapY + 2 >= Selection.y
 	) {
+		/*destination from the position in the 5x5 square around the
+		Avatar: the 3 central tiles of the middle row give 0, the
+		others (row + 2) * 5 + (column + 3)*/
 		if(Selection.y == MapY && MapX - 1 <= Selection.x && MapX + 1 >= Selection.x)
-			di = 0;
+			dest = 0;
 		else
-			di = (Selection.y - MapY + 2) * 5 + (Selection.x - MapX + 3);
+			dest = (Selection.y - MapY + 2) * 5 + (Selection.x - MapX + 3);
+		/*create the gate off-map first to test the destination tile*/
 		SetCoordXYZ(xyz, 0, 0, MapZ);
-		si = AddObj(0, xyz, OBJ_054, 1, QualQuan(di, 0));
+		gate = AddObj(0, xyz, OBJ_RED_GATE, 1, QualQuan(dest, 0));
 		if(
-			C_1E0F_000F(si, Selection.x, Selection.y) &&
-			__SearchTypeAt(Selection.x, Selection.y, MapZ, OBJ_12D) == -1 &&
-			__SearchTypeAt(Selection.x, Selection.y, MapZ, OBJ_12E) == -1
+			CanMoveTo(gate, Selection.x, Selection.y) &&
+			FindTypeAt(Selection.x, Selection.y, MapZ, OBJ_DOORWAY) == -1 &&
+			FindTypeAt(Selection.x, Selection.y, MapZ, OBJ_ARCHWAY) == -1
 		) {
 			CON_printf(/*2739*/"a red moon gate appears.\n");
-			MoveObj(si, Selection.x, Selection.y, MapZ);
+			MoveObj(gate, Selection.x, Selection.y, MapZ);
 			ScreenFade = 1;
-			C_1100_0306();
-			OtherAnimations();
+			VIS_UpdateView();
+			DisplayTick();
 		} else {
-			CON_printf(/*1D6D*/"%s\n", D_0DDC[1]);
-			DeleteObj(si);
+			CON_printf(/*1D6D*/"%s\n", SpellMessages[1]);
+			DeleteObj(gate);
 		}
 	} else {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[1]);
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[1]);
 	}
 }
 
-/*use crystal ball*/
-C_27A1_5935() {
-	int si, di;
-	char bp_0e[4];
-	int bp_0a, bp_08, bp_06, snd_flag, bp_02;
+/*use crystal ball: enter a latitude/longitude and view that place
+ (as with "wizard eye"); a failed intelligence check hurts*/
+/*C_27A1_5935*/UseCrystalBall() {
+	int lat, lon;
+	char buf[4];
+	int eyeX, eyeY, cursorY, snd_flag, actor;
 
-	bp_02 = C_27A1_0008(Active);
-	if(C_27A1_2D61(INTEL[bp_02])) {
-		LooseHP(bp_02, OSI_rand(1, 10));
+	actor = GetPartyObjOrVehicle(Active);
+	if(FailsIntCheck(INTEL[actor])) {
+		LoseHP(actor, OSI_rand(1, 10));
 		CON_putch('\n');
-		COMBAT_displaySeverity(bp_02);
+		COMBAT_displaySeverity(actor);
 		return;
 	}
 	if(SelectMode != 0) {
-		C_0C9C_1AE5(0);
+		DrawSlotCursor(0);
 		SelectMode = 0;
 	}
 	CON_printf(/*2753*/"\nEnter degrees followed by N, S, E or W.\n");
 	CON_printf(/*277D*/"\nAt latitude=");
-	bp_06 = D_04DF->_cury;
-	CON_gets(bp_0e, 4);
-	si = C_27A1_0205(bp_0e, 1);
-	if(si > 80 || si < -44) {
-		CON_gotoxy(12, bp_06);
+	cursorY = CurClip->curY;
+	CON_gets(buf, 4);
+	lat = ParseNumberInput(buf, 1);
+	if(lat > 80 || lat < -44) {
+		CON_gotoxy(12, cursorY);
 		CON_printf(/*1F02*/"0   \n");
 		return;
 	}
 	CON_printf(/*278B*/"\n  longitude=");
-	bp_06 = D_04DF->_cury;
-	CON_gets(bp_0e, 4);
-	di = C_27A1_0205(bp_0e, 2);
-	if(di > 88 || di < -37) {
-		CON_gotoxy(12, bp_06);
+	cursorY = CurClip->curY;
+	CON_gets(buf, 4);
+	lon = ParseNumberInput(buf, 2);
+	if(lon > 88 || lon < -37) {
+		CON_gotoxy(12, cursorY);
 		CON_printf(/*1F02*/"0   \n");
 		return;
 	}
 	CON_putch('\n');
 	snd_flag = SoundFlag;
 	SoundFlag = 0;
-	bp_0a = 0x130 + (di << 3);
-	bp_08 = 0x168 + (si << 3);
+	/*8 tiles per degree, origin at (0x130,0x168) on the surface;
+	other levels are 4 times smaller*/
+	eyeX = 0x130 + (lon << 3);
+	eyeY = 0x168 + (lat << 3);
 	if(MapZ != 0) {
-		bp_0a >>= 2;
-		bp_08 >>= 2;
+		eyeX >>= 2;
+		eyeY >>= 2;
 	}
-	C_1944_39A1(bp_0a, bp_08, 0);
+	SPELL_WizardEye(eyeX, eyeY, 0);
 	SoundFlag = snd_flag;
 }
 
-/*use telescope*/
-C_27A1_5A97(int bp06) {
-	int si, di;
-	int bp_04, bp_02;
+/*use telescope objNum: scroll the view in a direction until a view
+ blocking tile (>= TIL_0FC) or ~40 tiles*/
+/*C_27A1_5A97*/UseTelescope(int objNum) {
+	int steps, tile;
+	int savedX, savedY;
 
-	si = 40;
-	di = 0;
-	bp_04 = MapX;
-	bp_02 = MapY;
-	MapX = GetX(bp06);
-	MapY = GetY(bp06);
+	steps = 40;
+	tile = 0;
+	savedX = MapX;
+	savedY = MapY;
+	MapX = GetX(objNum);
+	MapY = GetY(objNum);
 	ShowObjects();
-	C_101C_054C();
-	OtherAnimations();
+	MAP_LoadAround();
+	DisplayTick();
 	CON_printf(/*2799*/"Direction-");
 	MouseMode = 0;
-	if(CON_getch() != CMD_80) {
+	if(CON_getch() != CMD_DIRECTION) {
 		CON_printf(/*1F7A*/"nowhere.\n");
 		return;
 	}
 	CON_printf(/*1F84*/"%s.\n", DirNames[AdvanceDir]);
-	D_05E8 = 1;
+	/*XRayView: see through walls/everything lit while scrolling*/
+	XRayView = 1;
 	ScreenFade = 1;
 	ShowObjects();
-	C_101C_054C();
-	OtherAnimations();
-	while(si >= 0 && di < TIL_0FC) {
+	MAP_LoadAround();
+	DisplayTick();
+	while(steps >= 0 && tile < TIL_0FC) {
 		MapX += DirIncrX[AdvanceDir];
 		MapY += DirIncrY[AdvanceDir];
 		ShowObjects();
-		C_101C_054C();
-		OtherAnimations();
-		si --;
-		di = GetTileAtXYZ(MapX, MapY, MapZ);
+		MAP_LoadAround();
+		DisplayTick();
+		steps --;
+		tile = GetTileAtXYZ(MapX, MapY, MapZ);
 	}
-	D_05E8 = 0;
-	MapX = bp_04;
-	MapY = bp_02;
+	XRayView = 0;
+	MapX = savedX;
+	MapY = savedY;
 	ShowObjects();
-	C_101C_054C();
+	MAP_LoadAround();
 	ScreenFade = 1;
-	OtherAnimations();
-	CON_printf(/*1F13*/"\n%s\n", D_0DDC[7]);
+	DisplayTick();
+	CON_printf(/*1F13*/"\n%s\n", SpellMessages[7]);
 }
 
-/*use silver horn?*/
-C_27A1_5BCF() {
+/*use silver horn: summon up to 3 groups of silver serpents at the
+ edges of the screen (not while one is already present)*/
+/*C_27A1_5BCF*/UseSilverHorn() {
 	int x, y;
-	int bp_12, bp_10, bp_0e, bp_0c, bp_0a, egg_numObject, bp_06;
+	int idx, offs, tries, n, serpent, egg_numObject, generated;
 	struct coord xyz;
 
-	bp_06 = 0;
-	for(bp_12 = 0xe0; bp_12 < 0x100; bp_12 ++) {
-		if(ObjShapeType[bp_12] != 0 && GetType(bp_12) == OBJ_19D) {
+	generated = 0;
+	for(idx = 0xe0; idx < 0x100; idx ++) {
+		if(ObjShapeType[idx] != 0 && GetType(idx) == OBJ_SILVER_SERPENT) {
 			CON_printf(/*27A4*/"\nNot now!\n");
 			return;
 		}
 	}
+	/*temporary off-map serpent, only used for the passability tests*/
 	SetCoordXYZ(xyz, 0, 0, MapZ);
-	bp_0a = AddObj(0, xyz, OBJ_19D, 0, 1);
-	for(bp_0c = 0; bp_0c < 3; bp_0c ++) {
-		for(bp_0e = 0; bp_0e < 8; bp_0e ++) {
-			bp_12 = OSI_rand(0, 3);
-			bp_10 = OSI_rand(0, 10);
-			switch(bp_12) {
-				case 0: x = MapX - 6; y = MapY + bp_10 - 6; break;
-				case 1: x = MapX + bp_10 - 6; y = MapY - 7; break;
-				case 2: x = MapX + 7; y = MapY + bp_10 - 6; break;
-				case 3: x = MapX + bp_10 - 6; y = MapY + 6; break;
+	serpent = AddObj(0, xyz, OBJ_SILVER_SERPENT, 0, 1);
+	for(n = 0; n < 3; n ++) {
+		/*up to 8 tries for a free spot just outside one of the 4
+		screen edges*/
+		for(tries = 0; tries < 8; tries ++) {
+			idx = OSI_rand(0, 3);
+			offs = OSI_rand(0, 10);
+			switch(idx) {
+				case 0: x = MapX - 6; y = MapY + offs - 6; break;
+				case 1: x = MapX + offs - 6; y = MapY - 7; break;
+				case 2: x = MapX + 7; y = MapY + offs - 6; break;
+				case 3: x = MapX + offs - 6; y = MapY + 6; break;
 			}
 			if(
-				C_1E0F_000F(bp_0a, x,     y) &&
-				C_1E0F_000F(bp_0a, x - 1, y) &&
-				C_1E0F_000F(bp_0a, x,     y + 1) &&
-				C_1E0F_000F(bp_0a, x - 1, y + 1) &&
-				C_1E0F_000F(bp_0a, x + 1, y) &&
-				C_1E0F_000F(bp_0a, x,     y - 1)
+				CanMoveTo(serpent, x,     y) &&
+				CanMoveTo(serpent, x - 1, y) &&
+				CanMoveTo(serpent, x,     y + 1) &&
+				CanMoveTo(serpent, x - 1, y + 1) &&
+				CanMoveTo(serpent, x + 1, y) &&
+				CanMoveTo(serpent, x,     y - 1)
 			) break;
 		}
-		if(bp_0e == 8)
+		if(tries == 8)
 			continue;
+		/*an egg (chaotic alignment, 100% hatching) containing a silver
+		serpent (embryo quality = its AI mode), hatched at once*/
 		SetCoordXYZ(xyz, x, y, MapZ);
-		egg_numObject = AddObj(0, xyz, OBJ_14F, 0, QualQuan(4, 100));
-		AddInvObj(OBJ_19D, CONTAINED, QualQuan(8, OSI_rand(4, 8)), egg_numObject);
+		egg_numObject = AddObj(0, xyz, OBJ_EGG, 0, QualQuan(4, 100));
+		AddInvObj(OBJ_SILVER_SERPENT, CONTAINED, QualQuan(8, OSI_rand(4, 8)), egg_numObject);
 		EGG_hatches(egg_numObject);
-		bp_06 ++;
+		generated ++;
 	}
-	DeleteObj(bp_0a);
-	if(!bp_06) {
+	DeleteObj(serpent);
+	if(!generated) {
 		CON_printf(/*27AF*/"\nNone generated!\n");
 		return;
 	}
 	CON_printf(/*27C1*/"\nSilver snakes are generated!\n");
 }
 
-C_27A1_5DF2(int si/*bp06*/) {
-	int di;
-	int bp_08, bp_06, bp_04, bp_02;
+/*use passthrough objNum: slide it open/closed by one tile*/
+/*C_27A1_5DF2*/UsePassthrough(int objNum/*bp06*/) {
+	int objX;
+	int objFrm, objTyp, objY, blocker;
 
-	bp_06 = GetType(si);
-	bp_08 = GetFrame(si);
-	di = GetX(si);
-	bp_04 = GetY(si);
-	if(bp_08 == 0) {
-		if(bp_06 == OBJ_116)
-			MoveObj(si, di, bp_04 - 1, MapZ);
+	objTyp = GetType(objNum);
+	objFrm = GetFrame(objNum);
+	objX = GetX(objNum);
+	objY = GetY(objNum);
+	/*OBJ_PASSTHROUGH_116 slides vertically, OBJ_PASSTHROUGH_118
+	horizontally; frame bit 1 = open*/
+	if(objFrm == 0) {
+		if(objTyp == OBJ_PASSTHROUGH_116)
+			MoveObj(objNum, objX, objY - 1, MapZ);
 		else
-			MoveObj(si, di - 1, bp_04, MapZ);
-		SetFrame(si, bp_08 | 2);
+			MoveObj(objNum, objX - 1, objY, MapZ);
+		SetFrame(objNum, objFrm | 2);
 		CON_printf(/*27E0*/"\nOpen the passthrough.\n");
 	} else {
-		if(bp_06 == OBJ_116) {
-			bp_02 = FindLoc(di, bp_04 + 1, MapZ);
-			if(bp_02 != -1 && bp_02 < 0x100) {
+		if(objTyp == OBJ_PASSTHROUGH_116) {
+			blocker = FindLoc(objX, objY + 1, MapZ);
+			if(blocker != -1 && blocker < 0x100) {
 				CON_printf(/*27A4*/"\nNot now!\n");
 				return;
 			}
-			MoveObj(si, di, bp_04 + 1, MapZ);
+			MoveObj(objNum, objX, objY + 1, MapZ);
 		} else {
-			bp_02 = FindLoc(di + 1, bp_04, MapZ);
-			if(bp_02 != -1 && bp_02 < 0x100) {
+			blocker = FindLoc(objX + 1, objY, MapZ);
+			if(blocker != -1 && blocker < 0x100) {
 				CON_printf(/*27A4*/"\nNot now!\n");
 				return;
 			}
-			MoveObj(si, di + 1, bp_04, MapZ);
+			MoveObj(objNum, objX + 1, objY, MapZ);
 		}
-		SetFrame(si, bp_08 & 1);
+		SetFrame(objNum, objFrm & 1);
 		CON_printf(/*27F8*/"\nClose the passthrough.\n");
 	}
 }
 
-C_27A1_5F43(int si/*bp06*/) {
-	int di;
+/*eat food objNum (one of a stack)*/
+/*C_27A1_5F43*/UseFood(int objNum/*bp06*/) {
+	int inInven;
 
-	di = 0;
+	inInven = 0;
 	CON_printf(/*2811*/"\nYou eat the food.\n");
-	if(GetCoordUse(si) != LOCXYZ)
-		di = 1;
-	if(QuanType(GetType(si)) && GetQuan(si) > 1)
-		SubQuan(si, 1);
+	if(GetCoordUse(objNum) != LOCXYZ)
+		inInven = 1;
+	if(QuanType(GetType(objNum)) && GetQuan(objNum) > 1)
+		SubQuan(objNum, 1);
 	else
-		DeleteObj(si);
-	if(di)
-		C_155D_0CF5();
+		DeleteObj(objNum);
+	if(inInven)
+		STAT_DrawInventory();
 }
 
-/*Use vortex cube?*/
-static C_27A1_5FAC(int objNum) {
-	int si, di;
-	int bp_12[8];
+/*use vortex cube objNum: if it holds the 8 moonstones and the two lenses
+ and the Codex are in place (and the party is near the Codex), the
+ Codex vanishes and the game ends. returns 0 if nothing happens*/
+/*C_27A1_5FAC*/static UseVortexCube(int objNum) {
+	int i, stone;
+	int hasStone[8];
 	int codex_objNum;
 
 	/*all moonstones in the vortex cube?*/
-	for(si = 0; si < 8; si ++)
-		bp_12[si] = 0;
-	for(di = FindInv(objNum); di >= 0; di = NextInv())
-		bp_12[GetFrame(di)] = 1;
-	for(si = 0; si < 8; si ++) {
-		if(!bp_12[si])
+	for(i = 0; i < 8; i ++)
+		hasStone[i] = 0;
+	for(stone = FindInv(objNum); stone >= 0; stone = NextInv())
+		hasStone[GetFrame(stone)] = 1;
+	for(i = 0; i < 8; i ++) {
+		if(!hasStone[i])
 			return 0;
 	}
 	/*Britannia lens?*/
-	if(__SearchTypeAt(0x399, 0x353, 0, OBJ_18A) == -1)
+	if(FindTypeAt(0x399, 0x353, 0, OBJ_BRITANNIA_LENS_BLUE) == -1)
 		return 0;
 	/*Gargoyle lens?*/
-	if(__SearchTypeAt(0x39d, 0x353, 0, OBJ_18C) == -1)
+	if(FindTypeAt(0x39d, 0x353, 0, OBJ_GARGOYLE_LENS_VIOLET) == -1)
 		return 0;
 	/*codex?*/
-	codex_objNum = __SearchTypeAt(0x39b, 0x353, 0, OBJ_03B);
+	codex_objNum = FindTypeAt(0x39b, 0x353, 0, OBJ_CODEX);
 	if(codex_objNum == -1)
 		return 0;
+	/*the Codex must be on screen*/
 	if(
 		MapX - 5 > 0x39b || MapX + 5 < 0x39b ||
 		MapY - 5 > 0x353 || MapY + 5 < 0x353
 	) return 0;
 	/*all conditions are OK*/
 	DeleteObj(codex_objNum);
-	C_2FC1_1BCE();
+	RedrawMapWindow();
 	CON_printf(/*2825*/"\nThe Codex has vanished!\n");
 	CON_getch();
-	C_0903_0A1E();/*go to ending?*/
+	LaunchEndGame();/*go to ending?*/
 
 	return 1;
 }
 
-C_27A1_60BD() {
+/*use rubber ducky: squeak*/
+/*C_27A1_60BD*/UseRubberDucky() {
 	CON_printf(/*283F*/"\nSqueak!\n");
-	MUS_0065(22, 0);
+	MUS_PlaySfx(22, 0);
 }
 
-C_27A1_60D6() {
+/*use fan: rotate the wind direction*/
+/*C_27A1_60D6*/UseFan() {
 	WindDir = (WindDir + 1) & 7;
 	CON_printf(/*2849*/"\nYou feel a breeze.\n");
-	C_0A33_1355(0);
+	PassTime(0);/*refresh the time-dependent state*/
 }
 
-unsigned D_1D59[] = {OBJ_1A7,OBJ_10E,OBJ_0DD,OBJ_1A4,OBJ_1AE,OBJ_131,OBJ_19F,OBJ_19C,OBJ_19E,OBJ_04E};
+/*types that can't be used while in a vehicle*/
+/*1D59*/unsigned NoVehicleUseTypes[] = {OBJ_BALLOON_INFLATED,OBJ_BALLOON_PLANS,OBJ_CANNON,OBJ_BALLOON_DEFLATED,OBJ_HORSE,OBJ_LADDER,OBJ_RAFT,OBJ_SHIP,OBJ_SKIFF,OBJ_STAFF};
 
-C_27A1_60F5(int bp06) {
-		int si, di;
-		int bp_04, bp_02;
-		bp_04 = 0;
-		di = GetType(bp06);
-		for(si = 0; si < 10; si ++) {
-			if(D_1D59[si] == di) {
-				bp_04 = 1;
+/*is objNum something that can't be used from a vehicle (NoVehicleUseTypes)?
+ (using the vehicle itself, or a ship from its skiff, is allowed)*/
+/*C_27A1_60F5*/IsNotUsableInVehicle(int objNum) {
+		int i, objTyp;
+		int found, actor;
+		found = 0;
+		objTyp = GetType(objNum);
+		for(i = 0; i < 10; i ++) {
+			if(NoVehicleUseTypes[i] == objTyp) {
+				found = 1;
 				break;
 			}
 		}
-		if(bp_04 == 0)
+		if(found == 0)
 			return 0;
-		bp_02 = Party[Active];
+		actor = Party[Active];
 		if(
-			(IN_VEHICLE && bp_02 == bp06) ||
-			(GetType(bp_02) == OBJ_19E && di == OBJ_19C)
+			(IN_VEHICLE && actor == objNum) ||
+			(GetType(actor) == OBJ_SKIFF && objTyp == OBJ_SHIP)
 		) return 0;
 		return 1;
 }
 
-/*"use"*/
-C_27A1_6179() {
-	int si, di;
-	int bp_0a, bp_08, bp_06, bp_04, bp_02;
+/*"use" command: dispatch on the selected object's type to its handler*/
+/*C_27A1_6179*/CmdUse() {
+	int objTyp, topObj;
+	int objFrm, actorX, actorY, topTyp, dir;
 
 	Selection.obj = COMBAT_getHead(Selection.obj);
-	si = GetType(Selection.obj);
+	objTyp = GetType(Selection.obj);
+	/*pointing at a person (except horses/cows, or from a vehicle) or
+	at an "ignore" tile: use what is under it*/
 	if(
 		(Selection.obj <= 0xff && Selection.x != -1 &&
-		si != OBJ_1AE && si != OBJ_1AF && si != OBJ_1AC &&
+		objTyp != OBJ_HORSE && objTyp != OBJ_MOUNTED_HORSE && objTyp != OBJ_COW &&
 		!IN_VEHICLE) ||
 		(IsTileIg(TILE_FRAME(Selection.obj)))
-	) Selection.obj = C_27A1_0919(Selection.obj);
+	) Selection.obj = FindNonIgnoredObjAt(Selection.obj);
 	if(Selection.obj == -1) {
-		CON_printf(/*1D6D*/"%s\n", D_0DDC[5]);
+		CON_printf(/*1D6D*/"%s\n", SpellMessages[5]);
 		return;
 	}
 	Selection.obj = COMBAT_getHead(Selection.obj);
-	if(si == OBJ_1AF) {
+	if(objTyp == OBJ_MOUNTED_HORSE) {
 		CON_printf(/*285E*/"horse\n");
 	} else {
 		CON_printf((char *)GetObjectString(Selection.obj));
 		CON_putch('\n');
 	}
-	si = GetType(Selection.obj);
-	if(!C_27A1_01DE(si)) {
-		CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+	objTyp = GetType(Selection.obj);
+	if(!IsUsableType(objTyp)) {
+		CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 		return;
 	}
-	if(IN_VEHICLE && C_27A1_60F5(Selection.obj)) {
+	if(IN_VEHICLE && IsNotUsableInVehicle(Selection.obj)) {
 		CON_printf(/*1D6F*/"\n");
 		CON_printf(NotOnShipMsg);
 		return;
 	}
 	if(GetCoordUse(Selection.obj) == LOCXYZ) {
-		bp_02 = MkDirection(PointerX, PointerY);
-		if(bp_02 != -1) {
-			C_1E0F_0664(Party[Active], bp_02);
-			C_1100_0306();
+		dir = MkDirection(PointerX, PointerY);
+		if(dir != -1) {
+			UpdateMoveFrame(Party[Active], dir);
+			VIS_UpdateView();
 		}
-		bp_08 = GetX(Party[Active]);
-		bp_06 = GetY(Party[Active]);
-		if(!CLOSE_ENOUGH(1, Selection.x, Selection.y, bp_08, bp_06)) {
-			CON_printf(/*1F24*/"\n%s!\n", D_0DDC[3]);
+		actorX = GetX(Party[Active]);
+		actorY = GetY(Party[Active]);
+		if(!CLOSE_ENOUGH(1, Selection.x, Selection.y, actorX, actorY)) {
+			CON_printf(/*1F24*/"\n%s!\n", SpellMessages[3]);
 			return;
 		}
 	}
-	di = FindLoc(GetX(Selection.obj), GetY(Selection.obj), MapZ);
-	bp_04 = GetType(di);
+	/*a door (or secret door) can't be used while something lies in
+	the doorway (on top of it)*/
+	topObj = FindLoc(GetX(Selection.obj), GetY(Selection.obj), MapZ);
+	topTyp = GetType(topObj);
 	if(
-		(C_1944_0AA9(si) && !C_1944_0AA9(bp_04) && !IsTileIg(TILE_FRAME(di))) ||
-		(si == OBJ_14E && bp_04 != OBJ_14E)
+		(IsDoorType(objTyp) && !IsDoorType(topTyp) && !IsTileIg(TILE_FRAME(topObj))) ||
+		(objTyp == OBJ_SECRET_DOOR && topTyp != OBJ_SECRET_DOOR)
 	) {
 		CON_printf(/*27A4*/"\nNot now!\n");
 		return;
 	}
-	if(Active != D_04B3 && GetCoordUse(Selection.obj) == EQUIP && si != OBJ_05A) {
+	/*a readied object can only be used by the member who holds it*/
+	if(Active != StatusMember && GetCoordUse(Selection.obj) == EQUIP && objTyp != OBJ_TORCH) {
 		CON_printf(/*2865*/"\nMust be in your hand.\n");
 		return;
 	}
-	bp_0a = GetFrame(Selection.obj);
-	switch(si) {
-		case OBJ_073:
-		case OBJ_074:
-		case OBJ_075: C_27A1_4E6F(Selection.obj); break;
-		case OBJ_19C:
-		case OBJ_19E:
-		case OBJ_19F:
-		case OBJ_1A7:
+	objFrm = GetFrame(Selection.obj);
+	switch(objTyp) {
+		case OBJ_WINE:
+		case OBJ_MEAD:
+		case OBJ_ALE: UseDrink(Selection.obj); break;
+		case OBJ_SHIP:
+		case OBJ_SKIFF:
+		case OBJ_RAFT:
+		case OBJ_BALLOON_INFLATED:
 			if(GetCoordUse(Selection.obj) != LOCXYZ)
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 			else
-				C_27A1_5289(Selection.obj);
+				UseVehicle(Selection.obj);
 		break;
-		case OBJ_10E: C_27A1_47F3(); break;
-		case OBJ_0BA:
-		case OBJ_0C0:
-			if(bp_0a == 1)
+		case OBJ_BALLOON_PLANS: UseBalloonPlans(); break;
+		case OBJ_OPEN_BARREL:
+		case OBJ_OPEN_CRATE:
+			/*frame 1 = closed: open it, then search it*/
+			if(objFrm == 1)
 				SetFrame(Selection.obj, 0);
 			else
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
-			C_27A1_09A1(Selection.obj, Selection.x, Selection.y);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
+			SearchObj(Selection.obj, Selection.x, Selection.y);
 		break;
-		case OBJ_0EC:
-		case OBJ_1A3: C_27A1_338D(); break;
-		case OBJ_0B6: C_27A1_37D3(); break;
-		case OBJ_07A:
-		case OBJ_091:
-		case OBJ_0A4:
-		case OBJ_0CE:
-		case OBJ_0FD:
-			if(si == OBJ_0CE && (bp_0a & 2))
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+		case OBJ_BELL:
+		case OBJ_PULL_CHAIN: UseBell(); break;
+		case OBJ_BEEHIVE: UseBeehive(); break;
+		case OBJ_CANDLE:
+		case OBJ_CANDELABRA:
+		case OBJ_FIREPLACE:
+		case OBJ_BRAZIER:
+		case OBJ_CAMPFIRE:
+			/*(braziers with frame bit 1 set can't be lit/doused)*/
+			if(objTyp == OBJ_BRAZIER && (objFrm & 2))
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 			else
-				C_27A1_31F6(Selection.obj);
+				UseLightSource(Selection.obj);
 		break;
-		case OBJ_05F:
-		case OBJ_060:
-		case OBJ_080:
-		case OBJ_081:
-		case OBJ_082:
-		case OBJ_083:
-		case OBJ_084:
-		case OBJ_085:
-		case OBJ_087:
-		case OBJ_0B4:
-		case OBJ_0B8:
-		case OBJ_0D1:
-		case OBJ_0D2:
-		case OBJ_109: C_27A1_5F43(Selection.obj); break;
-		case OBJ_0DD: C_27A1_3A35(Selection.obj); break;
-		case OBJ_129:
-		case OBJ_12A:
-		case OBJ_12B:
-		case OBJ_12C: C_27A1_2A44(Selection.obj, 0, 0, 0); break;
-		case OBJ_062:
+		case OBJ_BUNCH_OF_GRAPES:
+		case OBJ_BUTTER:
+		case OBJ_LOAF_OF_BREAD:
+		case OBJ_PORTION_OF_MEAT:
+		case OBJ_ROLLS:
+		case OBJ_CAKE:
+		case OBJ_CHEESE:
+		case OBJ_HAM:
+		case OBJ_HORSE_CHOPS:
+		case OBJ_BUCKET_OF_MILK:
+		case OBJ_JAR_OF_HONEY:
+		case OBJ_MEAT_RIB:
+		case OBJ_RIBS:
+		case OBJ_FISH: UseFood(Selection.obj); break;
+		case OBJ_CANNON: UseCannon(Selection.obj); break;
+		case OBJ_OAKEN_DOOR:
+		case OBJ_WINDOWED_DOOR:
+		case OBJ_CEDAR_DOOR:
+		case OBJ_STEEL_DOOR: UseDoor(Selection.obj, 0, 0, 0); break;
+		case OBJ_OPEN_CHEST:
 			if(GetCoordUse(Selection.obj) != LOCXYZ)
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 			else
-				C_27A1_2BBC(Selection.obj, 0, 0, 0);
+				UseChest(Selection.obj, 0, 0, 0);
 		break;
-		case OBJ_0B5: C_27A1_376D(); break;
-		case OBJ_1AC: C_27A1_36E7(); break;
-		case OBJ_120: C_27A1_433D(Selection.obj); break;
-		case OBJ_09B: C_27A1_5935(); break;
-		case OBJ_1A4:
+		case OBJ_CHURN: UseChurn(); break;
+		case OBJ_COW: UseCow(); break;
+		case OBJ_CRANK: UseCrank(Selection.obj); break;
+		case OBJ_CRYSTAL_BALL: UseCrystalBall(); break;
+		case OBJ_BALLOON_DEFLATED:
+			/*only on the surface (0) or in the gargoyle land (5)*/
 			if(MapZ != 0 && MapZ != 5)
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 			else
-				C_27A1_49C3(Selection.obj);
+				UseDeflatedBalloon(Selection.obj);
 		break;
-		case OBJ_0D4: C_27A1_60D6(); break;
-		case OBJ_108: C_27A1_4D46(); break;
-		case OBJ_0EA: C_27A1_4E9B(); break;
-		case OBJ_061: C_27A1_47E0(); break;
-		case OBJ_04D: C_27A1_319F(Selection.obj); break;
-		case OBJ_09D: C_27A1_335A(2); break;/*"music instrument" interface?*/
-		case OBJ_09C: C_27A1_335A(3); break;/*"music instrument" interface?*/
-		case OBJ_1AE: C_27A1_5503(Selection.obj); break;
-		case OBJ_1AF: C_27A1_55F0(Selection.obj); break;
-		case OBJ_03F:
-		case OBJ_040: C_27A1_2D8E(Selection.obj); break;
-		case OBJ_131:
-			if(D_2CC3 == -1)
-				C_101C_089E(Selection.obj);
+		case OBJ_FAN: UseFan(); break;
+		case OBJ_FISHING_POLE: UseFishingPole(); break;
+		case OBJ_FOUNTAIN: UseFountain(); break;
+		case OBJ_GARGISH_VOCABULARY: UseGargishVocabulary(); break;
+		case OBJ_GEM: UseGem(Selection.obj); break;
+		case OBJ_HARP: PlayInstrument(2); break;/*play the instrument*/
+		case OBJ_HARPSICHORD: PlayInstrument(3); break;/*play the instrument*/
+		case OBJ_HORSE: UseHorse(Selection.obj); break;
+		case OBJ_MOUNTED_HORSE: DismountHorse(Selection.obj); break;
+		case OBJ_LOCKPICK:
+		case OBJ_KEY: UseKeyOrLockpick(Selection.obj); break;
+		case OBJ_LADDER:
+			if(SoloMember == -1)
+				PartyChangeLevel(Selection.obj);
 			else
 				CON_printf(/*287D*/"\nNot in solo mode.\n");
 		break;
-		case OBJ_10C: C_27A1_4479(Selection.obj); break;
-		case OBJ_09E: C_27A1_335A(0x12); break;/*"music instrument" interface?*/
-		case OBJ_049: C_27A1_3425(Selection.obj); break;
-		case OBJ_057:
+		case OBJ_LEVER: UseLever(Selection.obj); break;
+		case OBJ_LUTE: PlayInstrument(0x12); break;/*play the instrument*/
+		case OBJ_MOONSTONE: UseMoonstone(Selection.obj); break;
+		case OBJ_ORB_OF_THE_MOONS:
 			if(GetCoordUse(Selection.obj) == LOCXYZ)
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 			else
-				C_27A1_5789();
+				UseOrbOfTheMoons();
 		break;
-		case OBJ_099: C_27A1_335A(0x13); break;/*"music instrument" interface?*/
-		case OBJ_116:
-		case OBJ_118: C_27A1_5DF2(Selection.obj); break;
-		case OBJ_067:
-		case OBJ_068:
+		case OBJ_PANPIPES: PlayInstrument(0x13); break;/*play the instrument*/
+		case OBJ_PASSTHROUGH_116:
+		case OBJ_PASSTHROUGH_118: UsePassthrough(Selection.obj); break;
+		case OBJ_PICK:
+		case OBJ_SHOVEL:
 			if(GetCoordUse(Selection.obj) == EQUIP)
-				C_27A1_4FC6();
+				UseDiggingTool();
 			else
 				CON_printf(/*2891*/"\nNot readied.\n");
 		break;
-		case OBJ_113: C_27A1_3832(Selection.obj); break;
-		case OBJ_0DF: C_27A1_3B59(Selection.obj); break;
-		case OBJ_0A9: C_27A1_60BD(); break;
-		case OBJ_0F2:
-		case OBJ_0F3:
-		case OBJ_0F4:
-		case OBJ_0F5:
-		case OBJ_0F6:
-		case OBJ_0F7:
-		case OBJ_0F8:
-		case OBJ_0F9: C_27A1_4B98(Selection.obj); break;
-		case OBJ_14E: C_27A1_32FA(Selection.obj); break;
-		case OBJ_05D:
+		case OBJ_POTION: UsePotion(Selection.obj); break;
+		case OBJ_POWDER_KEG: UsePowderKeg(Selection.obj); break;
+		case OBJ_RUBBER_DUCKY: UseRubberDucky(); break;
+		case OBJ_RUNE_OF_HONESTY:
+		case OBJ_RUNE_OF_COMPASSION:
+		case OBJ_RUNE_OF_VALOR:
+		case OBJ_RUNE_OF_JUSTICE:
+		case OBJ_RUNE_OF_SACRIFICE:
+		case OBJ_RUNE_OF_HONOR:
+		case OBJ_RUNE_OF_SPIRITUALITY:
+		case OBJ_RUNE_OF_HUMILITY: UseRune(Selection.obj); break;
+		case OBJ_SECRET_DOOR: UseSecretDoor(Selection.obj); break;
+		case OBJ_SEXTANT:
 			if(MapZ != 0 && MapZ != 5)
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 			else
-				C_1944_42AC();
+				SPELL_PrintLocation();
 		break;
-		case OBJ_139: C_27A1_5BCF(); break;
-		case OBJ_04E:
+		case OBJ_SILVER_HORN: UseSilverHorn(); break;
+		case OBJ_STAFF:
 			if(GetCoordUse(Selection.obj) == LOCXYZ)
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[11]);
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[11]);
 			else if(GetCoordUse(Selection.obj) == EQUIP)
-				C_27A1_3537(Selection.obj);
+				UseStaff(Selection.obj);
 			else
 				CON_printf(/*2891*/"\nNot readied.\n");
 		break;
-		case OBJ_0AE: C_27A1_4672(Selection.obj); break;
-		case OBJ_09A: C_27A1_5A97(Selection.obj); break;
-		case OBJ_05A: C_27A1_2FD1(Selection.obj); break;
-		case OBJ_03E:/*vortex cube*/
-			if(IsArmageddon || !C_27A1_5FAC(Selection.obj))
-				CON_printf(/*1F13*/"\n%s\n", D_0DDC[2]);
+		case OBJ_SWITCH: UseSwitch(Selection.obj); break;
+		case OBJ_TELESCOPE: UseTelescope(Selection.obj); break;
+		case OBJ_TORCH: UseTorch(Selection.obj); break;
+		case OBJ_VORTEX_CUBE:/*vortex cube: the endgame*/
+			if(IsArmageddon || !UseVortexCube(Selection.obj))
+				CON_printf(/*1F13*/"\n%s\n", SpellMessages[2]);
 		break;
-		case OBJ_0E9: C_27A1_3661(); break;
-		case OBJ_128: C_27A1_335A(0x14); break;/*"music instrument" interface?*/
+		case OBJ_WELL: UseWell(); break;
+		case OBJ_XYLOPHONE: PlayInstrument(0x14); break;/*play the instrument*/
 	}
+	/*using costs 5 movement points*/
 	SubMov(Party[Active], 5);
-	C_1100_0306();
-	OtherAnimations();
+	VIS_UpdateView();
+	DisplayTick();
 }

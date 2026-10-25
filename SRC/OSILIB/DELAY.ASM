@@ -1,6 +1,6 @@
 INCLUDE OSI.INC
 
-EXTRN D_2FC6:WORD	;computer speed
+EXTRN CpuSpeed:WORD	;computer speed
 
 DSegStart	
 	

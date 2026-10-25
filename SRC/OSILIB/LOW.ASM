@@ -2,7 +2,7 @@ INCLUDE OSI.INC
 
 EXTRN OSI_DELAY_CLEAN:FAR
 
-EXTRN D_0196:BYTE
+EXTRN CompressedFileList:BYTE
 
 DSegStart
 
@@ -10,8 +10,8 @@ D_2FC2	db 0
 __2FC3	db 0
 
 segment_0	dw 0
-PUBLIC D_2FC6
-D_2FC6	dw 0	;computer speed?
+PUBLIC CpuSpeed
+CpuSpeed	dw 0	;D_2FC6 computer speed?
 D_2FC8	dw 0	;equipment flags?
 D_2FCA	dw 0
 D_2FCC	dw 0
@@ -22,14 +22,14 @@ D_2FCE	db 8 dup(0)
 	db 8 dup(0)
 D_2FF6	dw 0
 __2FF8	db 4 dup(0)
-PUBLIC D_2FFC
-D_2FFC	dw 0
-PUBLIC D_2FFE
-D_2FFE	dw 1
+PUBLIC OSI_Started
+OSI_Started	dw 0	;D_2FFC
+PUBLIC TextIdle
+TextIdle	dw 1	;D_2FFE
 __3000	dw 5
 __3002	dw 4
-PUBLIC D_3004
-D_3004	dw OFFSET SEG_3368_TEXT:C_3368_00DC,SEG_3368_TEXT
+PUBLIC DriveErrorCallback
+DriveErrorCallback	dw OFFSET SEG_3368_TEXT:OSI_nullCallback,SEG_3368_TEXT	;D_3004
 __3008	db 2 dup(0)
 D_300A	dw 0
 __300C	db 4 dup(0)
@@ -68,7 +68,7 @@ C_0021:	;--
 C_0008	ENDP
 
 ;select drive?
-ProcStart	C_3360_0023
+ProcStart	OSI_selectDrive
 	MOV	D_2FCC,0
 	;--
 	MOV	AX,[BP+06]
@@ -93,11 +93,11 @@ ProcStart	C_3360_0023
 	JMP	SHORT C_0067
 C_005B:	;--
 	MOV	D_2FCC,1
-	CALL	DWORD PTR D_3004
+	CALL	DWORD PTR DriveErrorCallback
 	;--
 	XOR	AX,AX
 C_0067:	;--
-ProcEndN	C_3360_0023,2
+ProcEndN	OSI_selectDrive,2
 
 CSegEnd	SEG_3360_TEXT
 
@@ -106,12 +106,12 @@ CSegEnd	SEG_3360_TEXT
 CSegStart	SEG_3366_TEXT
 
 ;get current default drive?
-ProcStart	C_3366_000E
+ProcStart	OSI_getDrive
 	MOV	AH,19h	;get current default drive
 	INT	21h
 	XOR	AH,AH
 	ADD	AL,'A'	;41h
-ProcEnd	C_3366_000E
+ProcEnd	OSI_getDrive
 
 CSegEnd	SEG_3366_TEXT
 
@@ -146,7 +146,7 @@ DSegEnd
 CSegStart	SEG_3368_TEXT
 
 ;init OSI low?
-ProcStart	C_3368_0002
+ProcStart	OSI_lowInit
 	;-- set new int 24h & 23h
 	PUSH	DS
 	PUSH	CS
@@ -166,7 +166,7 @@ ProcStart	C_3368_0002
 	CALL	C_002E
 	CALL	C_00D0
 	CALL	C_005E	;check computer speed
-ProcEnd	C_3368_0002
+ProcEnd	OSI_lowInit
 
 ;initialize some unused feature[text clipping]?
 C_002E	PROC NEAR
@@ -197,7 +197,7 @@ C_002E	ENDP
 
 ;check computer speed
 C_005E	PROC NEAR
-	MOV	D_2FC6,0
+	MOV	CpuSpeed,0
 	MOV	D_2FCA,0
 	;-- push vector 0x1c
 	MOV	AL,1Ch
@@ -219,7 +219,7 @@ C_0082:	;--
 	JZ	C_0082
 	MOV	D_2FCA,0
 C_008F:	;--
-	INC	D_2FC6
+	INC	CpuSpeed
 	CMP	D_2FCA,0
 	JZ	C_008F
 	;-- restore original vector 0x1c
@@ -232,13 +232,13 @@ C_008F:	;--
 	INT	21h
 	POP	DS
 	;--
-	MOV	AX,D_2FC6
+	MOV	AX,CpuSpeed
 	XOR	DX,DX
 	MOV	CX,12h
 	MUL	CX
 	MOV	CX,2EEh
 	DIV	CX
-	MOV	D_2FC6,AX
+	MOV	CpuSpeed,AX
 	;--
 	INT	12h
 	MOV	D_2FC8,AX
@@ -272,9 +272,9 @@ C_00D0	PROC NEAR
 C_00D0	ENDP
 ;----------------------------------------
 ;a callback?
-C_3368_00DC	PROC FAR
+OSI_nullCallback	PROC FAR	;C_3368_00DC
 	RET
-C_3368_00DC	ENDP
+OSI_nullCallback	ENDP	;C_3368_00DC
 ;----------------------------------------
 ;new int 24h
 C_3368_00DD:
@@ -741,7 +741,7 @@ C_049C	PROC NEAR
 	PUSH	SI
 	PUSH	DI
 	;--
-	MOV	BX,OFFSET DGROUP:D_0196
+	MOV	BX,OFFSET DGROUP:CompressedFileList
 C_04A2:	;--
 	MOV	SI,[BX]
 	CMP	BYTE PTR [SI],0

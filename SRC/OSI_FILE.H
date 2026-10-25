@@ -7,10 +7,10 @@
 #define __OSI_FILE_H__
 
 /*error management */
-extern union tHandler pascal D_032E;/*error callback*/
-extern int pascal D_0332;/*error code*/
-extern int pascal D_0334;/*error origin*/
-extern char * pascal D_0336;/*last fileName*/
+/*032E*/extern union tHandler pascal OSI_ErrorHandler;/*far callback invoked by OSI file functions on error*/
+/*0332*/extern int pascal OSI_ErrorCode;/*DOS error code, -1 short read/write; handler sets 0 to retry*/
+/*0334*/extern int pascal OSI_ErrorFunc;/*failing function: 1 open 2 close 3 create 4 delete 5 read 6 write 7 rename 8 copy*/
+/*0336*/extern char * pascal OSI_ErrorFile;/*last file name passed to open/create/delete/rename*/
 /* */
 
 extern pascal OSI_callback();

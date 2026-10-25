@@ -6,88 +6,104 @@
 #ifndef __SEG_3522_H__
 #define __SEG_3522_H__
 
-extern int far D_3522_0000[];
+/*3522:0000*/extern int far MonsterTypes[];/*object type of each monster class, 0-terminated*/
 
-extern unsigned char far D_3522_0082[];
-extern unsigned char far D_3522_00C2[];
-extern unsigned char far D_3522_0102[];
-extern unsigned char far D_3522_0142[];
-extern unsigned char far D_3522_0182[];
-extern unsigned char far D_3522_01C2[];
+/*3522:0082*/extern unsigned char far MonsterStr[];/*base strength per class*/
+/*3522:00C2*/extern unsigned char far MonsterDex[];/*base dexterity per class*/
+/*3522:0102*/extern unsigned char far MonsterInt[];/*base intelligence per class*/
+/*3522:0142*/extern unsigned char far MonsterArmor[];/*armor per class (only used in the XP formula)*/
+/*3522:0182*/extern unsigned char far MonsterDamage[];/*natural attack damage per class*/
+/*3522:01C2*/extern unsigned char far MonsterHP[];/*base hit points per class*/
 
-extern unsigned char far D_3522_0202[];
+/*3522:0202*/extern unsigned char far MonsterAlignment[];/*initial NPCStatus (alignment) per class*/
 
-extern int far D_3522_0242[];
+/*3522:0242*/extern int far MonsterFlags[];/*MONSTER_xxx ability flags per class*/
 
-#define MONSTER_IS 0x0001
-#define MONSTER_ID 0x0002
-#define MONSTER_IP 0x0004
-#define MONSTER_IF 0x0008
-#define MONSTER_DF 0x0010
-#define MONSTER_0020 0x0020
-#define MONSTER_0040 0x0040
-#define MONSTER_UN 0x0080
-#define MONSTER_FL 0x0100
-#define MONSTER_SW 0x0200
-#define MONSTER_ET 0x0400
-#define MONSTER_0800 0x0800
-#define MONSTER_1000 0x1000
-#define MONSTER_2000 0x2000
-#define MONSTER_4000 0x4000
-#define MONSTER_8000 0x8000
+/*0x0001 immune to sleep (spell, sleep field)*/
+#define MONSTER_IMMUNE_SLEEP 0x0001
+/*0x0002 immune to death (kill) spells and fear*/
+#define MONSTER_IMMUNE_DEATH 0x0002
+/*0x0004 immune to poison*/
+#define MONSTER_IMMUNE_POISON 0x0004
+/*0x0008 immune to fire*/
+#define MONSTER_IMMUNE_FIRE 0x0008
+/*0x0010 double damage from fire*/
+#define MONSTER_DOUBLE_FIRE_DMG 0x0010
+/*0x0020 natural attack to-hit uses STR instead of DEX (__AttackTest)*/
+#define MONSTER_STR_ATTACK 0x0020
+/*0x0040 hits poison 1 time in 4*/
+#define MONSTER_POISONOUS 0x0040
+/*0x0080 undead: repel undead, half damage from normal weapons*/
+#define MONSTER_UNDEAD 0x0080
+/*0x0100 flies: ignores terrain effects and tremor*/
+#define MONSTER_FLIES 0x0100
+/*0x0200 moves on water*/
+#define MONSTER_SWIMS 0x0200
+/*0x0400 passes through walls*/
+#define MONSTER_ETHEREAL 0x0400
+/*0x0800 object deleted when killed (if no dead shape)*/
+#define MONSTER_NO_CORPSE 0x0800
+/*0x1000 never leaves a dead shape; deleted with a screen fade when near*/
+#define MONSTER_VANISHES 0x1000
+/*0x2000 leaves blood when killed*/
+#define MONSTER_BLEEDS 0x2000
+/*0x4000 human: opens doors/passthroughs, 'yells for help' when killed by party*/
+#define MONSTER_HUMAN 0x4000
+/*0x8000 never used*/
+#define MONSTER_UNUSED_8000 0x8000
 
 /*[IS]imune to sleep/zu*/
-#define IsMonster_0001(cls) (D_3522_0242[cls] & MONSTER_IS)
+#define IsMonsterImmuneSleep(cls) (MonsterFlags[cls] & MONSTER_IMMUNE_SLEEP)
 /*[ID]imune to death spells/corp*/
-#define IsMonster_0002(cls) (D_3522_0242[cls] & MONSTER_ID)
+#define IsMonsterDeathImmune(cls) (MonsterFlags[cls] & MONSTER_IMMUNE_DEATH)
 /*[IP]imune to poison/nox*/
-#define IsMonster_0004(cls) (D_3522_0242[cls] & MONSTER_IP)
+#define IsMonsterImmunePoison(cls) (MonsterFlags[cls] & MONSTER_IMMUNE_POISON)
 /*[IF]imune to fire/flam*/
-#define IsMonster_0008(cls) (D_3522_0242[cls] & MONSTER_IF)
+#define IsMonsterFireImmune(cls) (MonsterFlags[cls] & MONSTER_IMMUNE_FIRE)
 /*[DF]take double damage from fire*/
-#define IsMonster_0010(cls) (D_3522_0242[cls] & MONSTER_DF)
-/*[??]strength over dexterity (in combat)?*/
-#define IsMonster_0020(cls) (D_3522_0242[cls] & MONSTER_0020)
-/*[??]is poisonous*/
-#define IsMonster_0040(cls) (D_3522_0242[cls] & MONSTER_0040)
+#define IsMonsterFireVulnerable(cls) (MonsterFlags[cls] & MONSTER_DOUBLE_FIRE_DMG)
+/*flag test MONSTER_STR_ATTACK*/
+#define IsMonsterStrAttack(cls) (MonsterFlags[cls] & MONSTER_STR_ATTACK)
+/*flag test MONSTER_POISONOUS*/
+#define IsMonsterPoisonous(cls) (MonsterFlags[cls] & MONSTER_POISONOUS)
 /*[UN]undead nature*/
-#define IsMonster_0080(cls) (D_3522_0242[cls] & MONSTER_UN)
+#define IsMonsterUndead(cls) (MonsterFlags[cls] & MONSTER_UNDEAD)
 /*[FL]flies; also immune to tremor spells*/
-#define IsMonster_0100(cls) (D_3522_0242[cls] & MONSTER_FL)
+#define IsMonsterFlying(cls) (MonsterFlags[cls] & MONSTER_FLIES)
 /*[SW]swims*/
-#define IsMonster_0200(cls) (D_3522_0242[cls] & MONSTER_SW)
+#define IsMonsterSwimming(cls) (MonsterFlags[cls] & MONSTER_SWIMS)
 /*[ET]ethereal (walk through walls)*/
-#define IsMonster_0400(cls) (D_3522_0242[cls] & MONSTER_ET)
-/*[??]no corpse?*/
-#define IsMonster_0800(cls) (D_3522_0242[cls] & MONSTER_0800)
-/*[??]no corpse[fade out]?*/
-#define IsMonster_1000(cls) (D_3522_0242[cls] & MONSTER_1000)
-/*[??]leaves blood?*/
-#define IsMonster_2000(cls) (D_3522_0242[cls] & MONSTER_2000)
-/*[??]human?*/
-#define IsMonster_4000(cls) (D_3522_0242[cls] & MONSTER_4000)
+#define IsMonsterEthereal(cls) (MonsterFlags[cls] & MONSTER_ETHEREAL)
+/*flag test MONSTER_NO_CORPSE*/
+#define IsMonsterNoCorpse(cls) (MonsterFlags[cls] & MONSTER_NO_CORPSE)
+/*flag test MONSTER_VANISHES*/
+#define IsMonsterVanishing(cls) (MonsterFlags[cls] & MONSTER_VANISHES)
+/*flag test MONSTER_BLEEDS*/
+#define IsMonsterBleeding(cls) (MonsterFlags[cls] & MONSTER_BLEEDS)
+/*flag test MONSTER_HUMAN*/
+#define IsMonsterHuman(cls) (MonsterFlags[cls] & MONSTER_HUMAN)
 
 /*[AC]acid (dissolves inventory item){Slug}*/
-#define IsMonster_AC(cls) (cls == 0x00)
+#define IsMonsterAcidSlug(cls) (cls == 0x00)
 /*[AM]amphibious{Alligator}*/
-#define IsMonster_AM(cls) (cls == 0x01)
+#define IsMonsterAlligator(cls) (cls == 0x01)
 /*[DR]drags victims underground{Corpser}*/
-#define IsMonster_DR(cls) (cls == 0x08)
+#define IsMonsterCorpser(cls) (cls == 0x08)
 /*[IM]immortal{Lord British}*/
-#define IsMonster_IM(cls) (cls == 0x1f)
+#define IsMonsterLordBritish(cls) (cls == 0x1f)
 /*[IN]changes to insects when dead*/
-#define IsMonster_IN(cls) (cls == 0x15)
+#define IsMonsterGazer(cls) (cls == 0x15)
 /*[SP]splits in two{Slime}*/
-#define IsMonster_SP(cls) (cls == 0x30)
+#define IsMonsterSlime(cls) (cls == 0x30)
 /*[SF]steals food{Gremlin}*/
-#define IsMonster_SF(cls) (cls == 0x17)
-/*[??]{winged gargoyle}*/
-#define IsMonster_13(cls) (cls == 0x13)
+#define IsMonsterGremlin(cls) (cls == 0x17)
+/*class 0x13; such creatures get no gold from OBJ_SPELL treasure*/
+#define IsMonsterWingedGargoyle(cls) (cls == 0x13)
 
 
-extern int far D_3522_02C2[];
+/*3522:02C2*/extern int far MonsterInvIndex[];/*offset in MonsterInvLists of the class's starting inventory*/
 
-extern unsigned char far D_3522_0342[];
+/*3522:0342*/extern unsigned char far MonsterInvLists[];/*packed 0-terminated spell/weapon/armor/treasure lists*/
 
 
 #endif

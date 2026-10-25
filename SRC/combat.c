@@ -4,17 +4,46 @@
  * reverse-coded by Ergonomy Joe in 2013
  */
 /*
-	module combat?
+	module combat
+
+	Everything about fighting:
+	- combat mode on/off for the party (COMBAT_begin/COMBAT_breakOff),
+	- derived attributes (GetStr/GetDex/GetInt with curse and time stop
+	  penalties, MaxHP, MaxMagic, armour and weapon tables),
+	- the "Attack" command of the player (COMBAT_attack, cycling through
+	  every equipped weapon),
+	- resolving one attack (__TryHit -> __AttackTest -> __DoHit -> LooseHP)
+	  including ranged weapons, ammunition, thrown weapons, wands, the
+	  triple crossbow and monster special attacks (acid, theft, poison,
+	  dragging under),
+	- death handling (SetTypeUnconscious: corpses, blood, insects, slime),
+	- the reaction of the townsfolk when a neutral NPC is attacked,
+	- the combat AI modes (front, rear, flank, berserk, retreat, assault,
+	  like, unfriendly, immobile, tangle vine).
+	Objects 0..0xff are the "actors" (NPCs and monsters; they own the
+	NPCStatus/STREN/... entries); objects >= 0x100 are plain items.
+	The front/rear/flank AIs use the party and enemy centres of gravity
+	(PartyGravityX/Y, EnemiesGravityX/Y) and the flank/front members
+	(PartyFrontMember, PartyFlankPos, PartyFlankNeg, EnemyFrontFirst, EnemyFlankPos, EnemyFlankNeg) computed each turn
+	by npctrack.c. With axis = enemy centre - party centre, "depth" is the
+	dot product of a position with the axis and "side" is the cross
+	product (positive = left of the party when facing the enemies).
 */
 #include "u6.h"
 
 #undef abs
 #include <math.h>
 
-int D_1968 = 1;
-int D_196A = -1;
+/*when 0, the next COMBAT_showHit() call skips the hit flash*/
+/*1968*/int ShowHitFlash = 1;
+/*object firing the current missile (-1: none); lets Missiles() find
+  the object hit at the impact tile (MissileHitObj)*/
+/*196A*/int MissileShooter = -1;
 
-unsigned char D_196C[][8] = {
+/*range table: RangeTable[|dx|][|dy|] is the "combat distance" between two
+  tiles (roughly max + min/2); everything 8 or more tiles away in one
+  axis is treated as 9 by COMBAT_range()*/
+/*196C*/unsigned char RangeTable[][8] = {
 	0,1,2,3,4,5,6,7,
 	1,1,2,3,4,5,6,7,
 	2,2,2,3,4,5,6,7,
@@ -25,8 +54,11 @@ unsigned char D_196C[][8] = {
 	7,7,7,7,8,8,8,8
 };
 
-/*for triple-crossbow & magic wind*/
-unsigned char D_19AC[][11] = {
+/*for triple-crossbow & magic wind:
+  SpreadDirTable[dy + 5][dx + 5] gives, for a target at offset (dx,dy), the two
+  directions (high nibble, low nibble) in which the side missiles are
+  spread around the aimed tile (roughly perpendicular to the shot)*/
+/*19AC*/unsigned char SpreadDirTable[][11] = {
 /*	0x42,0x52,0x52,0x52,0x52,0x62,0x63,0x63,0x63,0x63,0x64,
 	0x41,0x42,0x52,0x52,0x52,0x62,0x63,0x63,0x63,0x64,0x74,
 	0x41,0x41,0x42,0x52,0x52,0x62,0x63,0x63,0x64,0x74,0x74,
@@ -53,10 +85,11 @@ unsigned char D_19AC[][11] = {
 #undef MD
 };
 
-static int D_1A25 = 0;/*equiped weapons max_index*/
-static int D_1A27 = 0;/*equiped weapons index*/
+/*1A25*/static int NumEquipWeapons = 0;/*number of equiped weapons in EquipWeapons*/
+/*1A27*/static int CurEquipWeapon = 0;/*index in EquipWeapons of the weapon currently attacking*/
 
-/*C_2337_000B*/COMBAT_getCathesus(int objNum, int x, int y) {
+/*distance in tiles (max(|dx|,|dy|)) between an object and a location*/
+/*C_2337_000B*/COMBAT_TileDistance(int objNum, int x, int y) {
 	int delta_x, delta_y;
 
 	delta_x = abs(GetX(objNum) - x);
@@ -67,6 +100,8 @@ static int D_1A27 = 0;/*equiped weapons index*/
 		return delta_y;
 }
 
+/*end the "charm" effect: restore the original alignment (kept in
+  NPCFlag) and give the NPC back its normal mode*/
 /*C_2337_005E*/COMBAT_stopCharm(int objNum) {
 	ClrCharmed(objNum);
 	SetAlignment(objNum, GetBKAlignment(objNum));
@@ -74,79 +109,90 @@ static int D_1A27 = 0;/*equiped weapons index*/
 		SetAlignment(objNum, GOOD);
 	if(InCombat)
 		NPCMode[objNum] = NPCComMode[objNum];
-	else if(D_2CC3 < 0)
+	else if(SoloMember < 0)/*party mode*/
 		NPCMode[objNum] = AI_FOLLOW;
-	else
+	else/*solo mode*/
 		NPCMode[objNum] = AI_MOTIONLESS;
 }
 
+/*enter combat mode: every party member takes its combat mode
+  (NPCComMode), the controlled member (first able one in party mode, the
+  solo member otherwise) gets AI_COMMAND, the combat icon is drawn and
+  the combat music starts*/
 /*C_2337_00C8*/COMBAT_begin() {
-	int si, di;
+	int partyIdx, mouseSave;
 
 	InCombat = 1;
-	for(si = 0; si < PartySize; si ++) {
-		if(!IsCharmed(Party[si]))
-			NPCMode[Party[si]] = NPCComMode[Party[si]];
-		Leader[Party[si]] = Party[si];
+	for(partyIdx = 0; partyIdx < PartySize; partyIdx ++) {
+		if(!IsCharmed(Party[partyIdx]))
+			NPCMode[Party[partyIdx]] = NPCComMode[Party[partyIdx]];
+		/*in combat Leader[] holds the melee opponent (see __DoHit);
+		  pointing to itself means "none"*/
+		Leader[Party[partyIdx]] = Party[partyIdx];
 	}
-	if(D_2CC3 < 0) {
+	if(SoloMember < 0) {
 		for(
-			si = 0;
-			(Isbis_0016(Party[si]) || IsDraggedUnder(Party[si])) && si < PartySize;
-			si ++
+			partyIdx = 0;
+			(IsIncapacitated(Party[partyIdx]) || IsDraggedUnder(Party[partyIdx])) && partyIdx < PartySize;
+			partyIdx ++
 		);
 	} else {
-		si = D_2CC3;
+		partyIdx = SoloMember;
 	}
-	D_2CC4 = NPCMode[Party[si]];
-	NPCMode[Party[si]] = AI_COMMAND;
-	di = CON_mouseOffAt(152, 176, 167, 191);
-	GR_2D(TIL_19F, 152, 176);
-	CON_mouseOn(di);
-	MUS_091A(7);
+	SavedNPCMode = NPCMode[Party[partyIdx]];
+	NPCMode[Party[partyIdx]] = AI_COMMAND;
+	mouseSave = CON_mouseOffAt(152, 176, 167, 191);
+	GR_PUT_TILE_SCREEN(TIL_BUTTON_COMBAT_ON, 152, 176);/*"combat on" icon*/
+	CON_mouseOn(mouseSave);
+	MUS_PlaySong(7);/*combat song*/
 }
 
+/*leave combat mode: party members follow again (or stay put in solo
+  mode), the combat icon is cleared and the combat music stopped*/
 /*C_2337_01BC*/COMBAT_breakOff() {
-	int si;
-	int bp_04, bp_02;
+	int mouseSave;
+	int partyIdx, newMode;
 
 	InCombat =
-	D_17B6 = 0;
-	if(D_2CC3 < 0)
-		bp_02 = AI_FOLLOW;
+	EnemyWarningGiven = 0;
+	if(SoloMember < 0)
+		newMode = AI_FOLLOW;
 	else
-		bp_02 = AI_MOTIONLESS;
-	for(bp_04 = 0; bp_04 < PartySize; bp_04 ++) {
-		if(IsDead(Party[bp_04])) {
-			NPCMode[Party[bp_04]] = AI_MOTIONLESS;
-		} else if(!IsCharmed(Party[bp_04])) {
-			NPCMode[Party[bp_04]] = bp_02;
-			if(bp_02 == AI_FOLLOW)
-				Leader[Party[bp_04]] = bp_04;
+		newMode = AI_MOTIONLESS;
+	for(partyIdx = 0; partyIdx < PartySize; partyIdx ++) {
+		if(IsDead(Party[partyIdx])) {
+			NPCMode[Party[partyIdx]] = AI_MOTIONLESS;
+		} else if(!IsCharmed(Party[partyIdx])) {
+			NPCMode[Party[partyIdx]] = newMode;
+			if(newMode == AI_FOLLOW)
+				Leader[Party[partyIdx]] = partyIdx;
 		}
 	}
-	if(D_2CC3 < 0)
-		bp_04 = 0;
+	if(SoloMember < 0)
+		partyIdx = 0;
 	else
-		bp_04 = D_2CC3;
-	D_2CC4 = NPCMode[Party[bp_04]];
-	NPCMode[Party[bp_04]] = AI_COMMAND;
-	si = CON_mouseOffAt(152, 176, 167, 191);
-	GR_2D(TIL_19E, 152, 176);
-	CON_mouseOn(si);
+		partyIdx = SoloMember;
+	SavedNPCMode = NPCMode[Party[partyIdx]];
+	NPCMode[Party[partyIdx]] = AI_COMMAND;
+	mouseSave = CON_mouseOffAt(152, 176, 167, 191);
+	GR_PUT_TILE_SCREEN(TIL_BUTTON_COMBAT_OFF, 152, 176);/*"combat off" icon*/
+	CON_mouseOn(mouseSave);
 	if(MUS_MIndex == 7)
-		MUS_09A8();
+		MUS_PlayAreaSong();
 }
 
+/*move an object to a random free spot at most 3 tiles away (8 tries);
+  with onScreenNotOk the spot must be outside the visible 11x11 area.
+  returns 1 if the object was moved*/
 /*C_2337_02DC*/COMBAT_TryTeleport(int objNum, int onScreenNotOk) {
-	int bp_0a, x, y, z, new_x, new_y;
+	int tries, x, y, z, new_x, new_y;
 
 	if(objNum < 0)
 		return 0;
 	x = GetX(objNum);
 	y = GetY(objNum);
 	z = GetZ(objNum);
-	for(bp_0a = 0; bp_0a < 8; bp_0a ++) {
+	for(tries = 0; tries < 8; tries ++) {
 		new_x = OSI_rand(1, 4) + OSI_rand(1, 4) + x - 5;
 		new_y = OSI_rand(1, 4) + OSI_rand(1, 4) + y - 5;
 		if(
@@ -154,7 +200,7 @@ static int D_1A27 = 0;/*equiped weapons index*/
 			MapX - 5 <= new_x && new_x <= MapX + 5 &&
 			MapY - 5 <= new_y && new_y <= MapY + 5
 		) continue;
-		if(C_1E0F_000F(objNum, new_x, new_y)) {
+		if(CanMoveTo(objNum, new_x, new_y)) {
 			MoveObj(objNum, new_x, new_y, z);
 			return 1;
 		}
@@ -162,52 +208,59 @@ static int D_1A27 = 0;/*equiped weapons index*/
 	return 0;
 }
 
+/*effective strength (-3 when cursed, minimum 1)*/
 /*C_2337_03E7*/GetStr(int objNum) {
-	int si = STREN[objNum];
+	int value = STREN[objNum];
 	if(IsCursed(objNum)) {
-		if((si -= 3) < 1)
-			si = 1;
+		if((value -= 3) < 1)
+			value = 1;
 	}
-	return si;
+	return value;
 }
 
+/*effective dexterity (-3 when cursed, minimum 1; 1 when asleep, or for
+  everyone but the party during "time stop")*/
 /*C_2337_0411*/GetDex(int objNum) {
-	int si = DEXTE[objNum];
+	int value = DEXTE[objNum];
 	if(IsCursed(objNum)) {
-		if((si -= 3) < 1)
-			si = 1;
+		if((value -= 3) < 1)
+			value = 1;
 	}
-	if(SpellFx[14] && !IsPlrControl(objNum))
-		si = 1;
+	if(SpellFx[14]/*time stop*/ && !IsPlrControl(objNum))
+		value = 1;
 	if(IsAsleep(objNum))
-		si = 1;
-	return si;
+		value = 1;
+	return value;
 }
 
+/*effective intelligence (-3 when cursed, minimum 1)*/
 /*C_2337_0458*/GetInt(int objNum) {
-	int si = INTEL[objNum];
+	int value = INTEL[objNum];
 	if(IsCursed(objNum)) {
-		if((si -= 3) < 1)
-			si = 1;
+		if((value -= 3) < 1)
+			value = 1;
 	}
-	return si;
+	return value;
 }
 
-/*C_2337_0482*/COMBAT_TestIntel(int bp08, int bp06) {
-	if(GetInt(bp06) / 2 + 15 - GetInt(bp08) > OSI_rand(1, 30))
+/*intelligence contest for spells: returns 1 when the target resists,
+  i.e. when INT(target)/2 + 15 - INT(caster) > 1d30*/
+/*C_2337_0482*/COMBAT_ResistsSpell(int casterObj, int targetObj) {
+	if(GetInt(targetObj) / 2 + 15 - GetInt(casterObj) > OSI_rand(1, 30))
 		return 1;
 	return 0;
 }
 
 /*uncalled*/
+/*level from experience: 1 + number of halvings to get 100xp or less*/
 /*__2337_04BE*/ComputeLevel(int objNum) {
-	unsigned lvl, exp;
+	unsigned lvl, xp;
 
-	exp = ExpPoints[objNum];
+	xp = ExpPoints[objNum];
 	lvl = 1;
-	while(exp > 99) {
+	while(xp > 99) {
 		lvl ++;
-		exp >>= 1;
+		xp >>= 1;
 	}
 	return lvl;
 }
@@ -216,6 +269,7 @@ static int D_1A27 = 0;/*equiped weapons index*/
 	return Level[objNum];
 }
 
+/*add experience points (capped at 9999)*/
 /*C_2337_04F4*/AddXP(int objNum, int xp) {
 	if(ExpPoints[objNum] < 9999 - xp)
 		ExpPoints[objNum] += xp;
@@ -223,60 +277,68 @@ static int D_1A27 = 0;/*equiped weapons index*/
 		ExpPoints[objNum] = 9999;
 }
 
+/*maximum hit points: 30 per level, between 1 and 255*/
 /*C_2337_0529*/MaxHP(int objNum) {
-	int si;
+	int hp;
 	
-	si = Level[objNum] * 30;
-	if(si == 0)
-		si = 1;
-	if(si > 255)
+	hp = Level[objNum] * 30;
+	if(hp == 0)
+		hp = 1;
+	if(hp > 255)
 		return 255;
-	return si;
+	return hp;
 }
 
+/*maximum magic points: 2*INT for the avatar, INT for a mage,
+  INT/2 for a swashbuckler or long-caped musician, 0 otherwise*/
 /*C_2337_0559*/MaxMagic(int objNum) {
-	int si, di;
+	int objType, mana;
 
-	di = 0;
-	si = GetType(objNum);
-	if(si == OBJ_19A)
-		di = INTEL[objNum] << 1;
-	if(si == OBJ_17A)
-		di = INTEL[objNum];
-	else if(si == OBJ_179 || si == OBJ_182)
-		di = INTEL[objNum] >> 1;
-	return di;
+	mana = 0;
+	objType = GetType(objNum);
+	if(objType == OBJ_AVATAR)
+		mana = INTEL[objNum] << 1;
+	if(objType == OBJ_MAGE)
+		mana = INTEL[objNum];
+	else if(objType == OBJ_SWASHBUCKLER || objType == OBJ_MUSICIAN_LONG_CAPE)
+		mana = INTEL[objNum] >> 1;
+	return mana;
 }
 
 /*object type==>corpse type*/
 /*1A29*/int DeadShape[] = {
-	OBJ_1AE,TypeFrame(OBJ_086,1),
-	OBJ_16F,TypeFrame(OBJ_153,0),
-	OBJ_16B,TypeFrame(OBJ_153,0),
-	OBJ_173,TypeFrame(OBJ_153,0),
-	OBJ_172,TypeFrame(OBJ_153,1),
-	OBJ_1A8,TypeFrame(OBJ_154,3),
-	OBJ_17C,TypeFrame(OBJ_153,2),
-	OBJ_17B,TypeFrame(OBJ_153,2),
-	OBJ_183,TypeFrame(OBJ_153,3),
-	OBJ_17A,TypeFrame(OBJ_153,3),
-	OBJ_17E,TypeFrame(OBJ_153,4),
-	OBJ_180,TypeFrame(OBJ_153,5),
-	OBJ_179,TypeFrame(OBJ_153,5),
-	OBJ_178,TypeFrame(OBJ_153,6),
-	OBJ_19A,TypeFrame(OBJ_153,7),
-	OBJ_182,TypeFrame(OBJ_153,7),
-	OBJ_188,TypeFrame(OBJ_153,7),
-	OBJ_17D,TypeFrame(OBJ_153,8),
-	OBJ_181,TypeFrame(OBJ_153,8),
-	OBJ_187,TypeFrame(OBJ_153,8),
-	OBJ_17F,TypeFrame(OBJ_153,8),
-	OBJ_170,TypeFrame(OBJ_153,9),
-	OBJ_16A,TypeFrame(OBJ_155,3),
+	OBJ_HORSE,TypeFrame(OBJ_HORSES_CARCASS,1),
+	OBJ_DAEMON,TypeFrame(OBJ_DEAD_BODY,0),
+	OBJ_GARGOYLE,TypeFrame(OBJ_DEAD_BODY,0),
+	OBJ_TROLL,TypeFrame(OBJ_DEAD_BODY,0),
+	OBJ_HEADLESS,TypeFrame(OBJ_DEAD_BODY,1),
+	OBJ_CYCLOPS,TypeFrame(OBJ_DEAD_CYCLOPS,3),
+	OBJ_MERCHANT,TypeFrame(OBJ_DEAD_BODY,2),
+	OBJ_VILLAGER,TypeFrame(OBJ_DEAD_BODY,2),
+	OBJ_WOMAN,TypeFrame(OBJ_DEAD_BODY,3),
+	OBJ_MAGE,TypeFrame(OBJ_DEAD_BODY,3),
+	OBJ_GUARD,TypeFrame(OBJ_DEAD_BODY,4),
+	OBJ_PEASANT,TypeFrame(OBJ_DEAD_BODY,5),
+	OBJ_SWASHBUCKLER,TypeFrame(OBJ_DEAD_BODY,5),
+	OBJ_FIGHTER,TypeFrame(OBJ_DEAD_BODY,6),
+	OBJ_AVATAR,TypeFrame(OBJ_DEAD_BODY,7),
+	OBJ_MUSICIAN_LONG_CAPE,TypeFrame(OBJ_DEAD_BODY,7),
+	OBJ_MUSICIAN_SHORT_CAPE,TypeFrame(OBJ_DEAD_BODY,7),
+	OBJ_CHILD,TypeFrame(OBJ_DEAD_BODY,8),
+	OBJ_FARMER,TypeFrame(OBJ_DEAD_BODY,8),
+	OBJ_FARMER_2,TypeFrame(OBJ_DEAD_BODY,8),
+	OBJ_JESTER,TypeFrame(OBJ_DEAD_BODY,8),
+	OBJ_SKELETON,TypeFrame(OBJ_DEAD_BODY,9),
+	OBJ_WINGED_GARGOYLE,TypeFrame(OBJ_DEAD_GARGOYLE,3),
 	-1
 };
 
-/*set to "unconscious" type*/
+/*set to "unconscious" type: called when an actor falls asleep or dies.
+  Humanoids/horses take their corpse shape from DeadShape (multi-tile
+  monsters keep their real shape in OrigShapeType). When dead: monsters
+  without corpse vanish (with a flash for the MONSTER_VANISHES ones), a gazer
+  turns into insects, slimes are re-joined, dragons removed, and the
+  bleeding ones leave a pool of blood*/
 /*C_2337_05B4*/SetTypeUnconscious(int objNum) {
 	int objType, objCls;
 	int *pTypUnc;
@@ -284,19 +346,21 @@ static int D_1A27 = 0;/*equiped weapons index*/
 
 	objType = GetType(objNum);
 	isDead = IsDead(objNum);
-	if(objType == OBJ_1AF) {
-		C_27A1_55F0(objNum);
+	if(objType == OBJ_MOUNTED_HORSE) {
+		DismountHorse(objNum);
 		objType = GetType(objNum);
-	} else if(objType == OBJ_19B || objType >= OBJ_1AA || objType == OBJ_19D || objType == OBJ_19C) {
+	} else if(objType == OBJ_DRAGON || objType >= OBJ_GIANT_SCORPION || objType == OBJ_SILVER_SERPENT || objType == OBJ_SHIP) {
 		OrigShapeType[objNum] = ObjShapeType[objNum];
 	}
 	objCls = GetMonsterClass(objType);
+	/*pairs {type, corpse}; pTypUnc ends pointing to the corpse
+	  (or to the -1 terminator)*/
 	for(pTypUnc = DeadShape; *pTypUnc >= 0; pTypUnc ++) {
 		if(*pTypUnc ++ == objType)
 			break;
 	}
-	if(*pTypUnc >= 0 && !IsMonster_1000(objCls)) {
-		if(objType == OBJ_1AE) {
+	if(*pTypUnc >= 0 && !IsMonsterVanishing(objCls)) {
+		if(objType == OBJ_HORSE) {
 			if(isDead) {
 				DeleteObj(OBJ_getHead(objNum));
 				ObjShapeType[objNum] = TypeFrame(*pTypUnc, 0);
@@ -306,317 +370,344 @@ static int D_1A27 = 0;/*equiped weapons index*/
 		}
 	} else if(isDead) {
 		if(objCls >= 0) {
-			if(IsMonster_IN(objCls))
-				EGG_generate(OBJ_157, GetX(objNum), GetY(objNum), MapZ);
+			if(IsMonsterGazer(objCls))
+				EGG_generate(OBJ_INSECTS, GetX(objNum), GetY(objNum), MapZ);
 
-			if(IsMonster_0800(objCls) || IsMonster_1000(objCls)) {
+			if(IsMonsterNoCorpse(objCls) || IsMonsterVanishing(objCls)) {
 				DeleteObj(objNum);
-				if(IsMonster_1000(objCls) && CLOSE_ENOUGH(5, GetX(objNum), GetY(objNum), MapX, MapY)) {
-					C_0A33_09CE(1);
+				if(IsMonsterVanishing(objCls) && CLOSE_ENOUGH(5, GetX(objNum), GetY(objNum), MapX, MapY)) {
+					DrawMapWindow(1);
 					ShowObjects();
 					ScreenFade = 1;
-					C_0A33_09CE(1);
+					DrawMapWindow(1);
 				}
 			}
 		}
-		if(objType == OBJ_177)
-			C_1184_0BC1();
-		if(objType == OBJ_19B)
+		if(objType == OBJ_SLIME)
+			OBJ_UpdateSlimeFrames();
+		if(objType == OBJ_DRAGON)
 			DeleteObj(objNum);
 	}
 	if(isDead) {
 		if(
-			(objCls >= 0 && IsMonster_2000(objCls)) ||
-			objType == OBJ_187 || objType == OBJ_188
+			(objCls >= 0 && IsMonsterBleeding(objCls)) ||
+			objType == OBJ_FARMER_2 || objType == OBJ_MUSICIAN_SHORT_CAPE
 		) {
-			newObj = AddMapObj(OBJ_152, LOCAL, 0, GetX(objNum), GetY(objNum), MapZ);
+			newObj = AddMapObj(OBJ_BLOOD, LOCAL, 0, GetX(objNum), GetY(objNum), MapZ);
 			if(newObj >= 0)
 				SetFrame(newObj, OSI_rand(0, 2));
 		}
 	}
-	D_17B0 = 1;
+	VisibilityDirty = 1;
 }
 
-/*C_2337_0837*/COMBAT_canSee(int objNum_0, int objNum_1) {
-	int isVisible_1;
+/*can viewerObj see (and so target) targetObj? not if it is invisible
+  (unless both are party members), dragged under, a buried corpser, an
+  "ignore" tile or on another level*/
+/*C_2337_0837*/COMBAT_canSee(int viewerObj, int targetObj) {
+	int isVisible;
 
-	isVisible_1 = !IsInvisible(objNum_1);
+	isVisible = !IsInvisible(targetObj);
 
 	if(
-		IsPlrControl(objNum_0) &&
-		!isVisible_1 && objNum_1 < 0x100 && IsPlrControl(objNum_1)
-	) isVisible_1 = 1;
+		IsPlrControl(viewerObj) &&
+		!isVisible && targetObj < 0x100 && IsPlrControl(targetObj)
+	) isVisible = 1;
 
-	if(objNum_1 < 0x100 && IsDraggedUnder(objNum_1))
-		isVisible_1 = 0;
+	if(targetObj < 0x100 && IsDraggedUnder(targetObj))
+		isVisible = 0;
 
-	if(ObjShapeType[objNum_1] == TypeFrame(OBJ_165, 0))
-		isVisible_1 = 0;
+	if(ObjShapeType[targetObj] == TypeFrame(OBJ_CORPSER, 0))
+		isVisible = 0;
 
-	if(IsTileIg(TILE_FRAME(objNum_1)))
-		isVisible_1 = 0;
+	if(IsTileIg(TILE_FRAME(targetObj)))
+		isVisible = 0;
 
-	if(GetZ(objNum_0) != GetZ(objNum_1))
-		isVisible_1 = 0;
+	if(GetZ(viewerObj) != GetZ(targetObj))
+		isVisible = 0;
 
-	return isVisible_1;
+	return isVisible;
 }
 
-C_2337_08F1(int objNum_param, int x, int y) {
-	int objNum_ret;
-	int objNum_2, objNum_3;
+/*pick the object targeted at (x,y) by viewerObj: the first visible
+  living actor, else the first visible object, else the first hidden
+  object; -1 if the tile is empty*/
+/*C_2337_08F1*/COMBAT_GetTargetAt(int viewerObj, int x, int y) {
+	int result;
+	int liveNpc, firstHidden;
 
-	objNum_3 = -1;
+	firstHidden = -1;
 	/*first "canSee" object*/
-	for(objNum_ret = FindLoc(x, y, MapZ); objNum_ret >= 0; objNum_ret = NextLoc()) {
-		if(COMBAT_canSee(objNum_param, objNum_ret))
+	for(result = FindLoc(x, y, MapZ); result >= 0; result = NextLoc()) {
+		if(COMBAT_canSee(viewerObj, result))
 			break;
-		if(objNum_3 < 0)
-			objNum_3 = objNum_ret;
+		if(firstHidden < 0)
+			firstHidden = result;
 	}
 	/*first "canSee" notDead NPC*/
-	for(objNum_2 = objNum_ret; objNum_2 >= 0; objNum_2 = NextLoc()) {
-		if(COMBAT_canSee(objNum_param, objNum_2)) {
-			if(objNum_2 < 0x100 && !IsDead(objNum_2))
+	for(liveNpc = result; liveNpc >= 0; liveNpc = NextLoc()) {
+		if(COMBAT_canSee(viewerObj, liveNpc)) {
+			if(liveNpc < 0x100 && !IsDead(liveNpc))
 				break;
 			continue;
 		}
-		if(objNum_3 < 0)
-			objNum_3 = objNum_2;
+		if(firstHidden < 0)
+			firstHidden = liveNpc;
 	}
 	/* */
-	if(objNum_2 >= 0)
-		objNum_ret = objNum_2;
-	else if(objNum_3 >= 0 && objNum_ret < 0)
-		objNum_ret = objNum_3;
+	if(liveNpc >= 0)
+		result = liveNpc;
+	else if(firstHidden >= 0 && result < 0)
+		result = firstHidden;
 
-	return objNum_ret;
+	return result;
 }
 
-int D_1A87[] = {
-	OBJ_001,OBJ_002,OBJ_003,OBJ_004,OBJ_005,OBJ_006,OBJ_007,OBJ_008,
-	OBJ_009,OBJ_00A,OBJ_00B,OBJ_00C,OBJ_00D,OBJ_00E,OBJ_00F,OBJ_010,
-	OBJ_011,OBJ_012,OBJ_013,OBJ_014,OBJ_015,OBJ_016,OBJ_017,OBJ_023,
-	OBJ_018,OBJ_100
+/*armours ... and their protection (ArmorValues)*/
+/*1A87*/int ArmorTypes[] = {
+	OBJ_LEATHER_HELM,OBJ_CHAIN_COIF,OBJ_IRON_HELM,OBJ_SPIKED_HELM,OBJ_WINGED_HELM,OBJ_BRASS_HELM,OBJ_GARGOYLE_HELM,OBJ_MAGIC_HELM,
+	OBJ_WOODEN_SHIELD,OBJ_CURVED_HEATER,OBJ_WINGED_SHIELD,OBJ_KITE_SHIELD,OBJ_SPIKED_SHIELD,OBJ_BLACK_SHIELD,OBJ_DOOR_SHIELD,OBJ_MAGIC_SHIELD,
+	OBJ_CLOTH_ARMOR,OBJ_LEATHER_ARMOR,OBJ_RING_MAIL,OBJ_SCALE_MAIL,OBJ_CHAIN_MAIL,OBJ_PLATE_MAIL,OBJ_MAGIC_ARMOR,OBJ_MAIN_GAUCHE,
+	OBJ_SPIKED_COLLAR,OBJ_PROTECTION_RING
 };
-unsigned char D_1ABB[] = {
+/*1ABB*/unsigned char ArmorValues[] = {
 	1,2,3,3,2,2,3,5,
 	2,3,3,3,2,2,4,5,
 	1,2,3,4,5,7,10,1,
 	2,5
 };
 
+/*protection given by an armour object (0 if not an armour)*/
 /*C_2337_0983*/GetArmorPoints(int objNum) {
-	int si, di;
+	int i, points;
 
-	di = 0;
-	for(si = 0; si < 26; si ++) {
-		if(D_1A87[si] == GetType(objNum)) {
-			di = D_1ABB[si];
+	points = 0;
+	for(i = 0; i < 26; i ++) {
+		if(ArmorTypes[i] == GetType(objNum)) {
+			points = ArmorValues[i];
 			break;
 		}
 	}
-	return di;
+	return points;
 }
 
+/*total protection of an actor: equipped armours, -3 cursed,
+  +3 "protected"*/
 static /*C_2337_09BF*/__GetProtection(int objNum) {
-	int si, di;
+	int protection, invObj;
 
-	si = 0;
-	for(di = FindInv(objNum); di >= 0; di = NextInv()) {
-		if(GetCoordUse(di) == EQUIP)
-			si += GetArmorPoints(di);
+	protection = 0;
+	for(invObj = FindInv(objNum); invObj >= 0; invObj = NextInv()) {
+		if(GetCoordUse(invObj) == EQUIP)
+			protection += GetArmorPoints(invObj);
 	}
 	if(IsCursed(objNum))
-		si -= 3;
+		protection -= 3;
 	if(IsProtected(objNum))
-		si += 3;
+		protection += 3;
 
-	return si;
+	return protection;
 }
 
-int D_1AD5[] = {
-	OBJ_028,OBJ_02F,OBJ_026,OBJ_053,OBJ_021,OBJ_025,OBJ_024,OBJ_029,
-	OBJ_02A,OBJ_039,OBJ_150,OBJ_031,OBJ_032,OBJ_19C,OBJ_05B,OBJ_036,
-	OBJ_04F,OBJ_050
+/*weapons with a range > 1 ... and their range (WeaponRanges)*/
+/*1AD5*/int RangedWeaponTypes[] = {
+	OBJ_MORNING_STAR,OBJ_HALBERD,OBJ_DAGGER,OBJ_FLASK_OF_OIL,OBJ_SLING,OBJ_THROWING_AXE,OBJ_SPEAR,OBJ_BOW,
+	OBJ_CROSSBOW,OBJ_SPELLBOOK,OBJ_CHARGE,OBJ_BOOMERANG,OBJ_TRIPLE_CROSSBOW,OBJ_SHIP,OBJ_ZU_YLEM,OBJ_MAGIC_BOW,
+	OBJ_LIGHTNING_WAND,OBJ_FIRE_WAND
 };
-unsigned char D_1AF9[] = {
+/*1AF9*/unsigned char WeaponRanges[] = {
 	2,2,3,5,4,3,4,5,
 	7,7,5,5,7,5,4,7,
 	7,7
 };
 
+/*range of a weapon (or of an actor's natural attack): 1 by default*/
 static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
-	int si, di;
+	int i, range;
 
-	di = 1;
-	for(si = 0; si < 18; si ++) {
-		if(GetType(objNum) == D_1AD5[si]) {
-			di = D_1AF9[si];
+	range = 1;
+	for(i = 0; i < 18; i ++) {
+		if(GetType(objNum) == RangedWeaponTypes[i]) {
+			range = WeaponRanges[i];
 			break;
 		}
 	}
-	return di;
+	return range;
 }
 
-static C_2337_0A4E(int objNum) {
-	int i;
+/*is objNum engaged in melee (so that it can't use a ranged weapon)?
+  in combat modes Leader[] holds the last adjacent attacker (see
+  __DoHit). returns 1 if that one is still able, at most 1 tile away
+  and not frozen by "time stop"*/
+/*C_2337_0A4E*/static COMBAT_IsEngagedInMelee(int objNum) {
+	int engagedObj;
 
-	if(NPCMode[objNum] > AI_FOLLOW && NPCMode[objNum] < AI_10 && Leader[objNum] != objNum) {
-		i = Leader[objNum];
+	if(NPCMode[objNum] > AI_FOLLOW && NPCMode[objNum] < AI_PATROL_NS && Leader[objNum] != objNum) {
+		engagedObj = Leader[objNum];
 		if(
-			ObjShapeType[i] &&
-			!IsDead(i) &&
-			!IsAsleep(i) &&
-			!IsParalyzed(i) &&
-			!IsDraggedUnder(i) &&
-			CLOSE_ENOUGH_S(2, GetX(objNum), GetY(objNum), GetX(i), GetY(i))
+			ObjShapeType[engagedObj] &&
+			!IsDead(engagedObj) &&
+			!IsAsleep(engagedObj) &&
+			!IsParalyzed(engagedObj) &&
+			!IsDraggedUnder(engagedObj) &&
+			CLOSE_ENOUGH_S(2, GetX(objNum), GetY(objNum), GetX(engagedObj), GetY(engagedObj))
 		) {
 			if(SpellFx[14] == 0)
 				return 1;
-			if(IsPlrControl(i))
+			if(IsPlrControl(engagedObj))
 				return 1;
 		}
 	}
 	return 0;
 }
 
+/*fire one missile (tile numTile, 0: invisible) from objNum toward
+  *pX_dst,*pY_dst; on return they hold where it stopped and MissileHitObj the
+  object found there. returns non-zero if it reached its destination*/
 /*C_2337_0B3F*/COMBAT_Missile(int objNum, int *pX_dst, int *pY_dst, int max_range, int numTile) {
-	int di;
+	int ret;
 
-	D_196A = objNum;
-	di = Missiles(GetX(objNum), GetY(objNum), 1, pX_dst, pY_dst, max_range, numTile, 0);
-	D_196A = -1;
+	MissileShooter = objNum;
+	ret = Missiles(GetX(objNum), GetY(objNum), 1, pX_dst, pY_dst, max_range, numTile, 0);
+	MissileShooter = -1;
 
-	return di;
+	return ret;
 }
 
-/*range weapon management?*/
-static C_2337_0B99(int att_objNum, int *pX_dest, int *pY_dest, int weap_objNum) {
+/*range weapon management: show the missile(s) of a ranged attack and
+  handle its consequences: ammunition used, thrown weapon dropped at the
+  impact tile (or lost in water/void, or destroyed if it hits an actor),
+  burning oil, zu ylem (sleep), wands that may vanish (1 in 100).
+  *pX_dest,*pY_dest are updated to the impact tile. returns 1*/
+/*C_2337_0B99*/static COMBAT_FireRangedWeapon(int att_objNum, int *pX_dest, int *pY_dest, int weap_objNum) {
 	int typ;
-	int bp_14, bp_12, bp_10, range, bp_0c;
-	int bp_0a, protTile, numBolts, bp_04, numTile;
+	int foundSpare, itemObj, invChanged, range, dist_x;
+	int dist_y, missileTile, numBolts, spreadDirs, landTile;
 
 	typ = GetType(weap_objNum);
 	range = __GetWeaponRange(weap_objNum);
 
-	if(typ == OBJ_029 || typ == OBJ_036)
-		protTile = BaseTile[OBJ_037];
-	else if(typ == OBJ_02A || typ == OBJ_032)
-		protTile = BaseTile[OBJ_038];
-	else if(typ == OBJ_04F)
-		protTile = TIL_188;
-	else if(typ == OBJ_050)
-		protTile = TIL_189;
-	else if(typ == OBJ_19C)
-		protTile = TIL_18F;
-	else if(typ == OBJ_021 || (range > 1 && att_objNum == weap_objNum))
-		protTile = TIL_18E;
+	if(typ == OBJ_BOW || typ == OBJ_MAGIC_BOW)
+		missileTile = BaseTile[OBJ_ARROW];
+	else if(typ == OBJ_CROSSBOW || typ == OBJ_TRIPLE_CROSSBOW)
+		missileTile = BaseTile[OBJ_BOLT];
+	else if(typ == OBJ_LIGHTNING_WAND)
+		missileTile = TIL_MISSILE_0;
+	else if(typ == OBJ_FIRE_WAND)
+		missileTile = TIL_MISSILE_1;
+	else if(typ == OBJ_SHIP)
+		missileTile = TIL_MISSILE_7;
+	else if(typ == OBJ_SLING || (range > 1 && att_objNum == weap_objNum))
+		missileTile = TIL_MISSILE_6;
 	else if(att_objNum != weap_objNum)
-		protTile = TILE_FRAME(weap_objNum);
+		missileTile = TILE_FRAME(weap_objNum);
 	else
-		protTile = 0;
+		missileTile = 0;
 
-	if(typ == OBJ_032) {/*triple crossbow?*/
-		bp_04 = D_19AC[*pY_dest - GetY(att_objNum) + 5][*pX_dest - GetX(att_objNum) + 5];
-		D_EC02[0] = *pX_dest;
-		D_EC02[1] = *pX_dest + DirIncrX[bp_04 >> 4];
-		D_EC02[2] = *pX_dest + DirIncrX[bp_04 & 0xf];
-		D_EC08[0] = *pY_dest;
-		D_EC08[1] = *pY_dest + DirIncrY[bp_04 >> 4];
-		D_EC08[2] = *pY_dest + DirIncrY[bp_04 & 0xf];
-		numBolts = TestObj(att_objNum, OBJ_038);
+	if(typ == OBJ_TRIPLE_CROSSBOW) {/*triple crossbow: 3 bolts, the side ones 1 tile apart*/
+		spreadDirs = SpreadDirTable[*pY_dest - GetY(att_objNum) + 5][*pX_dest - GetX(att_objNum) + 5];
+		TripleBoltX[0] = *pX_dest;
+		TripleBoltX[1] = *pX_dest + DirIncrX[spreadDirs >> 4];
+		TripleBoltX[2] = *pX_dest + DirIncrX[spreadDirs & 0xf];
+		TripleBoltY[0] = *pY_dest;
+		TripleBoltY[1] = *pY_dest + DirIncrY[spreadDirs >> 4];
+		TripleBoltY[2] = *pY_dest + DirIncrY[spreadDirs & 0xf];
+		numBolts = TestObj(att_objNum, OBJ_BOLT);
 		if(numBolts > 3)
 			numBolts = 3;
 
-		D_196A = att_objNum;
-		Missiles(GetX(att_objNum), GetY(att_objNum), numBolts, D_EC02, D_EC08, range, protTile, 0);
-		D_196A = -1;
+		MissileShooter = att_objNum;
+		Missiles(GetX(att_objNum), GetY(att_objNum), numBolts, TripleBoltX, TripleBoltY, range, missileTile, 0);
+		MissileShooter = -1;
 
-		*pX_dest = D_EC02[0];
-		*pY_dest = D_EC08[0];
+		*pX_dest = TripleBoltX[0];
+		*pY_dest = TripleBoltY[0];
 	} else {
-		COMBAT_Missile(att_objNum, pX_dest, pY_dest, range, protTile);
+		COMBAT_Missile(att_objNum, pX_dest, pY_dest, range, missileTile);
 	}
-	bp_10 = 0;
+	invChanged = 0;
 	switch(typ) {
-		case OBJ_029:
-		case OBJ_02A:
-		case OBJ_032:
-		case OBJ_036:
-			if(typ == OBJ_029 || typ == OBJ_036)
-				bp_12 = FindInvType(att_objNum, OBJ_037, -1);
+		case OBJ_BOW:
+		case OBJ_CROSSBOW:
+		case OBJ_TRIPLE_CROSSBOW:
+		case OBJ_MAGIC_BOW:
+			if(typ == OBJ_BOW || typ == OBJ_MAGIC_BOW)
+				itemObj = FindInvType(att_objNum, OBJ_ARROW, -1);
 			else
-				bp_12 = FindInvType(att_objNum, OBJ_038, -1);
-			if(typ == OBJ_032)
+				itemObj = FindInvType(att_objNum, OBJ_BOLT, -1);
+			if(typ == OBJ_TRIPLE_CROSSBOW)
 				numBolts = 3;
 			else
 				numBolts = 1;
-			if(bp_12 >= 0) {
-				if(GetQuan(bp_12) > numBolts)
-					SubQuan(bp_12, numBolts);
+			if(itemObj >= 0) {
+				if(GetQuan(itemObj) > numBolts)
+					SubQuan(itemObj, numBolts);
 				else
-					DeleteObj(bp_12);
-				bp_10 = 1;
+					DeleteObj(itemObj);
+				invChanged = 1;
 			}
 		break;
-		case OBJ_024:
-		case OBJ_025:
-		case OBJ_026:
-			bp_0c = *pX_dest;
-			bp_0a = *pY_dest;
-			bp_0c = abs(bp_0c - GetX(att_objNum));
-			bp_0a = abs(bp_0a - GetY(att_objNum));
-			if(bp_0c > 1 || bp_0a > 1) {
-				bp_14 = 0;
-				for(bp_12 = FindInv(att_objNum); bp_12 >= 0; bp_12 = NextInv()) {
-					if(GetCoordUse(bp_12) == INVEN && GetType(bp_12) == typ) {
-						bp_14 = 1;
+		case OBJ_SPEAR:
+		case OBJ_THROWING_AXE:
+		case OBJ_DAGGER:
+			dist_x = *pX_dest;
+			dist_y = *pY_dest;
+			dist_x = abs(dist_x - GetX(att_objNum));
+			dist_y = abs(dist_y - GetY(att_objNum));
+			if(dist_x > 1 || dist_y > 1) {/*thrown*/
+				/*throw a spare one from the inventory if any,
+				  else the readied one*/
+				foundSpare = 0;
+				for(itemObj = FindInv(att_objNum); itemObj >= 0; itemObj = NextInv()) {
+					if(GetCoordUse(itemObj) == INVEN && GetType(itemObj) == typ) {
+						foundSpare = 1;
 						break;
 					}
 				}
-				if(bp_14 == 0)
-					bp_12 = weap_objNum;
-				bp_10 = 1;
-				if(D_EC9E >= 0 && D_EC9E < 0x100) {
-					DeleteObj(bp_12);
+				if(foundSpare == 0)
+					itemObj = weap_objNum;
+				invChanged = 1;
+				if(MissileHitObj >= 0 && MissileHitObj < 0x100) {/*hit an actor: lost*/
+					DeleteObj(itemObj);
 				} else {
-					numTile = GetTileAtXYZ(D_EBFE[0], D_EBFE[1], MapZ);
-					typ = TerrainType[numTile];
+					landTile = GetTileAtXYZ(MissileEnd[0], MissileEnd[1], MapZ);
+					/*typ now holds terrain flags*/
+					typ = TerrainType[landTile];
+					/*lost in deep water or in the void, else dropped*/
 					if(
 						(
-						((typ & TERRAIN_FLAG_01) && (typ & TERRAIN_FLAG_02)) || (numTile >= TIL_0FC && numTile <= TIL_0FF)
-						) && FindLoc(D_EBFE[0], D_EBFE[1], MapZ) < 0
+						((typ & TERRAIN_WET) && (typ & TERRAIN_IMPASSABLE)) || (landTile >= TIL_0FC && landTile <= TIL_HIDDEN)
+						) && FindLoc(MissileEnd[0], MissileEnd[1], MapZ) < 0
 					) {
-						DeleteObj(bp_12);
+						DeleteObj(itemObj);
 					} else {
-						MoveObj(bp_12, D_EBFE[0], D_EBFE[1], MapZ);
-						SetOwned(bp_12);
+						MoveObj(itemObj, MissileEnd[0], MissileEnd[1], MapZ);
+						SetOwned(itemObj);
 					}
 					ShowObjects();
 				}
 			}
 		break;
-		case OBJ_053:
-			bp_0c = *pX_dest;
-			bp_0a = *pY_dest;
-			bp_0c = abs(bp_0c - GetX(att_objNum));
-			bp_0a = abs(bp_0a - GetY(att_objNum));
-			bp_10 = 1;
-			TakeObj(att_objNum, OBJ_053, 1);
-			typ = TerrainType[GetTileAtXYZ(D_EBFE[0], D_EBFE[1], MapZ)];
-			if(!(typ & TERRAIN_FLAG_01)) {
-				AddMapObj(OBJ_13D, LOCAL, 0, D_EBFE[0], D_EBFE[1], MapZ);
+		case OBJ_FLASK_OF_OIL:
+			dist_x = *pX_dest;
+			dist_y = *pY_dest;
+			dist_x = abs(dist_x - GetX(att_objNum));
+			dist_y = abs(dist_y - GetY(att_objNum));
+			invChanged = 1;
+			TakeObj(att_objNum, OBJ_FLASK_OF_OIL, 1);
+			typ = TerrainType[GetTileAtXYZ(MissileEnd[0], MissileEnd[1], MapZ)];
+			if(!(typ & TERRAIN_WET)) {/*not wet: fire field*/
+				AddMapObj(OBJ_FIRE_FIELD, LOCAL, 0, MissileEnd[0], MissileEnd[1], MapZ);
 				ShowObjects();
 			}
 		break;
-		case OBJ_05B:
-			TakeObj(att_objNum, OBJ_05B, 1);
-			if(D_EC9E >= 0 && D_EC9E < 0x100)
-				C_1944_0AD0(att_objNum, D_EC9E);
+		case OBJ_ZU_YLEM:
+			TakeObj(att_objNum, OBJ_ZU_YLEM, 1);
+			if(MissileHitObj >= 0 && MissileHitObj < 0x100)
+				SPELL_SleepTarget(att_objNum, MissileHitObj);/*"sleep"*/
 		break;
-		case OBJ_04F:
-		case OBJ_050:
+		case OBJ_LIGHTNING_WAND:
+		case OBJ_FIRE_WAND:
 			if(OSI_rand(1, 100) == 37) {
 				DeleteObj(weap_objNum);
 				CON_printf(RingVanishedMsg, /*1BC8*/"wand");
@@ -624,19 +715,20 @@ static C_2337_0B99(int att_objNum, int *pX_dest, int *pY_dest, int weap_objNum) 
 			}
 		break;
 	}
-	if(bp_10 && StatusDisplay == CMD_92 && Party[D_04B3] == att_objNum)
+	if(invChanged && StatusDisplay == CMD_STAT_EQUIP && Party[StatusMember] == att_objNum)
 		StatusDirty = 1;
 	return 1;
 }
 
-int D_1B0B[] = {
-	OBJ_004,OBJ_021,OBJ_022,OBJ_023,OBJ_024,OBJ_025,OBJ_026,OBJ_027,
-	OBJ_028,OBJ_029,OBJ_02A,OBJ_02B,OBJ_02C,OBJ_02D,OBJ_02E,OBJ_02F,
-	OBJ_031,OBJ_032,OBJ_030,OBJ_00D,OBJ_0DD,OBJ_053,OBJ_036,OBJ_06D,
-	OBJ_064,OBJ_065,OBJ_067,OBJ_068,OBJ_069,OBJ_071,OBJ_072,OBJ_08D,
-	OBJ_19C,OBJ_05B,OBJ_04E,OBJ_04F,OBJ_050
+/*weapons ... and their damage (WeaponDamages)*/
+/*1B0B*/int WeaponTypes[] = {
+	OBJ_SPIKED_HELM,OBJ_SLING,OBJ_CLUB,OBJ_MAIN_GAUCHE,OBJ_SPEAR,OBJ_THROWING_AXE,OBJ_DAGGER,OBJ_MACE,
+	OBJ_MORNING_STAR,OBJ_BOW,OBJ_CROSSBOW,OBJ_SWORD,OBJ_TWO_HANDED_HAMMER,OBJ_TWO_HANDED_AXE,OBJ_TWO_HANDED_SWORD,OBJ_HALBERD,
+	OBJ_BOOMERANG,OBJ_TRIPLE_CROSSBOW,OBJ_GLASS_SWORD,OBJ_SPIKED_SHIELD,OBJ_CANNON,OBJ_FLASK_OF_OIL,OBJ_MAGIC_BOW,OBJ_ROLLING_PIN,
+	OBJ_SCYTHE,OBJ_PITCHFORK,OBJ_PICK,OBJ_SHOVEL,OBJ_HOE,OBJ_CLEAVER,OBJ_KNIFE,OBJ_DECORATIVE_SWORD,
+	OBJ_SHIP,OBJ_ZU_YLEM,OBJ_STAFF,OBJ_LIGHTNING_WAND,OBJ_FIRE_WAND
 };
-unsigned char D_1B55[] = {
+/*1B55*/unsigned char WeaponDamages[] = {
 	 4, 6,  8, 8,10,10, 6,15,
 	15,10, 12,15,20,20,20,30,
 	 8,12,255, 4,90, 4,20, 2,
@@ -644,30 +736,33 @@ unsigned char D_1B55[] = {
 	30, 0,  4,30,20
 };
 
-/*C_2337_10E4*/GetDamagePoints(int bp06) {
-	int si, di;
+/*maximum damage of a weapon, or of an actor's natural attack (from its
+  monster class); -1 if the object is not a weapon*/
+/*C_2337_10E4*/GetDamagePoints(int objNum) {
+	int i, damage;
 	int objCls;
 
-	di = -1;
-	if(bp06 < 0x100)
-		objCls = GetMonsterClass(GetType(bp06));
+	damage = -1;
+	if(objNum < 0x100)
+		objCls = GetMonsterClass(GetType(objNum));
 	else
 		objCls = -1;
 	if(objCls >= 0) {
-		di = D_3522_0182[objCls];
+		damage = MonsterDamage[objCls];
 	} else {
-		for(si = 0; si < 37; si ++)
-			if(GetType(bp06) == D_1B0B[si]) {
-				di = D_1B55[si];
+		for(i = 0; i < 37; i ++)
+			if(GetType(objNum) == WeaponTypes[i]) {
+				damage = WeaponDamages[i];
 				break;
 			}
 	}
-	return di;
+	return damage;
 }
 
+/*copy the state of an actor into another one (slime division)*/
 /*C_2337_115F*/CloneObject(int src_objNum, int dst_objNum) {
 	ObjStatus[dst_objNum] = ObjStatus[src_objNum];
-	if(GetType(src_objNum) != OBJ_177)
+	if(GetType(src_objNum) != OBJ_SLIME)
 		ObjShapeType[dst_objNum] = ObjShapeType[src_objNum];
 	Amount[dst_objNum] = Amount[src_objNum];
 	NPCStatus[dst_objNum] = NPCStatus[src_objNum];
@@ -685,96 +780,106 @@ unsigned char D_1B55[] = {
 	NPCFlag[dst_objNum] = NPCFlag[src_objNum];
 }
 
+/*flash the "hit" tile over an object (if on screen and ShowHitFlash set) and
+  wake it up if it was asleep*/
 /*C_2337_121F*/COMBAT_showHit(int objNum) {
-	if(D_1968) {
+	if(ShowHitFlash) {
 		int x = GetX(objNum) - MapX + 5;
 		int y = GetY(objNum) - MapY + 5;
 		if(x >= 0 && x < 11 && y >= 0 && y < 11) {
 			/*display hit?*/
 			ShowObjects();
-			ShowObject(TIL_101, x, y, 1);
-			C_0A33_09CE(1);
-			MUS_0065(4, 0);
+			ShowObject(TIL_HIT, x, y, 1);
+			DrawMapWindow(1);
+			MUS_PlaySfx(4, 0);
 			ShowObjects();
-			D_17B0 = 1;
+			VisibilityDirty = 1;
 		}
 		if(objNum < 0x100)
-			SetSkipSomeTest(objNum);
+			SetHurtThisTurn(objNum);
 	}
 	if(IsAsleep(objNum)) {
 		ClrAsleep(objNum);
 		ObjShapeType[objNum] = OrigShapeType[objNum];
-		D_17B0 = 1;
+		VisibilityDirty = 1;
 	}
-	D_1968 = 1;
+	ShowHitFlash = 1;
 }
 
-/*C_2337_12F5*/LooseHP(int objNum, int bp06) {
-	int di;
-	int new_x, new_y, bp_0c, objTyp;
-	int bp_08, objCls, exp, bp_02;
+/*inflict damage to an object. Actors: Lord British is immortal, a
+  skiff/raft passes the damage to a random party member, a ship becomes
+  a raft, others die (karma, party removal, inventory dropped) or lose
+  hit points (slimes may divide). Tangle vine parts kill their pod.
+  Breakable items lose "quantity" points and are broken at 0.
+  returns the experience gained by killing a hostile monster*/
+/*C_2337_12F5*/LoseHP(int objNum, int damage) {
+	int i;
+	int new_x, new_y, otherObj, objTyp;
+	int mouseSave, objCls, xpGained, savedTextOn;
 
-	if(bp06 < 0)
+	if(damage < 0)
 		return 0;
-	exp = 0;
+	xpGained = 0;
 	objTyp = GetType(objNum);
-	if(objTyp == OBJ_1A7)
+	if(objTyp == OBJ_BALLOON_INFLATED)
 		return 0;
 
-	bp_02 = TextOn; TextOn = 1;
+	savedTextOn = TextOn; TextOn = 1;
 
 	if(objNum < 0x100) {
 		COMBAT_showHit(objNum);
-		if(IsMonster_IM(GetMonsterClass(objTyp))) {
+		if(IsMonsterLordBritish(GetMonsterClass(objTyp))) {
 			HitPoints[objNum] = 255;
-		} else if(objTyp == OBJ_19E || objTyp == OBJ_19F) {/*Skiff/Raft*/
-			bp_0c = Party[0];
+		} else if(objTyp == OBJ_SKIFF || objTyp == OBJ_RAFT) {/*Skiff/Raft*/
+			otherObj = Party[0];
 			if(PartySize > 1)
-				bp_0c = Party[OSI_rand(0, PartySize - 1)];
-			LooseHP(bp_0c, bp06);
-			COMBAT_displaySeverity(bp_0c);
-		} else if(HitPoints[objNum] <= bp06) {/*too many hits?*/
-			if(D_04A7 == objNum)
-				D_04A7 = -1;
-			if(objTyp == OBJ_19C) {
-				C_1184_116D(objNum, GetX(objNum), GetY(objNum), 1);
-				ObjShapeType[objNum] = TypeFrame(OBJ_19F, 0);
+				otherObj = Party[OSI_rand(0, PartySize - 1)];
+			LoseHP(otherObj, damage);
+			COMBAT_displaySeverity(otherObj);
+		} else if(HitPoints[objNum] <= damage) {/*too many hits?*/
+			if(LastAttackTarget == objNum)
+				LastAttackTarget = -1;
+			if(objTyp == OBJ_SHIP) {
+				OBJ_MoveCreatureParts(objNum, GetX(objNum), GetY(objNum), 1);
+				ObjShapeType[objNum] = TypeFrame(OBJ_RAFT, 0);
 				HitPoints[objNum] = 10;
-				D_17B0 = 1;
+				VisibilityDirty = 1;
 			} else {
 				if(HitPoints[objNum] != 0) {
-					if(GetAlignment(objNum) == NEUTRAL)
+					if(GetAlignment(objNum) == NEUTRAL)/*killing an innocent*/
 						SubKarma(5);
 					HitPoints[objNum] = 0;
 					SetDead(objNum);
 					if(Is_ATKPLR(objNum)) {
 						objCls = GetMonsterClass(GetType(objNum));
 						if(objCls >= 0) {
-							exp = (
-								/*STR*/D_3522_0082[objCls] +
-								/*DEX*/D_3522_00C2[objCls] +
-								/*INT*/D_3522_0102[objCls] +
-								/*ARM*/D_3522_0142[objCls] +
-								/*DMG*/D_3522_0182[objCls] +
-								/*HIT*/D_3522_01C2[objCls]
+							/*experience = sum of the class stats / 4*/
+							xpGained = (
+								/*STR*/MonsterStr[objCls] +
+								/*DEX*/MonsterDex[objCls] +
+								/*INT*/MonsterInt[objCls] +
+								/*ARM*/MonsterArmor[objCls] +
+								/*DMG*/MonsterDamage[objCls] +
+								/*HIT*/MonsterHP[objCls]
 							) >> 2;
 						}
 					}
 					ClrInvisible(objNum);
 					SetTypeUnconscious(objNum);
 					NPCMode[objNum] = AI_MOTIONLESS;
+					/*a dead companion leaves the party*/
 					if(IsPlrControl(objNum) && Party[0] != objNum) {
-						for(di = 1; di <= PartySize; di ++) {
-							if(Party[di] == objNum) {
-								if(D_2CC3 >= di)
-									D_2CC3 --;
-								if(Active == di)
+						for(i = 1; i <= PartySize; i ++) {
+							if(Party[i] == objNum) {
+								if(SoloMember >= i)
+									SoloMember --;
+								if(Active == i)
 									SetPartyMode();
-								if(Active > di)
+								if(Active > i)
 									Active --;
-								for( ; di < PartySize; di ++) {
-									Party[di] = Party[di + 1];
-									strcpy(Names[di], Names[di + 1]);
+								for( ; i < PartySize; i ++) {
+									Party[i] = Party[i + 1];
+									strcpy(Names[i], Names[i + 1]);
 								}
 								PartySize --;
 								StatusDirty = 1;
@@ -782,55 +887,57 @@ unsigned char D_1B55[] = {
 							}
 						}
 					}
-					C_1184_1B3A(objNum);
-					D_17B0 = 1;
+					OBJ_MakeDeadBody(objNum);
+					VisibilityDirty = 1;
 				}
 				if(Party[Active] == objNum)
-					C_1E0F_4B6A();
+					CheckActiveMember();
 			}
 		} else {
-			HitPoints[objNum] -= bp06;
+			HitPoints[objNum] -= damage;
 			if(NPCMode[objNum] == AI_SHY)
 				NPCMode[objNum] = AI_ASSAULT;
-			if(IsMonster_SP(GetMonsterClass(objTyp))) {
-				for(di = 0;di < 8; di ++) {
+			if(IsMonsterSlime(GetMonsterClass(objTyp))) {/*slime splits*/
+				for(i = 0;i < 8; i ++) {
 					new_x = GetX(objNum) + OSI_rand(0, 2) - 1;
 					new_y = GetY(objNum) + OSI_rand(0, 2) - 1;
-					if(C_1E0F_000F(objNum, new_x, new_y)) {
-						bp_0c = AddMonster(GetType(objNum), new_x, new_y, MapZ);
-						if(bp_0c >= 0) {
-							CloneObject(objNum, bp_0c);
+					if(CanMoveTo(objNum, new_x, new_y)) {
+						otherObj = AddMonster(GetType(objNum), new_x, new_y, MapZ);
+						if(otherObj >= 0) {
+							CloneObject(objNum, otherObj);
 							CON_printf(SlimeDividesMsg);
 							PromptFlag = 1;
-							D_17B0 = 1;
+							VisibilityDirty = 1;
 						}
 						break;
 					}
 				}
 			}
 		}
+		/*refresh the hit points on the status display*/
 		if(IsPlrControl(objNum)) {
-			if(StatusDisplay == CMD_90 && Party[D_04B3] == objNum) {
+			if(StatusDisplay == CMD_STAT_PORTRAIT && Party[StatusMember] == objNum) {
 				StatusDirty = 1;
-			} else if(StatusDisplay == CMD_91) {
-				for(di = D_07CC; di < PartySize && di < D_07CC + 5; di ++) {
-					if(Party[di] == objNum) {
-						bp_08 = CON_mouseOffAt(176, 6, 311, 103);
-						CON_setClip(&(D_B6B5[1]));
-						CON_gotoxy(14, ((di - D_07CC) << 1) + 2);
+			} else if(StatusDisplay == CMD_STAT_PARTY) {
+				for(i = PartyListTop; i < PartySize && i < PartyListTop + 5; i ++) {
+					if(Party[i] == objNum) {
+						mouseSave = CON_mouseOffAt(176, 6, 311, 103);
+						CON_setClip(&(TextWindows[1]));
+						CON_gotoxy(14, ((i - PartyListTop) << 1) + 2);
 						if(IsPoisoned(objNum))
-							D_04DF->_fg = D_2A4C;
+							CurClip->fgColor = ColorGreen;
 						else if(HitPoints[objNum] < 10)
-							D_04DF->_fg = D_2A4A;
+							CurClip->fgColor = ColorRed;
 						CON_printf(/*1BCD*/"%3d\n", HitPoints[objNum]);
-						D_04DF->_fg = D_2A56;
-						CON_setClip(&(D_B6B5[3]));
-						CON_mouseOn(bp_08);
+						CurClip->fgColor = ColorText;
+						CON_setClip(&(TextWindows[3]));
+						CON_mouseOn(mouseSave);
 					}
 				}
 			}
 		}
-	} else if(objTyp == OBJ_16E) {
+	} else if(objTyp == OBJ_TANGLE_VINE_VINE) {
+		/*vine segment: its quality is the pod (actor) number*/
 		HitPoints[GetQual(objNum)] = 0;
 		SetDead(GetQual(objNum));
 		ClrInvisible(GetQual(objNum));
@@ -838,71 +945,78 @@ unsigned char D_1B55[] = {
 		CON_printf(VineKilledMsg);
 		PromptFlag = 1;
 	} else if(!QuanType(ObjShapeType[objNum]) && GetQuan(objNum) != 0) {
+		/*breakable object: quantity is its "hit points"*/
 		COMBAT_showHit(objNum);
+		/*not for broken/destroyed doors (frame >= 12) or broken chests*/
 		if(
-			!(objTyp >= OBJ_129 && objTyp <= OBJ_12C && GetFrame(objNum) >= 12) &&
-			!(objTyp == OBJ_062 && GetFrame(objNum) == 3)
+			!(objTyp >= OBJ_OAKEN_DOOR && objTyp <= OBJ_STEEL_DOOR && GetFrame(objNum) >= 12) &&
+			!(objTyp == OBJ_OPEN_CHEST && GetFrame(objNum) == 3)
 		) {
-			if(GetQuan(objNum) > bp06) {
-				SubQuan(objNum, bp06);
+			if(GetQuan(objNum) > damage) {
+				SubQuan(objNum, damage);
 			} else {
 				CON_printf(BrokenMsg, GetObjectString(objNum));
 				PromptFlag = 1;
-				if(FindInvType(objNum, OBJ_151, SPELL_16) != -1)
-					C_27A1_28A3(objNum);
-				if(objTyp == OBJ_07B) {
-					MUS_0065(15, 0);
+				if(FindInvType(objNum, OBJ_EFFECT, SPELL_TRAP) != -1)
+					SpringTrap(objNum);
+				if(objTyp == OBJ_MIRROR) {
+					MUS_PlaySfx(15, 0);
 					SetFrame(objNum, 2);
-					D_17B0 = 1;
+					VisibilityDirty = 1;
 					SubKarma(10);
 				} else {
 					DeleteObj(objNum);
-					D_17B0 = 1;
+					VisibilityDirty = 1;
 				}
 			}
 		}
 	}
 
-	TextOn = bp_02;
+	TextOn = savedTextOn;
 
-	return exp;
+	return xpGained;
 }
 
+/*does the attack hit? items are always hit, the glass sword always
+  hits. Bludgeons (and MONSTER_STR_ATTACK monsters' natural attacks) use STR,
+  other weapons DEX: hit if 1d30 >= (DEX(defender) + 30 - STAT) / 2*/
 static /*C_2337_18CF*/__AttackTest(int objNum_att, int objNum_def, int objNum_weapon) {
-	int objTyp, str_dex;
-	int dex, objCls, strOverDex;
+	int objTyp, attackStat;
+	int defDex, objCls, strOverDex;
 
 	if(objNum_def >= 0x100)
 		return 1;
 	objTyp = GetType(objNum_weapon);
-	if(objTyp == OBJ_030)
+	if(objTyp == OBJ_GLASS_SWORD)
 		return 1;
 	if(objNum_weapon == objNum_att) {
 		objCls = GetMonsterClass(objTyp);
-		strOverDex = IsMonster_0020(objCls);
+		strOverDex = IsMonsterStrAttack(objCls);
 	} else {
-		strOverDex = (objTyp == OBJ_004 || objTyp == OBJ_022 || objTyp == OBJ_027 || objTyp == OBJ_02C);
+		strOverDex = (objTyp == OBJ_SPIKED_HELM || objTyp == OBJ_CLUB || objTyp == OBJ_MACE || objTyp == OBJ_TWO_HANDED_HAMMER);
 	}
 	if(strOverDex)
-		str_dex = GetStr(objNum_att);
+		attackStat = GetStr(objNum_att);
 	else
-		str_dex = GetDex(objNum_att);
-	dex = GetDex(objNum_def);
+		attackStat = GetDex(objNum_att);
+	defDex = GetDex(objNum_def);
 
-	return OSI_rand(1, 30) >= (dex + 30 - str_dex) / 2;
+	return OSI_rand(1, 30) >= (defDex + 30 - attackStat) / 2;
 }
 
+/*print how badly an actor is wounded (in quarters of its max HP);
+  a critically wounded intelligent NPC in a mobile combat mode flees*/
 /*C_2337_198F*/COMBAT_displaySeverity(int objNum) {
-	int di;
+	int severity;
 
-	if(GetType(objNum) == OBJ_1A7 || HitPoints[objNum] == 0)
+	if(GetType(objNum) == OBJ_BALLOON_INFLATED || HitPoints[objNum] == 0)
 		return;
-	di = (HitPoints[objNum] << 2) / MaxHP(objNum);
-	if(di < 4) {
+	severity = (HitPoints[objNum] << 2) / MaxHP(objNum);
+	if(severity < 4) {
 		CON_printf(/*1BD2*/"`%s ", GetObjectString(objNum));
 		PromptFlag = 1;
 	}
-	if(di == 0) {/*critical*/
+	if(severity == 0) {/*critical*/
 		CON_printf(CriticalMsg);
 		if(
 			GetInt(objNum) >= 5 &&
@@ -913,53 +1027,55 @@ static /*C_2337_18CF*/__AttackTest(int objNum_att, int objNum_def, int objNum_we
 			NPCMode[objNum] != AI_FOLLOW &&
 			NPCMode[objNum] != AI_MOTIONLESS
 		) NPCMode[objNum] = AI_RETREAT;
-	} else if(di == 1) {/*heavily*/
+	} else if(severity == 1) {/*heavily*/
 		CON_printf(HeavilyMsg);
-	} else if(di == 2) {/*lightly*/
+	} else if(severity == 2) {/*lightly*/
 		CON_printf(LightlyMsg);
-	} else if(di == 3) {/*barely*/
+	} else if(severity == 3) {/*barely*/
 		CON_printf(BarelyMsg);
 	}
-	if(di != 0 && di < 4)
+	if(severity != 0 && severity < 4)
 		CON_printf(WoundedMsg);
 }
 
 /*dissolvable objects*/
-int D_1B7A[] = {
-	OBJ_002,OBJ_003,OBJ_004,OBJ_005,OBJ_007,OBJ_00A,OBJ_00B,OBJ_00C,
-	OBJ_00D,OBJ_00F,OBJ_013,OBJ_014,OBJ_015,OBJ_016,OBJ_023,OBJ_026,
-	OBJ_02B,OBJ_071,OBJ_072,
+/*1B7A*/int DissolvableTypes[] = {
+	OBJ_CHAIN_COIF,OBJ_IRON_HELM,OBJ_SPIKED_HELM,OBJ_WINGED_HELM,OBJ_GARGOYLE_HELM,OBJ_CURVED_HEATER,OBJ_WINGED_SHIELD,OBJ_KITE_SHIELD,
+	OBJ_SPIKED_SHIELD,OBJ_DOOR_SHIELD,OBJ_RING_MAIL,OBJ_SCALE_MAIL,OBJ_CHAIN_MAIL,OBJ_PLATE_MAIL,OBJ_MAIN_GAUCHE,OBJ_DAGGER,
+	OBJ_SWORD,OBJ_CLEAVER,OBJ_KNIFE,
 	0
 };
-/*robbable objects*/
-int D_1BA2[] = {
-	OBJ_080,OBJ_081,OBJ_082,OBJ_083,OBJ_084,OBJ_085,OBJ_087,OBJ_0D1,
-	OBJ_0D2,OBJ_0D3,
+/*robbable objects (food stolen by gremlins)*/
+/*1BA2*/int StealableFoodTypes[] = {
+	OBJ_LOAF_OF_BREAD,OBJ_PORTION_OF_MEAT,OBJ_ROLLS,OBJ_CAKE,OBJ_CHEESE,OBJ_HAM,OBJ_HORSE_CHOPS,OBJ_MEAT_RIB,
+	OBJ_RIBS,OBJ_DEAD_ANIMAL,
 	0
 };
 
-/*pick {dissolv/robb}able object?*/
-static C_2337_1A99(int bp08, int bp06/*disolve/rob flag*/) {
-	int si, di;
-	int *bp_02;
+/*pick a random object in ownerObj's inventory that can be dissolved by
+  acid (wantFood == 0) or stolen by a gremlin (wantFood != 0); -1 if none*/
+/*C_2337_1A99*/static COMBAT_PickVulnerableItem(int ownerObj, int wantFood/*disolve/rob flag*/) {
+	int invObj, picked;
+	int *pList;
 
-	di = -1;
-	for(si = FindInv(bp08); si >= 0; si = NextInv()) {
-		bp_02 = bp06?D_1BA2:D_1B7A;
-		while(*bp_02) {
-			if(GetType(si) == *(bp_02++)) {
-				if(di < 0 || OSI_rand(0, 1))
-					di = si;
+	picked = -1;
+	for(invObj = FindInv(ownerObj); invObj >= 0; invObj = NextInv()) {
+		pList = wantFood?StealableFoodTypes:DissolvableTypes;
+		while(*pList) {
+			if(GetType(invObj) == *(pList++)) {
+				if(picked < 0 || OSI_rand(0, 1))
+					picked = invObj;
 				break;
 			}
 		}
 	}
-	return di;
+	return picked;
 }
 
 /*The avatar did a bad action and "everyone"
-run after him*/
-C_2337_1B0E() {
+run after him: -5 karma, guards within 32 tiles arrest him, other
+neutral NPCs within 6 tiles become vigilantes (scheduled NPCs) or flee*/
+/*C_2337_1B0E*/COMBAT_RaiseAlarm() {
 	int objNum;
 
 	SubKarma(5);
@@ -971,22 +1087,22 @@ C_2337_1B0E() {
 		if(IsDead(objNum) || IsPlrControl(objNum) || GetAlignment(objNum) != NEUTRAL)
 			continue;
 		/*guard*/
-		if(GetType(objNum) == OBJ_17E) {
-			if(COMBAT_getCathesus(objNum, MapX, MapY) < 32)
+		if(GetType(objNum) == OBJ_GUARD) {
+			if(COMBAT_TileDistance(objNum, MapX, MapY) < 32)
 				NPCMode[objNum] = AI_ARREST;
 			continue;
 		}
 
 		if(NPCMode[objNum] == AI_IMMOBILE || NPCMode[objNum] == AI_MOTIONLESS)
 			continue;
-		if(Isbis_0016(objNum) || IsDraggedUnder(objNum))
+		if(IsIncapacitated(objNum) || IsDraggedUnder(objNum))
 			continue;
-		if(COMBAT_getCathesus(objNum, MapX, MapY) >= 6)
+		if(COMBAT_TileDistance(objNum, MapX, MapY) >= 6)
 			continue;
 		if(NPCMode[objNum] >= AI_SCHEDULE) {
-			if(NPCMode[objNum] <= AI_86)
+			if(NPCMode[objNum] <= AI_PATH_FAILED)/*busy walking its schedule path*/
 				continue;
-			if(GetType(objNum) == OBJ_188)
+			if(GetType(objNum) == OBJ_MUSICIAN_SHORT_CAPE)
 				ObjShapeType[objNum] = OrigShapeType[objNum];
 			NPCMode[objNum] = AI_VIGILANTE;
 		} else {
@@ -995,53 +1111,60 @@ C_2337_1B0E() {
 	}
 }
 
-/*attack morality/alignement check?*/
-C_2337_1C1E(int si/*victim?*/, int bp08/*attacker?*/, int bp06/*hit points?*/) {
+/*attack morality/alignement check: called when "attacker" hurts the
+  neutral NPC "victim". If the player hurt a human, he yells for help
+  (COMBAT_RaiseAlarm). A scheduled NPC becomes a vigilante; otherwise the
+  victim turns hostile toward the attacker's side (temporary monsters,
+  0xe0 and above, also switch to assault)*/
+/*C_2337_1C1E*/COMBAT_ProvokeNeutral(int victim, int attacker, int damage) {
 	int objCls;
 
-	if(si >= 0x100)
+	if(victim >= 0x100)
 		return;
-	if(GetAlignment(si) != NEUTRAL)
+	if(GetAlignment(victim) != NEUTRAL)
 		return;
-	if(IsPlrControl(si))
+	if(IsPlrControl(victim))
 		return;
-	objCls = GetMonsterClass(GetType(si));
-	if(NPCMode[bp08] == AI_COMMAND && objCls >= 0 && IsMonster_4000(objCls) && bp06 > 0) {
+	objCls = GetMonsterClass(GetType(victim));
+	if(NPCMode[attacker] == AI_COMMAND && objCls >= 0 && IsMonsterHuman(objCls) && damage > 0) {
 		/*killed a human ? ...yells for help...*/
-		CON_printf(D_356A_044A, GetObjectString(si));
-		C_2337_1B0E();
+		CON_printf(YellsForHelpMsg, GetObjectString(victim));
+		COMBAT_RaiseAlarm();
 		PromptFlag = 1;
 	}
-	if(NPCMode[si] >= AI_SCHEDULE) {
-		if(NPCMode[bp08] == AI_COMMAND) {
-			if(GetType(si) == OBJ_188)
-				ObjShapeType[si] = OrigShapeType[si];
-			NPCMode[si] = AI_VIGILANTE;
+	if(NPCMode[victim] >= AI_SCHEDULE) {
+		if(NPCMode[attacker] == AI_COMMAND) {
+			if(GetType(victim) == OBJ_MUSICIAN_SHORT_CAPE)
+				ObjShapeType[victim] = OrigShapeType[victim];
+			NPCMode[victim] = AI_VIGILANTE;
 		}
 		return;
 	}
-	if(GetAlignment(bp08) == GOOD)
-		SetAlignment(si, CHAOTIC);
+	if(GetAlignment(attacker) == GOOD)
+		SetAlignment(victim, CHAOTIC);
 	else
-		SetAlignment(si, GOOD);
-	if(si >= 0xe0)
-		NPCMode[si] = AI_ASSAULT;
+		SetAlignment(victim, GOOD);
+	if(victim >= 0xe0)
+		NPCMode[victim] = AI_ASSAULT;
 }
 
-static /*C_2337_1D20*/__DoHit(int objNum, int si/*bp08*/, int hitPts) {
+/*a hit landed: roll the damage (1..hitPts; 255 is a sure kill), subtract
+  1..armour, apply it, print the messages and the monster special
+  attacks (drag under, acid, theft, poison)*/
+static /*C_2337_1D20*/__DoHit(int attacker, int defender, int hitPts) {
 	char *pObjStr;
-	char bp_22[26];
-	int armorPts, objCls, bp_04, bp_02;
+	char defName[26];
+	int armorPts, objCls, lostObj, defTyp;
 
 #if 0
-	CON_printf("%03x hits %03x (%03d)\n", objNum, si, hitPts);
+	CON_printf("%03x hits %03x (%03d)\n", attacker, defender, hitPts);
 #endif
-	if(si < 0)
+	if(defender < 0)
 		return;
-	pObjStr = GetObjectString(si);
-	if(ObjShapeType[objNum] == TypeFrame(OBJ_165, 0)) {
-		SetFrame(objNum, 1);
-		D_17B0 = 1;
+	pObjStr = GetObjectString(defender);
+	if(ObjShapeType[attacker] == TypeFrame(OBJ_CORPSER, 0)) {/*corpser surfaces*/
+		SetFrame(attacker, 1);
+		VisibilityDirty = 1;
 	}
 
 	if(hitPts == -1)
@@ -1049,101 +1172,105 @@ static /*C_2337_1D20*/__DoHit(int objNum, int si/*bp08*/, int hitPts) {
 	else if(hitPts > 1 && hitPts < 255)
 		hitPts = OSI_rand(1, hitPts);
 
-	if(si < 0x100)
-		armorPts = __GetProtection(si);
+	if(defender < 0x100)
+		armorPts = __GetProtection(defender);
 	else
 		armorPts = 0;
 	if(armorPts > 0 && hitPts < 255)
 		hitPts -= OSI_rand(1, armorPts);
 
 	if(hitPts <= 0) {
-		COMBAT_showHit(si);
+		COMBAT_showHit(defender);
 		CON_printf(GrazedMsg, pObjStr);
 		PromptFlag = 1;
 	} else {
+		/*an adjacent attacker engages the defender in melee*/
 		if(
-			si < 0x100 &&
-			NPCMode[si] > AI_FOLLOW && NPCMode[si] < AI_10 &&
-			CLOSE_ENOUGH_S(2, GetX(si), GetY(si), GetX(objNum), GetY(objNum))
-		) Leader[si] = objNum;
-		AddXP(objNum, LooseHP(si, hitPts));
+			defender < 0x100 &&
+			NPCMode[defender] > AI_FOLLOW && NPCMode[defender] < AI_PATROL_NS &&
+			CLOSE_ENOUGH_S(2, GetX(defender), GetY(defender), GetX(attacker), GetY(attacker))
+		) Leader[defender] = attacker;
+		AddXP(attacker, LoseHP(defender, hitPts));
 	}
-	if(si >= 0x100)
+	if(defender >= 0x100)
 		return;
 
-	if(si == Selection.obj)
-		C_2337_1C1E(si, objNum, hitPts);
-	bp_02 = GetType(si);
+	if(defender == Selection.obj)
+		COMBAT_ProvokeNeutral(defender, attacker, hitPts);
+	defTyp = GetType(defender);
 	if(
-		HitPoints[si] == 0 &&
-		bp_02 != OBJ_1A7 &&
-		bp_02 != OBJ_19E &&
-		bp_02 != OBJ_19F &&
-		bp_02 != OBJ_19C
+		HitPoints[defender] == 0 &&
+		defTyp != OBJ_BALLOON_INFLATED &&
+		defTyp != OBJ_SKIFF &&
+		defTyp != OBJ_RAFT &&
+		defTyp != OBJ_SHIP
 	) {
-		CON_printf(KiledMsg, pObjStr);
+		CON_printf(KilledMsg, pObjStr);
 		PromptFlag = 1;
-		if(StatusDisplay == CMD_90 && Party[D_04B3] == objNum)
+		if(StatusDisplay == CMD_STAT_PORTRAIT && Party[StatusMember] == attacker)
 			StatusDirty = 1;
 		return;
 	}
-	objCls = GetMonsterClass(GetType(objNum));
-	if(IsMonster_DR(objCls)) {
-		MUS_0065(9, 0);
+	objCls = GetMonsterClass(GetType(attacker));
+	if(IsMonsterCorpser(objCls)) {
+		MUS_PlaySfx(9, 0);
 		CON_printf(DraggedUnderMsg, pObjStr);
-		SetDraggedUnder(si);
+		SetDraggedUnder(defender);
 		PromptFlag = 1;
-		D_17B0 = 1;
+		VisibilityDirty = 1;
 	}
-	if(IsMonster_AC(objCls)) {
-		bp_04 = C_2337_1A99(si, 0);
-		if(bp_04 >= 0) {
-			MUS_0065(11, 0);
-			strcpy(bp_22, GetObjectString(si));
-			CON_printf(DissolvedMsg, bp_22, GetObjectString(bp_04));
+	if(IsMonsterAcidSlug(objCls)) {
+		lostObj = COMBAT_PickVulnerableItem(defender, 0);
+		if(lostObj >= 0) {
+			MUS_PlaySfx(11, 0);
+			strcpy(defName, GetObjectString(defender));
+			CON_printf(DissolvedMsg, defName, GetObjectString(lostObj));
 			PromptFlag = 1;
-			DeleteObj(bp_04);
+			DeleteObj(lostObj);
 		}
 	}
-	if(IsMonster_SF(objCls)) {
-		bp_04 = C_2337_1A99(si, 1);
-		if(bp_04 >= 0) {
-			MUS_0065(12, 0);
-			CON_printf(StolenMsg, GetObjectString(si));
+	if(IsMonsterGremlin(objCls)) {
+		lostObj = COMBAT_PickVulnerableItem(defender, 1);
+		if(lostObj >= 0) {
+			MUS_PlaySfx(12, 0);
+			CON_printf(StolenMsg, GetObjectString(defender));
 			PromptFlag = 1;
-			DeleteObj(bp_04);
+			DeleteObj(lostObj);
 		}
 	}
-	if(IsMonster_0040(objCls) && OSI_rand(0, 3) == 0) {
+	if(IsMonsterPoisonous(objCls) && OSI_rand(0, 3) == 0) {
 		CON_printf(PoisonedMsg, pObjStr);
 		PromptFlag = 1;
-		SetPoisoned(si);
+		SetPoisoned(defender);
 		if(
-			StatusDisplay == CMD_91 ||
-			(StatusDisplay == CMD_90 && Party[D_04B3] == si)
+			StatusDisplay == CMD_STAT_PARTY ||
+			(StatusDisplay == CMD_STAT_PORTRAIT && Party[StatusMember] == defender)
 		) StatusDirty = 1;
 	}
 	if(hitPts > 0)
-		COMBAT_displaySeverity(si);
+		COMBAT_displaySeverity(defender);
 }
 
 /*not very proud of that name ...*/
+/*return the actor owning a part of a multi-tile monster (dragon,
+  scorpion, ship, serpent, hydra body); the object itself otherwise*/
 /*C_2337_205C*/COMBAT_getHead(int objNum) {
-	int di;
-	int objType, bp_04, bp_02;
+	int obj;
+	int objType, neck_x, neck_y;
 
 	if(objNum < 0)
 		return -1;
 	objType = GetType(objNum);
-	if(objType >= OBJ_1AA || objType == OBJ_19B || objType == OBJ_19C || objType == OBJ_19D) {
+	if(objType >= OBJ_GIANT_SCORPION || objType == OBJ_DRAGON || objType == OBJ_SHIP || objType == OBJ_SILVER_SERPENT) {
 		if(objNum >= 0x100)
 			objNum = OBJ_getHead(objNum);
-	} else if(objType == OBJ_1A9) {
-		bp_04 = GetX(objNum) - DirIncrX[GetFrame(objNum) >> 2];
-		bp_02 = GetY(objNum) - DirIncrY[GetFrame(objNum) >> 2];
-		for(di = FindLoc(bp_04, bp_02, MapZ); di >= 0; di = NextLoc()) {
-			if(di < 0x100 && GetType(di) == OBJ_176) {
-				objNum = di;
+	} else if(objType == OBJ_HYDRA_BODY) {
+		/*frame >> 2 is the direction of this part from the hydra*/
+		neck_x = GetX(objNum) - DirIncrX[GetFrame(objNum) >> 2];
+		neck_y = GetY(objNum) - DirIncrY[GetFrame(objNum) >> 2];
+		for(obj = FindLoc(neck_x, neck_y, MapZ); obj >= 0; obj = NextLoc()) {
+			if(obj < 0x100 && GetType(obj) == OBJ_HYDRA) {
+				objNum = obj;
 				break;
 			}
 		}
@@ -1151,10 +1278,16 @@ static /*C_2337_1D20*/__DoHit(int objNum, int si/*bp08*/, int hitPts) {
 	return objNum;
 }
 
+/*att_objNum attacks location (x,y) with weap_objNum (itself for a
+  natural attack). Turns the attacker, handles spellbooks/charges (casts
+  the spell), missiles and misses of ranged weapons (the missile may
+  then hit a neighbouring tile), the triple crossbow, undead resistance
+  and the glass sword / boomerang.
+  returns 0: done, 1: engaged in melee (can't shoot), 2: out of range*/
 static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 	int weap_typ, opp_objNum;
-	int bp_16, bp_14, damage, didHit;
-	int delta_x, delta_y, some_weapon_flag, numBolts, bp_06, bp_04, objTyp;
+	int dir, tmp, damage, didHit;
+	int delta_x, delta_y, isRanged, numBolts, savedActive, manaCost, objTyp;
 
 #if 0
 	CON_printf("%04x att. %03x,%03x w.%04x\n", att_objNum, x, y, weap_objNum);
@@ -1163,49 +1296,53 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 		return 2;
 
 	objTyp = GetType(weap_objNum);
-	if((objTyp == OBJ_029 || objTyp == OBJ_036) && FindInvType(att_objNum, OBJ_037, -1) < 0)
+	if((objTyp == OBJ_BOW || objTyp == OBJ_MAGIC_BOW) && FindInvType(att_objNum, OBJ_ARROW, -1) < 0)
 		return 0;
-	if((objTyp == OBJ_02A || objTyp == OBJ_032) && FindInvType(att_objNum, OBJ_038, -1) < 0)
+	if((objTyp == OBJ_CROSSBOW || objTyp == OBJ_TRIPLE_CROSSBOW) && FindInvType(att_objNum, OBJ_BOLT, -1) < 0)
 		return 0;
 
+	/*face the target (dir = 0,2,4,6 = N,E,S,W)*/
 	delta_x = x - GetX(att_objNum);
 	delta_y = y - GetY(att_objNum);
 	if(abs(delta_x) > abs(delta_y))
-		bp_16 = (delta_x < 0)?6:2;
+		dir = (delta_x < 0)?6:2;
 	else
-		bp_16 = (delta_y < 0)?0:4;
+		dir = (delta_y < 0)?0:4;
 	objTyp = GetType(att_objNum);
-	if(objTyp == OBJ_19C) {
-		if(((GetDirection(att_objNum) & 6) ^ bp_16) & 2)
-			bp_16 = GetDirection(att_objNum);
+	if(objTyp == OBJ_SHIP) {
+		/*a ship fires its broadside: perpendicular to its heading*/
+		if(((GetDirection(att_objNum) & 6) ^ dir) & 2)
+			dir = GetDirection(att_objNum);
 		else
-			bp_16 ^= 2;
+			dir ^= 2;
 	}
-	SetDirection(att_objNum, bp_16);
-	C_1E0F_0664(att_objNum, bp_16);
-	if(objTyp >= OBJ_170 && objTyp <= OBJ_174) {
-		bp_14 = (GetFrame(att_objNum) & 0xc) + 2;
-		SetFrame(att_objNum, bp_14);
+	SetDirection(att_objNum, dir);
+	UpdateMoveFrame(att_objNum, dir);
+	if(objTyp >= OBJ_SKELETON && objTyp <= OBJ_MONGBAT) {
+		/*attack frame (tmp is reused below as the bolt index)*/
+		tmp = (GetFrame(att_objNum) & 0xc) + 2;
+		SetFrame(att_objNum, tmp);
 	}
 
-	C_0A33_0D06();
-	D_EC9E = Selection.obj;
+	FlushViewIfDirty();
+	MissileHitObj = Selection.obj;
 	weap_typ = GetType(weap_objNum);
-	some_weapon_flag = 0;
-	if(weap_typ != OBJ_028 && weap_typ != OBJ_02F) {
+	isRanged = 0;
+	/*morning star and halberd reach 2 tiles but are melee weapons*/
+	if(weap_typ != OBJ_MORNING_STAR && weap_typ != OBJ_HALBERD) {
 		if(delta_x > 1 || delta_x < -1 || delta_y > 1 || delta_y < -1)
-			some_weapon_flag = 1;
+			isRanged = 1;
 		if(
-			weap_typ == OBJ_021 || weap_typ == OBJ_025 || weap_typ == OBJ_029 ||
-			weap_typ == OBJ_02A || weap_typ == OBJ_031 || weap_typ == OBJ_053 ||
-			weap_typ == OBJ_032 || weap_typ == OBJ_05B || weap_typ == OBJ_04F ||
-			weap_typ == OBJ_050
-		) some_weapon_flag = 1;
+			weap_typ == OBJ_SLING || weap_typ == OBJ_THROWING_AXE || weap_typ == OBJ_BOW ||
+			weap_typ == OBJ_CROSSBOW || weap_typ == OBJ_BOOMERANG || weap_typ == OBJ_FLASK_OF_OIL ||
+			weap_typ == OBJ_TRIPLE_CROSSBOW || weap_typ == OBJ_ZU_YLEM || weap_typ == OBJ_LIGHTNING_WAND ||
+			weap_typ == OBJ_FIRE_WAND
+		) isRanged = 1;
 	}
-	if(some_weapon_flag && C_2337_0A4E(att_objNum))
+	if(isRanged && COMBAT_IsEngagedInMelee(att_objNum))
 		return 1;
-	if(weap_typ == OBJ_032) {
-		numBolts = TestObj(att_objNum, OBJ_038);
+	if(weap_typ == OBJ_TRIPLE_CROSSBOW) {
+		numBolts = TestObj(att_objNum, OBJ_BOLT);
 		if(numBolts > 3)
 			numBolts = 3;
 	}
@@ -1215,10 +1352,11 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 		damage = 1;
 
 	didHit = -1;
-	opp_objNum = COMBAT_getHead(D_EC9E);
+	opp_objNum = COMBAT_getHead(MissileHitObj);
 	/*spell*/
-	if(weap_typ == OBJ_150 || weap_typ == OBJ_039) {
-		if(GetQual(weap_objNum) == SPELL_81 && objTyp == OBJ_175) {
+	if(weap_typ == OBJ_CHARGE || weap_typ == OBJ_SPELLBOOK) {
+		/*quality of the charge/spellbook = spell number*/
+		if(GetQual(weap_objNum) == SPELL_WISP_TELEPORT && objTyp == OBJ_WISP) {
 			x = GetX(att_objNum);
 			y = GetY(att_objNum);
 			MoveObj(att_objNum, MapX, MapY, MapZ);
@@ -1230,198 +1368,207 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 			}
 			return 0;
 		}
-		if(weap_typ == OBJ_039) {
-			bp_04 = GetQual(weap_objNum) / 0x10 + 1;
-			if(MAGIC[att_objNum] < bp_04 || Level[att_objNum] < bp_04)
+		if(weap_typ == OBJ_SPELLBOOK) {
+			/*cost = circle (spell / 16 + 1); needs that much magic and level*/
+			manaCost = GetQual(weap_objNum) / 0x10 + 1;
+			if(MAGIC[att_objNum] < manaCost || Level[att_objNum] < manaCost)
 				return 0;
-			MAGIC[att_objNum] -= bp_04;
+			MAGIC[att_objNum] -= manaCost;
 		}
-		bp_06 = Active;
+		/*cast as if the caster was party member #0x10*/
+		savedActive = Active;
 		Active = 0x10;
 		Party[0x10] = att_objNum;
 		Selection.obj = opp_objNum;
 		Selection.x = GetX(opp_objNum);
 		Selection.y = GetY(opp_objNum);
 		TextOn = 0;
-		C_1944_43D5(GetQual(weap_objNum), 1);/*SPELL_cast*/
+		SPELL_Execute(GetQual(weap_objNum), 1);/*SPELL_cast*/
 		TextOn = 1;
-		if(GetQual(weap_objNum) == SPELL_50 && SpellResult == -2)
+		if(GetQual(weap_objNum) == SPELL_CHARM && SpellResult == -2)
 			CON_printf(/*1BD7*/"%s is charmed.\n", GetObjectString(Selection.obj));
-		else if(GetQual(weap_objNum) == SPELL_45 && SpellResult == 0)
+		else if(GetQual(weap_objNum) == SPELL_PARALYZE && SpellResult == 0)
 			CON_printf(/*1BE7*/"%s is paralyzed.\n", GetObjectString(Selection.obj));
-		Active = bp_06;
+		Active = savedActive;
 		return 0;
 	}
 	/* */
-	if(D_EC9E >= 0 && opp_objNum < 0x100) {
+	if(MissileHitObj >= 0 && opp_objNum < 0x100) {
 		didHit = __AttackTest(att_objNum, opp_objNum, weap_objNum);
-		if(!didHit && some_weapon_flag) {
+		if(!didHit && isRanged) {
+			/*missed: the missile goes to a random neighbouring tile*/
 			didHit = -1;
 			x += OSI_rand(0, 2) - 1;
 			y += OSI_rand(0, 2) - 1;
-			D_EC9E = C_2337_08F1(att_objNum, x, y);
-			opp_objNum = COMBAT_getHead(D_EC9E);
+			MissileHitObj = COMBAT_GetTargetAt(att_objNum, x, y);
+			opp_objNum = COMBAT_getHead(MissileHitObj);
 		}
 	}
-	if(some_weapon_flag && !C_2337_0B99(att_objNum, &x, &y, weap_objNum))
+	if(isRanged && !COMBAT_FireRangedWeapon(att_objNum, &x, &y, weap_objNum))
 		didHit = -1;
-	opp_objNum = COMBAT_getHead(D_EC9E);
-	if(!some_weapon_flag && COMBAT_getCathesus(att_objNum, MapX, MapY) < 6)
-		MUS_0065(17, 0);
+	opp_objNum = COMBAT_getHead(MissileHitObj);
+	if(!isRanged && COMBAT_TileDistance(att_objNum, MapX, MapY) < 6)
+		MUS_PlaySfx(17, 0);/*melee sound*/
 	if(didHit == -1) {
 		didHit = 1;
-		if(D_EC9E >= 0 && opp_objNum < 0x100)
+		if(MissileHitObj >= 0 && opp_objNum < 0x100)
 			didHit = __AttackTest(att_objNum, opp_objNum, weap_objNum);
 	}
 	/*triple crossbow*/
-	if(weap_typ == OBJ_032) {
-		for(bp_14 = 0; bp_14 < numBolts; bp_14 ++) {
-			if(bp_14 > 0) {
-				D_EC9E = C_2337_08F1(att_objNum, D_EC02[bp_14], D_EC08[bp_14]);
-				opp_objNum = COMBAT_getHead(D_EC9E);
+	if(weap_typ == OBJ_TRIPLE_CROSSBOW) {
+		for(tmp = 0; tmp < numBolts; tmp ++) {
+			if(tmp > 0) {
+				MissileHitObj = COMBAT_GetTargetAt(att_objNum, TripleBoltX[tmp], TripleBoltY[tmp]);
+				opp_objNum = COMBAT_getHead(MissileHitObj);
 				didHit = __AttackTest(att_objNum, opp_objNum, weap_objNum);
 			}
-			if(didHit && D_EC9E >= 0 && opp_objNum != att_objNum)
+			if(didHit && MissileHitObj >= 0 && opp_objNum != att_objNum)
 				__DoHit(att_objNum, opp_objNum, damage);
 		}
 		return 0;
 	}
 
-	if(didHit && D_EC9E >= 0 && opp_objNum != att_objNum) {
+	if(didHit && MissileHitObj >= 0 && opp_objNum != att_objNum) {
+		/*undead take half damage, except from magic weapons*/
 		if(
-			IsMonster_0080(GetMonsterClass(GetType(opp_objNum))) &&
-			weap_typ != OBJ_030 && weap_typ != OBJ_032 && weap_typ != OBJ_036
+			IsMonsterUndead(GetMonsterClass(GetType(opp_objNum))) &&
+			weap_typ != OBJ_GLASS_SWORD && weap_typ != OBJ_TRIPLE_CROSSBOW && weap_typ != OBJ_MAGIC_BOW
 		) damage = (damage + 1) >> 1;
-		if(weap_typ != OBJ_05B)
+		if(weap_typ != OBJ_ZU_YLEM)
 			__DoHit(att_objNum, opp_objNum, damage);
-		if(weap_typ == OBJ_030) {
+		if(weap_typ == OBJ_GLASS_SWORD) {
 			CON_printf(GlassSwordMsg);
 			DeleteObj(weap_objNum);
 			PromptFlag = 1;
 		}
 	}
 	/*boomerang returns*/
-	if(weap_typ == OBJ_031)
-		Missiles(GetX(att_objNum), GetY(att_objNum), 1, &x, &y, 100, BaseTile[OBJ_031], 1);
+	if(weap_typ == OBJ_BOOMERANG)
+		Missiles(GetX(att_objNum), GetY(att_objNum), 1, &x, &y, 100, BaseTile[OBJ_BOOMERANG], 1);
 
 	return 0;
 }
 
-/*reset equiped weapon list*/
-static C_2337_27C5() {
-	int si, di;
+/*reset equiped weapon list: collect the (up to 8) equipped weapons of
+  the active party member into EquipWeapons and print the first one*/
+/*C_2337_27C5*/static COMBAT_InitWeaponList() {
+	int invObj, attacker;
 
-	di = Party[Active];
-	D_1A25 =
-	D_1A27 = 0;
-	for(si = FindInv(di); si >= 0 && D_1A25 < 8; si = NextInv()) {
-		if(GetCoordUse(si) == EQUIP && GetDamagePoints(si) >= 0) {
-			D_EC0E[D_1A25] = si;
-			D_1A25 ++;
+	attacker = Party[Active];
+	NumEquipWeapons =
+	CurEquipWeapon = 0;
+	for(invObj = FindInv(attacker); invObj >= 0 && NumEquipWeapons < 8; invObj = NextInv()) {
+		if(GetCoordUse(invObj) == EQUIP && GetDamagePoints(invObj) >= 0) {
+			EquipWeapons[NumEquipWeapons] = invObj;
+			NumEquipWeapons ++;
 		}
 	}
-	if(D_1A25 == 0) {
-		if(GetType(di) == OBJ_19C)
+	if(NumEquipWeapons == 0) {
+		if(GetType(attacker) == OBJ_SHIP)
 			CON_printf(ShipCannonMsg);
 		else
 			CON_printf(BareHandsMsg);
 	} else
-		CON_printf(WithMsg, GetObjectString(D_EC0E[0]));
+		CON_printf(WithMsg, GetObjectString(EquipWeapons[0]));
 }
 
-/*next equiped weapon list*/
-static C_2337_2875() {
-	int si, di;
-	int bp_04, bp_02;
+/*next equiped weapon list: attack the selected target with the current
+  weapon (EquipWeapons[CurEquipWeapon], bare hands if none), then prepare the
+  targeting of the next equipped weapon, or end the command*/
+/*C_2337_2875*/static COMBAT_AttackWithNextWeapon() {
+	int attacker, weapTyp;
+	int weapObj, hitResult;
 
-	si = Party[Active];
-	if(D_1A25 == 0)
-		bp_04 = si;
+	attacker = Party[Active];
+	if(NumEquipWeapons == 0)
+		weapObj = attacker;
 	else
-		bp_04 = D_EC0E[D_1A27];
-	di = GetType(bp_04);
-	if((di == OBJ_029 || di == OBJ_036) && FindInvType(si, OBJ_037, -1) < 0) {
+		weapObj = EquipWeapons[CurEquipWeapon];
+	weapTyp = GetType(weapObj);
+	if((weapTyp == OBJ_BOW || weapTyp == OBJ_MAGIC_BOW) && FindInvType(attacker, OBJ_ARROW, -1) < 0) {
 		CON_printf(OutOfArrowsMsg);
-	} else if((di == OBJ_02A || di == OBJ_032) && FindInvType(si, OBJ_038, -1) < 0) {
+	} else if((weapTyp == OBJ_CROSSBOW || weapTyp == OBJ_TRIPLE_CROSSBOW) && FindInvType(attacker, OBJ_BOLT, -1) < 0) {
 		CON_printf(OutOfBoltsMsg);
 	} else {
-		bp_02 = 0;
+		hitResult = 0;
 		if(Selection.obj >= 0) {
-			if(Selection.obj == si)
-				CON_printf(D_356A_00A3);
+			if(Selection.obj == attacker)
+				CON_printf(AttackSelfPassMsg);
 			else
 				CON_printf(/*1BF9*/"%s.\n", GetObjectString(Selection.obj));
 		} else {
-			if(D_B6DF)
+			if(SelectionIsDark)
 				CON_printf(NothingMsg);
 			else
 				CON_printf(/*1BF9*/"%s.\n", GetTileString(GetTileAtXYZ(Selection.x, Selection.y, MapZ)));
 		}
-		if(Selection.obj != si) {
+		if(Selection.obj != attacker) {
 			CON_printf(/*1BCD+3*/"\n");
-			D_04A9 = 1;
+			SkipNewlines = 1;
 			if(Selection.obj < 0)
-				Selection.obj = C_2337_08F1(si, Selection.x, Selection.y);
-			bp_02 = __TryHit(si, Selection.x, Selection.y, bp_04);
-			if(bp_02 == 1) {
-				MUS_0065(12, 0);
-				CON_printf(InterferenceMsg, GetObjectString(Leader[si]));
-			} else if(bp_02 == 2) {
+				Selection.obj = COMBAT_GetTargetAt(attacker, Selection.x, Selection.y);
+			hitResult = __TryHit(attacker, Selection.x, Selection.y, weapObj);
+			if(hitResult == 1) {
+				MUS_PlaySfx(12, 0);
+				CON_printf(InterferenceMsg, GetObjectString(Leader[attacker]));
+			} else if(hitResult == 2) {
 				CON_printf(OutOfRangeMsg);
-				D_04A7 = -1;
-				MUS_0065(12, 0);
+				LastAttackTarget = -1;
+				MUS_PlaySfx(12, 0);
 			}
 		}
 	}
-	D_1A27 ++;
-	if(D_1A27 < D_1A25) {
+	CurEquipWeapon ++;
+	if(CurEquipWeapon < NumEquipWeapons) {
 		SelectMode = 1;
-		SelectRange = __GetWeaponRange(D_EC0E[D_1A27]);
+		SelectRange = __GetWeaponRange(EquipWeapons[CurEquipWeapon]);
 		if(COMBAT_range(AimX, AimY, 5, 5) > SelectRange) {
 			AimX =
 			AimY = 5;
 		}
-		CON_printf(AttackWithMsg, GetObjectString(D_EC0E[D_1A27]));
+		CON_printf(AttackWithMsg, GetObjectString(EquipWeapons[CurEquipWeapon]));
 	} else {
 		MouseMode = 0;
 		SelectMode = 0;
-		C_0C9C_01FB();
+		CON_UpdateMousePointer();
 	}
 }
 
 /*"attack"*/
+/*the player's "Attack" command: select a target for each equipped
+  weapon in turn*/
 /*C_2337_2AA9*/COMBAT_attack() {
 	int ch, weapon_objNum;
 
 	CON_printf(AttackMsg);
-	if(IN_VEHICLE && GetType(Party[Active]) != OBJ_19C) {
+	if(IN_VEHICLE && GetType(Party[Active]) != OBJ_SHIP) {
 		CON_printf(/*1BFE*/"-");
 		CON_printf(NotOnShipMsg);
 		return;
 	}
 	CON_printf(/*1BD2+3*/" ");
 	MouseMode = 1;
-	D_04C2 = CMD_81;
-	C_0C9C_01FB();
-	C_2337_27C5();
-	if(D_1A25 == 0)
+	PendingCommand = CMD_ATTACK;
+	CON_UpdateMousePointer();
+	COMBAT_InitWeaponList();
+	if(NumEquipWeapons == 0)
 		weapon_objNum = Party[Active];
 	else
-		weapon_objNum = D_EC0E[D_1A27];
+		weapon_objNum = EquipWeapons[CurEquipWeapon];
 	SelectRange = __GetWeaponRange(weapon_objNum);
 	if(COMBAT_range(AimX, AimY, 5, 5) > SelectRange) {
 		AimX =
 		AimY = 5;
 	}
 	ch = CON_getch();
-	D_04A7 = Selection.obj;
-	if(ch == CMD_8E && (Selection.obj < 0 || GetCoordUse(Selection.obj) == LOCXYZ)) {
+	LastAttackTarget = Selection.obj;
+	if(ch == CMD_TARGET && (Selection.obj < 0 || GetCoordUse(Selection.obj) == LOCXYZ)) {
 		do {
-			C_2337_2875();
+			COMBAT_AttackWithNextWeapon();
 			if(MouseMode == 1) {
 				RefreshStatus();
 				ch = CON_getch();
-				if(ch != CMD_8E) {
+				if(ch != CMD_TARGET) {
 					CON_printf(WhatMsg);
 					break;
 				}
@@ -1433,26 +1580,31 @@ static C_2337_2875() {
 	SubMov(Party[Active], 10);
 	MouseMode = 0;
 	SelectMode = 0;
-	C_0C9C_01FB();
+	CON_UpdateMousePointer();
 }
 
-/*C_2337_2BEE*/COMBAT_range(int bp0c, int bp0a, int bp08, int bp06) {
+/*combat distance between two locations (RangeTable; 9 if too far)*/
+/*C_2337_2BEE*/COMBAT_range(int x0, int y0, int x1, int y1) {
 	int delta_x, delta_y;
-	int bp_02;
+	int range;
 
-	delta_x = abs(bp0c - bp08);
-	delta_y = abs(bp0a - bp06);
+	delta_x = abs(x0 - x1);
+	delta_y = abs(y0 - y1);
 	if(delta_x < 8 && delta_y < 8)
-		bp_02 = D_196C[delta_x][delta_y];
+		range = RangeTable[delta_x][delta_y];
 	else
-		bp_02 = 9;
-	return bp_02;
+		range = 9;
+	return range;
 }
 
+/*choose what an NPC attacks with: sometimes (1 in 4, not during negate
+  magic, more likely for low spells) an equipped spellbook/charge, else
+  the equipped weapon with the best damage that reaches the opponent,
+  else its natural attack (att_objNum itself)*/
 /*C_2337_2C43*/static __PickWeapon(int att_objNum, int opp_objNum) {
 	int ret, i;
 	int opp_x, opp_y, att_x, att_y;
-	int range, dmg, max_dmg, bp_02;
+	int range, dmg, max_dmg, itemTyp;
 
 	ret = att_objNum;
 	max_dmg = 0;
@@ -1462,12 +1614,12 @@ static C_2337_2875() {
 	att_y = GetY(ret);
 	range = COMBAT_range(opp_x, opp_y, att_x, att_y);
 	for(i = FindInv(att_objNum); i >= 0; i = NextInv()) {
-		bp_02 = GetType(i);
+		itemTyp = GetType(i);
 		if(GetCoordUse(i) == EQUIP) {
-			if(bp_02 == OBJ_039 || bp_02 == OBJ_150) {
+			if(itemTyp == OBJ_SPELLBOOK || itemTyp == OBJ_CHARGE) {
 				if(
 					OSI_rand(0, 3) == 0 &&
-					SpellFx[13] == 0 &&
+					SpellFx[13] == 0 &&/*negate magic*/
 					OSI_rand(0, GetQual(i)) < 16
 				) {
 					ret = i;
@@ -1486,6 +1638,11 @@ static C_2337_2875() {
 	return ret;
 }
 
+/*closest (euclidian) visible enemy within 8 tiles, according to the
+  alignments (GOOD attacks the ones hostile to the party, EVIL the ones
+  hostile to monsters, CHAOTIC everything but chaotic, NEUTRAL nothing
+  unless vigilante). Fleeing modes take any actor (the one to flee).
+  Retreating actors off-screen are ignored. returns -1 if none*/
 /*C_2337_2D6E*/COMBAT_pickOpponent(int objNum) {
 	int i;
 	int x, y, opp_x, opp_y, objAln;
@@ -1500,7 +1657,7 @@ static C_2337_2875() {
 		if(ObjShapeType[i] != 0 && !IsDead(i) && i != objNum && COMBAT_canSee(objNum, i)) {
 			if(
 				NPCMode[objNum] != AI_SHY &&
-				NPCMode[objNum] != AI_9A &&
+				NPCMode[objNum] != AI_SCHED_SHY &&
 				NPCMode[objNum] != AI_FEAR &&
 				NPCMode[objNum] != AI_RETREAT &&
 				NPCMode[objNum] != AI_BRAWL
@@ -1518,7 +1675,7 @@ static C_2337_2875() {
 			}
 			opp_x = GetX(i);
 			opp_y = GetY(i);
-			if(COMBAT_getCathesus(objNum, opp_x, opp_y) <= 8) {
+			if(COMBAT_TileDistance(objNum, opp_x, opp_y) <= 8) {
 				if(NPCMode[i] != AI_RETREAT || CLOSE_ENOUGH(5, opp_x, opp_y, MapX, MapY)) {
 						dst2 = (opp_x - x) * (opp_x - x) + (opp_y - y) * (opp_y - y);
 						if(dst2 < min_dst2 || (dst2 == min_dst2 && OSI_rand(0, 1))) {
@@ -1532,26 +1689,30 @@ static C_2337_2875() {
 	return ret;
 }
 
+/*AI_ASSAULT (also the fallback of the other modes): attack the closest
+  enemy if in range and in line of fire, else sidestep (90 degrees) or
+  move toward it*/
 /*C_2337_2F3E*/COMBAT_AI_Assault(int objNum) {
-	int bp_0a, opp_x, opp_y, x, y, bp_02;
+	int weapObj, opp_x, opp_y, x, y, range;
 
 	Selection.obj = COMBAT_pickOpponent(objNum);
-	bp_0a = __PickWeapon(objNum, Selection.obj);
+	weapObj = __PickWeapon(objNum, Selection.obj);
 	if(Selection.obj >= 0) {
 		opp_x = GetX(Selection.obj);
 		opp_y = GetY(Selection.obj);
 		x = GetX(objNum);
 		y = GetY(objNum);
-		bp_02 = __GetWeaponRange(bp_0a);
+		range = __GetWeaponRange(weapObj);
 		if(
 			CLOSE_ENOUGH_S(8, opp_x, opp_y, x, y) &&
-			D_196C[abs(opp_x - x)][abs(opp_y - y)] <= bp_02
+			RangeTable[abs(opp_x - x)][abs(opp_y - y)] <= range
 		) {
-			if(COMBAT_Missile(objNum, &opp_x, &opp_y, bp_02, 0)) {
-				__TryHit(objNum, opp_x, opp_y, bp_0a);
+			if(COMBAT_Missile(objNum, &opp_x, &opp_y, range, 0)) {
+				__TryHit(objNum, opp_x, opp_y, weapObj);
 				SubMov(objNum, 10);
 				return;
 			}
+			/*no line of fire: step perpendicular to the target*/
 			if(OSI_rand(0, 1)) {
 				opp_x = x - (GetY(Selection.obj) - y);
 				opp_y = GetX(Selection.obj) - x + y;
@@ -1578,216 +1739,234 @@ static C_2337_2875() {
 			SubMov(objNum, 5);
 		else
 /*C_3100*/
-			C_1E0F_37DB(objNum);
+			WanderRandomly(objNum);
 	}
 }
 
-static C_2337_310E(int objNum) {
-	int di;
-	int bp_24, bp_22, bp_20;
-	int bp_1e, bp_1c, bp_1a, bp_18, bp_16, bp_14, bp_12;
-	int bp_10, bp_0e, x, y, bp_08, bp_06, bp_04, bp_02;
+/*front line helper: move objNum onto the front line, i.e. the point of
+  the axis between the two sides at the depth of the reference member
+  (Party[0] plus one step for the party, EnemyFrontFirst for the enemies),
+  sliding sideways along the line while that point is occupied.
+  returns 1 if nothing was done (caller decides), 0 if handled*/
+/*C_2337_310E*/static COMBAT_MoveToFrontLine(int objNum) {
+	int axisX;
+	int onLeft, refObj, refDepth;
+	int cross, axisLen2, axisY, destX, destY, stepX, stepY;
+	int depthStepX, depthStepY, x, y, occupied, originX, originY, savedMovePts;
 
-	if((EnemiesNum == 0 || D_EBF7 == 0) && !IsPlrControl(objNum)) {
+	if((EnemiesNum == 0 || EnemyFrontFirst == 0) && !IsPlrControl(objNum)) {
 		SubMov(objNum, 5);
 		return 1;
 	}
 	x = GetX(objNum);
 	y = GetY(objNum);
 	if(IsPlrControl(objNum)) {
-		bp_06 = GetX(Party[0]);
-		bp_04 = GetY(Party[0]);
-		di = EnemiesGravityX - bp_06;
-		bp_1a = EnemiesGravityY - bp_04;
+		originX = GetX(Party[0]);
+		originY = GetY(Party[0]);
+		axisX = EnemiesGravityX - originX;
+		axisY = EnemiesGravityY - originY;
 	} else {
-		bp_06 = PartyGravityX;
-		bp_04 = PartyGravityY;
-		di = GetX(D_EBF7) - bp_06;
-		bp_1a = GetY(D_EBF7) - bp_04;
+		originX = PartyGravityX;
+		originY = PartyGravityY;
+		axisX = GetX(EnemyFrontFirst) - originX;
+		axisY = GetY(EnemyFrontFirst) - originY;
 	}
-	bp_1e = (x - bp_06) * bp_1a - (y - bp_04) * di;
-	bp_24 = (bp_1e > 0);
-	if(bp_1e == 0)
-		bp_24 = OSI_rand(0, 1);
-	bp_14 = (bp_1a > 0)?1:-1;
-	bp_12 = (di > 0)?-1:1;
-	if(!bp_24) {
-		bp_14 = -bp_14;
-		bp_12 = -bp_12;
+	/*which side of the axis are we on? slide away from the axis*/
+	cross = (x - originX) * axisY - (y - originY) * axisX;
+	onLeft = (cross > 0);
+	if(cross == 0)
+		onLeft = OSI_rand(0, 1);
+	stepX = (axisY > 0)?1:-1;
+	stepY = (axisX > 0)?-1:1;
+	if(!onLeft) {
+		stepX = -stepX;
+		stepY = -stepY;
 	}
 	if(!IsPlrControl(objNum))
-		bp_22 = D_EBF7;
+		refObj = EnemyFrontFirst;
 	else
-		bp_22 = Party[0];
-	bp_20 = (GetX(bp_22) - bp_06) * di + (GetY(bp_22) - bp_04) * bp_1a;
-	if(Party[0] == bp_22)
-		bp_20 += abs(di) + abs(bp_1a);
-	bp_1c = di * di + bp_1a * bp_1a;
-	if(bp_1c == 0)
-		bp_1c = 1;
-	bp_18 = (bp_20 * di) / bp_1c + bp_06;
-	bp_16 = (bp_20 * bp_1a) / bp_1c + bp_04;
-	D_17B2 = 0;
+		refObj = Party[0];
+	refDepth = (GetX(refObj) - originX) * axisX + (GetY(refObj) - originY) * axisY;
+	if(Party[0] == refObj)
+		refDepth += abs(axisX) + abs(axisY);
+	axisLen2 = axisX * axisX + axisY * axisY;
+	if(axisLen2 == 0)
+		axisLen2 = 1;
+	/*projection of the reference on the axis*/
+	destX = (refDepth * axisX) / axisLen2 + originX;
+	destY = (refDepth * axisY) / axisLen2 + originY;
+	PassThroughParty = 0;
 	do {
 		if(
-			bp_18 < AreaX || AreaX + 39 < bp_18 ||
-			bp_16 < AreaY || AreaY + 39 < bp_16 ||
-			(x == bp_18 && y == bp_16)
+			destX < AreaX || AreaX + 39 < destX ||
+			destY < AreaY || AreaY + 39 < destY ||
+			(x == destX && y == destY)
 		) {
-			D_17B2 = 1;
+			PassThroughParty = 1;
 			return 1;
 		}
-		bp_08 = (C_1184_0B3D(0, bp_18, bp_16) >= 0);
-		if(bp_08) {
-			bp_10 = (bp_18 + bp_14 - bp_06) * di + (bp_16 - bp_04) * bp_1a;
-			bp_0e = (bp_18 - bp_06) * di + (bp_16 + bp_12 - bp_04) * bp_1a;
-			if(abs(bp_10 - bp_20) < abs(bp_0e - bp_20))
-				bp_18 += bp_14;
+		occupied = (OBJ_FindNPCAt(0, destX, destY) >= 0);
+		if(occupied) {
+			depthStepX = (destX + stepX - originX) * axisX + (destY - originY) * axisY;
+			depthStepY = (destX - originX) * axisX + (destY + stepY - originY) * axisY;
+			if(abs(depthStepX - refDepth) < abs(depthStepY - refDepth))
+				destX += stepX;
 			else
-				bp_16 += bp_12;
+				destY += stepY;
 		}
-	} while(bp_08);
-	D_17B2 = 1;
-	bp_02 = MovePts[objNum];
-	if(!TryMoveTo(objNum, bp_18, bp_16)) {
-		MovePts[objNum] = bp_02;
+	} while(occupied);
+	PassThroughParty = 1;
+	savedMovePts = MovePts[objNum];
+	if(!TryMoveTo(objNum, destX, destY)) {
+		MovePts[objNum] = savedMovePts;
 	} else {
 		if(!IsPlrControl(objNum))
 			return 0;
-		if(GetX(objNum) == bp_18 && GetY(objNum) == bp_16)
+		if(GetX(objNum) == destX && GetY(objNum) == destY)
 			return 0;
 		if(EnemiesNum == 0)
-			MovePts[objNum] = bp_02;
-		if(TryMoveTo(objNum, bp_18, bp_16))
+			MovePts[objNum] = savedMovePts;
+		if(TryMoveTo(objNum, destX, destY))
 			return 0;
 	}
 	COMBAT_AI_Assault(objNum);
 	return 0;
 }
 
-/*C_2337_3464*/COMBAT_AI_Front(int si/*bp06*/) {
-	if(!C_2337_310E(si))
+/*AI_FRONT: take position on the front line (COMBAT_MoveToFrontLine); when that is
+  not possible, enemies 8+ tiles from the party wait, the enemy anchor
+  (EnemyFrontFirst) charges 1 time in 8, and the others assault*/
+/*C_2337_3464*/COMBAT_AI_Front(int objNum) {
+	if(!COMBAT_MoveToFrontLine(objNum))
 		return;
-	if(!IsPlrControl(si)) {
-		if(COMBAT_getCathesus(si, PartyGravityX, PartyGravityY) < 8) {
-			if(si == D_EBF7 && OSI_rand(0, 7) == 0) {
-				TryMoveTo(si, PartyGravityX, PartyGravityY);
+	if(!IsPlrControl(objNum)) {
+		if(COMBAT_TileDistance(objNum, PartyGravityX, PartyGravityY) < 8) {
+			if(objNum == EnemyFrontFirst && OSI_rand(0, 7) == 0) {
+				TryMoveTo(objNum, PartyGravityX, PartyGravityY);
 				return;
 			}
 		} else {
-			SubMov(si, 5);
+			SubMov(objNum, 5);
 			return;
 		}
 	}
-	COMBAT_AI_Assault(si);
+	COMBAT_AI_Assault(objNum);
 }
 
-/*C_2337_34C9*/COMBAT_AI_Rear(int si/*bp06*/) {
-	int di;
-	int bp_16, bp_14, bp_12, bp_10, bp_0e;
-	int bp_0c, bp_0a, bp_08, bp_06, bp_04, bp_02;
+/*AI_REAR: stay behind the own front line (depth smaller than every
+  AI_FRONT member of the same alignment) and between the two flank
+  members; party members also stay within 3 tiles of the leader.
+  attack (assault) when no move is needed or possible*/
+/*C_2337_34C9*/COMBAT_AI_Rear(int objNum) {
+	int axisX;
+	int i, axisY, pos, minFrontDepth, objAln;
+	int stuck, savedMovePts, originX, originY, leftFlank, rightFlank;
 
-	bp_0c = 0;
-	if(IsPlrControl(si)) {
+	stuck = 0;
+	if(IsPlrControl(objNum)) {
 		if(EnemiesNum == 0) {
-			TryMoveTo(si, MapX, MapY);
+			TryMoveTo(objNum, MapX, MapY);
 			return;
 		}
-		bp_04 = D_EBE9;
-		bp_02 = D_EBF5;
-		bp_08 = PartyGravityX;
-		bp_06 = PartyGravityY;
-		di = EnemiesGravityX - PartyGravityX;
-		bp_14 = EnemiesGravityY - PartyGravityY;
+		leftFlank = PartyFlankPos;
+		rightFlank = PartyFlankNeg;
+		originX = PartyGravityX;
+		originY = PartyGravityY;
+		axisX = EnemiesGravityX - PartyGravityX;
+		axisY = EnemiesGravityY - PartyGravityY;
 	} else {
 		if(EnemiesNum == 0) {
-			SubMov(si, 5);
+			SubMov(objNum, 5);
 			return;
 		}
-		bp_04 = D_EBF9;
-		bp_02 = D_EBF1;
-		if(bp_04 < 0)
-			bp_04 = si;
-		if(bp_02 < 0)
-			bp_02 = si;
-		bp_08 = EnemiesGravityX;
-		bp_06 = EnemiesGravityY;
-		di = PartyGravityX - EnemiesGravityX;
-		bp_14 = PartyGravityY - EnemiesGravityY;
+		leftFlank = EnemyFlankNeg;
+		rightFlank = EnemyFlankPos;
+		if(leftFlank < 0)
+			leftFlank = objNum;
+		if(rightFlank < 0)
+			rightFlank = objNum;
+		originX = EnemiesGravityX;
+		originY = EnemiesGravityY;
+		axisX = PartyGravityX - EnemiesGravityX;
+		axisY = PartyGravityY - EnemiesGravityY;
 	}
-	bp_10 = 0x7fff;
-	bp_0e = GetAlignment(si);
-	for(bp_16 = 0; bp_16 < 0x100; bp_16 ++) {
+	minFrontDepth = 0x7fff;
+	objAln = GetAlignment(objNum);
+	for(i = 0; i < 0x100; i ++) {
 		if(
-			!IsDead(bp_16) &&
-			NPCMode[bp_16] == AI_FRONT &&
-			GetAlignment(bp_16) == bp_0e
+			!IsDead(i) &&
+			NPCMode[i] == AI_FRONT &&
+			GetAlignment(i) == objAln
 		) {
-			bp_12 = (GetX(bp_16) - bp_08) * di + (GetY(bp_16) - bp_06) * bp_14;
-			if(bp_12 < bp_10)
-				bp_10 = bp_12;
+			pos = (GetX(i) - originX) * axisX + (GetY(i) - originY) * axisY;
+			if(pos < minFrontDepth)
+				minFrontDepth = pos;
 		}
 	}
-	bp_12 = (GetX(si) - bp_08) * di + (GetY(si) - bp_06) * bp_14;
-	bp_0a = MovePts[si];
-	if(IsPlrControl(si) && COMBAT_getCathesus(si, MapX, MapY) > 3) {
-		bp_0c = !TryMoveTo(si, MapX, MapY);
-	} else if(bp_12 >= bp_10) {
-		bp_0c = !TryMoveTo(si, GetX(si) - di, GetY(si) - bp_14);
+	pos = (GetX(objNum) - originX) * axisX + (GetY(objNum) - originY) * axisY;
+	savedMovePts = MovePts[objNum];
+	if(IsPlrControl(objNum) && COMBAT_TileDistance(objNum, MapX, MapY) > 3) {
+		stuck = !TryMoveTo(objNum, MapX, MapY);
+	} else if(pos >= minFrontDepth) {
+		stuck = !TryMoveTo(objNum, GetX(objNum) - axisX, GetY(objNum) - axisY);
 	} else {
-		bp_12 = (GetX(si) - bp_08) * bp_14 - (GetY(si) - bp_06) * di;
-		if((GetX(bp_04) - bp_08) * bp_14 - (GetY(bp_04) - bp_06) * di < bp_12) {
-			bp_0c = !TryMoveTo(si, GetX(si) - bp_14, GetY(si) + di);
-		} else if((GetX(bp_02) - bp_08) * bp_14 - (GetY(bp_02) - bp_06) * di > bp_12) {
-			bp_0c = !TryMoveTo(si, GetX(si) + bp_14, GetY(si) - di);
+		pos = (GetX(objNum) - originX) * axisY - (GetY(objNum) - originY) * axisX;
+		if((GetX(leftFlank) - originX) * axisY - (GetY(leftFlank) - originY) * axisX < pos) {
+			stuck = !TryMoveTo(objNum, GetX(objNum) - axisY, GetY(objNum) + axisX);
+		} else if((GetX(rightFlank) - originX) * axisY - (GetY(rightFlank) - originY) * axisX > pos) {
+			stuck = !TryMoveTo(objNum, GetX(objNum) + axisY, GetY(objNum) - axisX);
 		} else {
-			bp_0c = 1;
+			stuck = 1;
 		}
 	}
-	if(bp_0c) {
-		MovePts[si] = bp_0a;
-		COMBAT_AI_Assault(si);
+	if(stuck) {
+		MovePts[objNum] = savedMovePts;
+		COMBAT_AI_Assault(objNum);
 	}
 }
 
+/*AI_FLANK: go round the enemy line on our side; target the visible
+  enemy furthest out on that side and approach it moving outward, attack
+  when in range*/
 /*C_2337_37F2*/COMBAT_AI_Flank(int objNum) {
 	int i;
-	int bp_28, bp_26;
-	int bp_24, bp_22, bp_20, bp_1e, bp_1c;
-	int bp_1a, bp_18, bp_16, bp_14;
-	int objAln, bp_10, bp_0e, bp_0c, bp_0a;
-	int bp_08, delta_x, delta_y, bp_02;
+	int vx, vy;
+	int selfX, selfY, cross, onLeft, oppSide;
+	int bestSide, bestOpp, oppX, oppY;
+	int objAln, outX, outY, mustMove, weapObj;
+	int range, delta_x, delta_y, savedMovePts;
 
 	if(
 		EnemiesNum == 0 ||
-		(!IsPlrControl(objNum) && COMBAT_getCathesus(objNum, MapX, MapY) > 7)
+		(!IsPlrControl(objNum) && COMBAT_TileDistance(objNum, MapX, MapY) > 7)
 	) {
-		bp_02 = MovePts[objNum];
-		if(IsPlrControl(objNum) && COMBAT_getCathesus(objNum, MapX, MapY) > 2)
+		savedMovePts = MovePts[objNum];
+		if(IsPlrControl(objNum) && COMBAT_TileDistance(objNum, MapX, MapY) > 2)
 			TryMoveTo(objNum, MapX, MapY);
-		MovePts[objNum] = bp_02;
+		MovePts[objNum] = savedMovePts;
 		SubMov(objNum, 5);
 		return;
 	}
 	objAln = GetAlignment(objNum);
-	bp_24 = GetX(objNum);
-	bp_22 = GetY(objNum);
-	bp_28 = EnemiesGravityX - PartyGravityX;
-	bp_26 = EnemiesGravityY - PartyGravityY;
-	bp_20 = (bp_24 - PartyGravityX) * bp_26 - (bp_22 - PartyGravityY) * bp_28;
-	bp_1e = (bp_20 > 0);
-	if(bp_20 == 0)
-		bp_1e = OSI_rand(0, 1);
-	if(bp_1e) {
-		bp_10 = bp_26;
-		bp_0e = - bp_28;
+	selfX = GetX(objNum);
+	selfY = GetY(objNum);
+	/*(vx,vy): first the axis, later the target position*/
+	vx = EnemiesGravityX - PartyGravityX;
+	vy = EnemiesGravityY - PartyGravityY;
+	cross = (selfX - PartyGravityX) * vy - (selfY - PartyGravityY) * vx;
+	onLeft = (cross > 0);
+	if(cross == 0)
+		onLeft = OSI_rand(0, 1);
+	if(onLeft) {
+		outX = vy;
+		outY = - vx;
 	} else {
-		bp_10 = -bp_26;
-		bp_0e = bp_28;
-		bp_20 = -bp_20;
+		outX = -vy;
+		outY = vx;
+		cross = -cross;
 	}
-	bp_1a = 0x8000;
-	bp_18 = -1;
+	bestSide = 0x8000;
+	bestOpp = -1;
 	for(i = 0; i < 0x100; i ++) {
 		if(
 			ObjShapeType[i] &&
@@ -1799,134 +1978,136 @@ static C_2337_310E(int objNum) {
 				continue;
 			if(objAln == EVIL && !Is_ATKMON(i))
 				continue;
-			bp_16 = GetX(i);
-			bp_14 = GetY(i);
-			if(NPCMode[i] == AI_RETREAT || NPCMode[i] == AI_SHY || NPCMode[i] == AI_9A) {
+			oppX = GetX(i);
+			oppY = GetY(i);
+			if(NPCMode[i] == AI_RETREAT || NPCMode[i] == AI_SHY || NPCMode[i] == AI_SCHED_SHY) {
 				if(
-					(MapX - 5) > bp_16 || (MapX + 5) < bp_16 ||
-					(MapY - 5) > bp_14 || (MapY + 5) < bp_14
+					(MapX - 5) > oppX || (MapX + 5) < oppX ||
+					(MapY - 5) > oppY || (MapY + 5) < oppY
 				) continue;
 			}
 			if(
-				CLOSE_ENOUGH(7, bp_16, bp_14, MapX, MapY) ||
-				CLOSE_ENOUGH(5, bp_16, bp_14, bp_24, bp_22)
+				CLOSE_ENOUGH(7, oppX, oppY, MapX, MapY) ||
+				CLOSE_ENOUGH(5, oppX, oppY, selfX, selfY)
 			) {
-				bp_1c = (bp_16 - PartyGravityX) * bp_26 - (bp_14 - PartyGravityY) * bp_28;
-				if(bp_1e == 0)
-					bp_1c = -bp_1c;
-				if(bp_1c > bp_1a) {
-					bp_1a = bp_1c;
-					bp_18 = i;
+				oppSide = (oppX - PartyGravityX) * vy - (oppY - PartyGravityY) * vx;
+				if(onLeft == 0)
+					oppSide = -oppSide;
+				if(oppSide > bestSide) {
+					bestSide = oppSide;
+					bestOpp = i;
 				}
 			}
 		}
 	}
-	if(bp_18 >= 0) {
-		Selection.obj = bp_18;
-		bp_28 = GetX(bp_18);
-		bp_26 = GetY(bp_18);
-		bp_0c = 0;
-		bp_0a = __PickWeapon(objNum, bp_18);
-		delta_x = abs(bp_28 - bp_24);
-		delta_y = abs(bp_26 - bp_22);
-		bp_08 = __GetWeaponRange(bp_0a);
-		if(delta_x < 8 && delta_y < 8 && D_196C[delta_x][delta_y] <= bp_08) {
-			if(COMBAT_Missile(objNum, &bp_28, &bp_26, bp_08, 0)) {
-				__TryHit(objNum, bp_28, bp_26, bp_0a);
+	if(bestOpp >= 0) {
+		Selection.obj = bestOpp;
+		vx = GetX(bestOpp);
+		vy = GetY(bestOpp);
+		mustMove = 0;
+		weapObj = __PickWeapon(objNum, bestOpp);
+		delta_x = abs(vx - selfX);
+		delta_y = abs(vy - selfY);
+		range = __GetWeaponRange(weapObj);
+		if(delta_x < 8 && delta_y < 8 && RangeTable[delta_x][delta_y] <= range) {
+			if(COMBAT_Missile(objNum, &vx, &vy, range, 0)) {
+				__TryHit(objNum, vx, vy, weapObj);
 				SubMov(objNum, 10);
 			} else {
 				if(OSI_rand(0, 1)) {
-					bp_28 = bp_24 - (GetY(Selection.obj) - bp_22);
-					bp_26 = bp_22 + (GetX(Selection.obj) - bp_24);
-					bp_0c = 1;
+					vx = selfX - (GetY(Selection.obj) - selfY);
+					vy = selfY + (GetX(Selection.obj) - selfX);
+					mustMove = 1;
 				} else {
-					bp_28 = bp_24 + (GetY(Selection.obj) - bp_22);
-					bp_26 = bp_22 - (GetX(Selection.obj) - bp_24);
-					bp_0c = 1;
+					vx = selfX + (GetY(Selection.obj) - selfY);
+					vy = selfY - (GetX(Selection.obj) - selfX);
+					mustMove = 1;
 				}
 			}
 		} else {
-			if(bp_10 > 0)
-				bp_28 ++;
-			else if(bp_10 < 0)
-				bp_28 --;
-			if(bp_0e > 0)
-				bp_26 ++;
-			else if(bp_0e < 0)
-				bp_26 --;
-			bp_0c = 1;
+			if(outX > 0)
+				vx ++;
+			else if(outX < 0)
+				vx --;
+			if(outY > 0)
+				vy ++;
+			else if(outY < 0)
+				vy --;
+			mustMove = 1;
 		}
-		if(bp_0c) {
-			bp_02 = MovePts[objNum];
-			if(!TryMoveTo(objNum, bp_28, bp_26)) {
-				MovePts[objNum] = bp_02;
+		if(mustMove) {
+			savedMovePts = MovePts[objNum];
+			if(!TryMoveTo(objNum, vx, vy)) {
+				MovePts[objNum] = savedMovePts;
 				COMBAT_AI_Assault(objNum);
 			}
 		}
 	} else {
-		C_1E0F_37DB(objNum);
+		WanderRandomly(objNum);
 	}
 }
 
-/*C_2337_3C3A*/COMBAT_AI_Bersek(int objNum) {
-	int si;
-	int bp_1c, bp_1a, bp_18, x, y, bp_12, bp_10;
-	int bp_0e, bp_0c, bp_0a, delta_x, delta_y, bp_04, bp_02;
+/*AI_BERSEK: attack the strongest (STR+DEX+INT) visible enemy within 8
+  tiles, whatever the distance from the party*/
+/*C_2337_3C3A*/COMBAT_AI_Berserk(int objNum) {
+	int i;
+	int weapObj, bestOpp, objAln, x, y, oppStats, maxStats;
+	int oppX, oppY, range, delta_x, delta_y, mustMove, savedMovePts;
 
-	bp_1a = -1;
-	bp_04 = 0;
-	bp_18 = GetAlignment(objNum);
+	bestOpp = -1;
+	mustMove = 0;
+	objAln = GetAlignment(objNum);
 	x = GetX(objNum);
 	y = GetY(objNum);
-	bp_10 = 0;
-	for(si = 0; si < 0x100; si ++) {
+	maxStats = 0;
+	for(i = 0; i < 0x100; i ++) {
 		if(
-			ObjShapeType[si] &&
-			!IsDead(si) &&
-			si != objNum &&
-			COMBAT_getCathesus(si, x, y) <= 8 &&
-			COMBAT_canSee(objNum, si) &&
-			(bp_18 != GOOD || GetAlignment(si) == EVIL) &&
-			(bp_18 != EVIL || GetAlignment(si) == GOOD) &&
-			(bp_18 != CHAOTIC || (GetAlignment(si) != CHAOTIC && GetAlignment(si) != NEUTRAL))
+			ObjShapeType[i] &&
+			!IsDead(i) &&
+			i != objNum &&
+			COMBAT_TileDistance(i, x, y) <= 8 &&
+			COMBAT_canSee(objNum, i) &&
+			(objAln != GOOD || GetAlignment(i) == EVIL) &&
+			(objAln != EVIL || GetAlignment(i) == GOOD) &&
+			(objAln != CHAOTIC || (GetAlignment(i) != CHAOTIC && GetAlignment(i) != NEUTRAL))
 		) {
-			bp_12 = STREN[si] + DEXTE[si] + INTEL[si];
-			if(bp_12 > bp_10) {
-				bp_10 = bp_12;
-				bp_1a = si;
+			oppStats = STREN[i] + DEXTE[i] + INTEL[i];
+			if(oppStats > maxStats) {
+				maxStats = oppStats;
+				bestOpp = i;
 			}
 		}
 	}
-	if(bp_1a >= 0) {
-		bp_0e = GetX(bp_1a);
-		bp_0c = GetY(bp_1a);
-		delta_x = abs(bp_0e - x);
-		delta_y = abs(bp_0c - y);
-		bp_1c = __PickWeapon(objNum, bp_1a);
-		bp_0a = __GetWeaponRange(bp_1c);
-		if(delta_x < 8 && delta_y < 8 && D_196C[delta_x][delta_y] <= bp_0a) {
-			Selection.obj = bp_1a;
-			if(COMBAT_Missile(objNum, &bp_0e, &bp_0c, bp_0a, 0)) {
-				__TryHit(objNum, bp_0e, bp_0c, bp_1c);
+	if(bestOpp >= 0) {
+		oppX = GetX(bestOpp);
+		oppY = GetY(bestOpp);
+		delta_x = abs(oppX - x);
+		delta_y = abs(oppY - y);
+		weapObj = __PickWeapon(objNum, bestOpp);
+		range = __GetWeaponRange(weapObj);
+		if(delta_x < 8 && delta_y < 8 && RangeTable[delta_x][delta_y] <= range) {
+			Selection.obj = bestOpp;
+			if(COMBAT_Missile(objNum, &oppX, &oppY, range, 0)) {
+				__TryHit(objNum, oppX, oppY, weapObj);
 				SubMov(objNum, 10);
 			} else {
 				if(OSI_rand(0, 1)) {
-					bp_0e = x - (GetY(Selection.obj) - y);
-					bp_0c = y + (GetX(Selection.obj) - x);
-					bp_04 = 1;
+					oppX = x - (GetY(Selection.obj) - y);
+					oppY = y + (GetX(Selection.obj) - x);
+					mustMove = 1;
 				} else {
-					bp_0e = x + (GetY(Selection.obj) - y);
-					bp_0c = y - (GetX(Selection.obj) - x);
-					bp_04 = 1;
+					oppX = x + (GetY(Selection.obj) - y);
+					oppY = y - (GetX(Selection.obj) - x);
+					mustMove = 1;
 				}
 			}
 		} else {
-			bp_04 = 1;
+			mustMove = 1;
 		}
-		if(bp_04) {
-			bp_02 = MovePts[objNum];
-			if(!TryMoveTo(objNum, bp_0e, bp_0c)) {
-				MovePts[objNum] = bp_02;
+		if(mustMove) {
+			savedMovePts = MovePts[objNum];
+			if(!TryMoveTo(objNum, oppX, oppY)) {
+				MovePts[objNum] = savedMovePts;
 				COMBAT_AI_Assault(objNum);
 			}
 		}
@@ -1936,33 +2117,38 @@ static C_2337_310E(int objNum) {
 	SubMov(objNum, 5);
 }
 
+/*AI_RETREAT (also AI_SHY, AI_FEAR and AI_SCHED_SHY): flee from the closest
+  opponent (when within 8 tiles; 3 for the other modes) or fight back
+  if cornered; good ones go back to the party. A retreating NPC regains
+  1 HP 1 time in 4 and goes back to its combat mode when no longer
+  critical*/
 /*C_2337_3ED2*/COMBAT_AI_Retreat(int objNum) {
 	int oppObjNum;
-	int delta_x, delta_y, bp_04, bp_02;
+	int delta_x, delta_y, fleeDist, savedMovePts;
 
-	if(COMBAT_getCathesus(objNum, MapX, MapY) > 7) {
+	if(COMBAT_TileDistance(objNum, MapX, MapY) > 7) {
 		MovePts[objNum] = 0;
 		return;
 	}
 	oppObjNum = COMBAT_pickOpponent(objNum);
 	if(oppObjNum < 0) {
-		C_1E0F_37DB(objNum);
+		WanderRandomly(objNum);
 		return;
 	}
 	delta_x = GetX(oppObjNum) - GetX(objNum);
 	delta_y = GetY(oppObjNum) - GetY(objNum);
-	bp_04 = (NPCMode[objNum] == AI_RETREAT)?8:3;
-	if(CLOSE_ENOUGH_S(bp_04, delta_x, delta_y, 0, 0)) {
-		bp_02 = MovePts[objNum];
+	fleeDist = (NPCMode[objNum] == AI_RETREAT)?8:3;
+	if(CLOSE_ENOUGH_S(fleeDist, delta_x, delta_y, 0, 0)) {
+		savedMovePts = MovePts[objNum];
 		if(!TryMoveTo(objNum, GetX(objNum) - delta_x, GetY(objNum) - delta_y)) {
-			MovePts[objNum] = bp_02;
-			if(NPCMode[objNum] != AI_9A && NPCMode[objNum] != AI_SHY)
+			MovePts[objNum] = savedMovePts;
+			if(NPCMode[objNum] != AI_SCHED_SHY && NPCMode[objNum] != AI_SHY)
 				COMBAT_AI_Assault(objNum);
 		}
-	} else if(GetAlignment(objNum) == GOOD && NPCMode[objNum] != AI_SHY && NPCMode[objNum] != AI_9A) {
+	} else if(GetAlignment(objNum) == GOOD && NPCMode[objNum] != AI_SHY && NPCMode[objNum] != AI_SCHED_SHY) {
 		TryMoveTo(objNum, PartyGravityX, PartyGravityY);
 	} else {
-		C_1E0F_37DB(objNum);
+		WanderRandomly(objNum);
 	}
 	if(NPCMode[objNum] == AI_RETREAT && OSI_rand(0, 3) == 0) {
 		if(MaxHP(objNum) > HitPoints[objNum])
@@ -1972,20 +2158,21 @@ static C_2337_310E(int objNum) {
 	}
 }
 
+/*AI_LIKE: approach the party now and then when close, else wander*/
 /*C_2337_407F*/COMBAT_AI_Like(int objNum) {
 	int i;
-	int x, y, bp_02;
+	int x, y, nearParty;
 
-	bp_02 = 0;
+	nearParty = 0;
 	x = GetX(objNum);
 	y = GetY(objNum);
 	for(i = 0; i < PartySize; i ++) {
 		if(CLOSE_ENOUGH_S(3, GetX(Party[i]), GetY(Party[i]), x, y)) {
-			bp_02 = 1;
+			nearParty = 1;
 			break;
 		}
 	}
-	if(bp_02 && OSI_rand(0, 1) == 0) {
+	if(nearParty && OSI_rand(0, 1) == 0) {
 		TryMoveTo(objNum, PartyGravityX, PartyGravityY);
 
 		return;
@@ -2001,20 +2188,22 @@ static C_2337_310E(int objNum) {
 	SubMov(objNum, 5);
 }
 
+/*AI_UNFRIENDLY: wander; when close to the party, 1 in 8 to turn into
+  AI_ASSAULT*/
 /*C_2337_41B7*/COMBAT_AI_Unfriendly(int objNum) {
 	int i;
-	int x, y, bp_02;
+	int x, y, nearParty;
 
-	bp_02 = 0;
+	nearParty = 0;
 	x = GetX(objNum);
 	y = GetY(objNum);
 	for(i = 0; i < PartySize; i ++) {
 		if(CLOSE_ENOUGH_S(3, GetX(Party[i]), GetY(Party[i]), x, y)) {
-			bp_02 = 1;
+			nearParty = 1;
 			break;
 		}
 	}
-	if(bp_02 && OSI_rand(0, 7) == 0) {
+	if(nearParty && OSI_rand(0, 7) == 0) {
 		NPCMode[objNum] = AI_ASSAULT;
 		COMBAT_AI_Assault(objNum);
 		return;
@@ -2030,6 +2219,8 @@ static C_2337_310E(int objNum) {
 	SubMov(objNum, 5);
 }
 
+/*AI_IMMOBILE: never moves; tries 16 random tiles within 4 for a
+  visible enemy and attacks it*/
 /*C_2337_42EE*/COMBAT_AI_Immobile(int objNum) {
 	int i;
 	int objAln, opp_x, opp_y;
@@ -2039,7 +2230,7 @@ static C_2337_310E(int objNum) {
 		for(i = 0; i < 16; i ++) {
 			opp_x = GetX(objNum) + OSI_rand(0, 8) - 4;
 			opp_y = GetY(objNum) + OSI_rand(0, 8) - 4;
-			Selection.obj = C_2337_08F1(objNum, opp_x, opp_y);
+			Selection.obj = COMBAT_GetTargetAt(objNum, opp_x, opp_y);
 			if(
 				Selection.obj >= 0 && Selection.obj < 0x100 && COMBAT_canSee(objNum, Selection.obj) &&
 				GetAlignment(Selection.obj) != objAln && GetAlignment(Selection.obj) != NEUTRAL
@@ -2053,7 +2244,11 @@ static C_2337_310E(int objNum) {
 	SubMov(objNum, 5);
 }
 
-unsigned char D_1BB8[][2] = {
+/*tangle vine frames: VineFrames[prev_dir][dir >> 1] is the frame of the vine
+  segment left behind (corner/straight), VineFrames[dir][rand 0..3] the frame
+  of the growing tip. NB: indexed past the 2 columns, so it is really
+  used as a flat 16 bytes table (index = 2*row + column)*/
+/*1BB8*/unsigned char VineFrames[][2] = {
 	{0x01,0x03},
 	{0x01,0x04},
 	{0x05,0x00},
@@ -2064,8 +2259,11 @@ unsigned char D_1BB8[][2] = {
 	{0x03,0x00}
 };
 
+/*the tangle vine pod moves one tile in direction dir (0,2,4,6), leaving a
+  vine segment (quality = pod number) behind; no going backward.
+  returns 1 on success*/
 static /*C_2337_43D2*/__TryGrowVine(int objNum, int dir) {
-	int bp_0a, x, y, prev_dir, bp_02;
+	int moved, x, y, prev_dir, vineObj;
 
 	dir &= 6;
 	x = GetX(objNum);
@@ -2073,13 +2271,13 @@ static /*C_2337_43D2*/__TryGrowVine(int objNum, int dir) {
 	prev_dir = GetDirection(objNum);
 	if((dir ^ prev_dir) == 4)
 		return 0;
-	bp_0a = TryStraightMove(objNum, dir, 1);
-	if(bp_0a == 0)
+	moved = TryStraightMove(objNum, dir, 1);
+	if(moved == 0)
 		return 0;
-	bp_02 = AddMapObj(OBJ_16E, LOCAL, QualQuan(objNum, 0), x, y, MapZ);
-	if(bp_02 >= 0) {
-		SetFrame(bp_02, D_1BB8[prev_dir][dir >> 1]);
-		SetFrame(objNum, D_1BB8[dir][OSI_rand(0, 3)]);
+	vineObj = AddMapObj(OBJ_TANGLE_VINE_VINE, LOCAL, QualQuan(objNum, 0), x, y, MapZ);
+	if(vineObj >= 0) {
+		SetFrame(vineObj, VineFrames[prev_dir][dir >> 1]);
+		SetFrame(objNum, VineFrames[dir][OSI_rand(0, 3)]);
 		return 1;
 	}
 	MoveObj(objNum, x, y, MapZ);
@@ -2088,7 +2286,10 @@ static /*C_2337_43D2*/__TryGrowVine(int objNum, int dir) {
 	return 0;
 }
 
+/*AI_TANGLE (tangle vine pod): hit an adjacent opponent, or grow toward
+  one within 4 tiles, or grow at random (1 in 4)*/
 /*C_2337_44F6*/COMBAT_AI_Tangle(int objNum) {
+
 	int dir;
 	int opp_x, opp_y, tangle_x, tangle_y;
 

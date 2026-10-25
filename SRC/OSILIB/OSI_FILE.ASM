@@ -8,20 +8,20 @@ ENDM
 
 DSegStart
 
-PUBLIC D_032E,D_0332,D_0334,D_0336
+PUBLIC OSI_ErrorHandler,OSI_ErrorCode,OSI_ErrorFunc,OSI_ErrorFile
 
-D_032E	dw OSI_callback,SEG OSI_callback
-D_0332	dw 0	;error code
-D_0334	dw 0	;error origin
-D_0336	dw 0	;last filename
+OSI_ErrorHandler	dw OSI_callback,SEG OSI_callback	;D_032E
+OSI_ErrorCode	dw 0	;D_0332 error code
+OSI_ErrorFunc	dw 0	;D_0334 error origin
+OSI_ErrorFile	dw 0	;D_0336 last filename
 
 DSegEnd
 
 OSIERR_CB	MACRO fctNum,errNum
 	MOV	DS,CS:C_0207
-	MOV	D_0332,errNum
-	MOV	D_0334,fctNum
-	CALL	DWORD PTR D_032E
+	MOV	OSI_ErrorCode,errNum
+	MOV	OSI_ErrorFunc,fctNum
+	CALL	DWORD PTR OSI_ErrorHandler
 ENDM
 
 
@@ -31,7 +31,7 @@ OSIERR_1	MACRO errNum,retry
 	JNB	_noErr_
 	PUSH	DS
 	OSIERR_CB	errNum,AX
-	TEST	D_0332,0FFFFh
+	TEST	OSI_ErrorCode,0FFFFh
 	POP	DS
 	JZ	retry
 	MOV	AX,-1
@@ -45,7 +45,7 @@ OSIERR_2	MACRO errNum,retry
 	JNB	_noErr_
 
 	OSIERR_CB	errNum,AX
-	TEST	D_0332,0FFFFh
+	TEST	OSI_ErrorCode,0FFFFh
 
 	JZ	retry
 
@@ -75,7 +75,7 @@ OSI_open	PROC FAR
 	MOV	ES,CS:C_0207
 C_0214:
 	MOV	DX,[BP+06]
-	MOV	ES:D_0336,DX
+	MOV	ES:OSI_ErrorFile,DX
 	;--
 	MOV	AX,(3Dh SHL 8) OR 2	;open file
 	INT	21h
@@ -122,7 +122,7 @@ C_0287:
 	MOV	AH,3Ch	;create file
 	XOR	CX,CX
 	MOV	DX,[BP+06]
-	MOV	ES:D_0336,DX
+	MOV	ES:OSI_ErrorFile,DX
 	INT	21h
 	;--
 	OSIERR_1	3,C_0287
@@ -146,7 +146,7 @@ OSI_delete	PROC FAR
 C_02C7:
 	MOV	AH,41h	;delete file
 	MOV	DX,[BP+06]
-	MOV	ES:D_0336,DX
+	MOV	ES:OSI_ErrorFile,DX
 	INT	21h
 	;--
 	OSIERR_1	4,C_02C7
@@ -300,7 +300,7 @@ C_04AB:	;--
 	MOV	AH,56h
 	MOV	ES,CS:C_0207
 	MOV	DX,[BP+08]
-	MOV	ES:D_0336,DX
+	MOV	ES:OSI_ErrorFile,DX
 	MOV	DI,DS
 	MOV	ES,DI
 	MOV	DI,[BP+06]

@@ -4,7 +4,27 @@
  * reverse-coded by Ergonomy Joe in 2013
  */
 /*
-	console module?
+	Console / user input module.
+
+	- Text output: a small "console" driver writing 8x8 characters into
+	  rectangular text windows (struct tClipInfo; CurClip is the current one,
+	  TextWindows[] holds the game's windows: [0] full screen, [1] status panel,
+	  [3] message scroll area). Characters are collected in a line buffer
+	  (LineBufChars chars / LineBufColors colors) and flushed one line at a time, which
+	  allows word wrap, centering, scrolling and "more" pagination
+	  according to the window's _attr bits:
+	    0x01 word wrap        0x02 center lines
+	    0x04 '`' capitalizes  0x08 runic font (char | 0x80)
+	    0x10 paginate         0x20 scroll at bottom
+	  CON_putch interprets the in-text escapes used by conversations and
+	  messages (#n $n / \ ^ @ * & < > `), CON_printf is a minimal printf.
+	- Input: CON_prompt (animated cursor + one key), CON_ReadCommand (translate
+	  keys and mouse clicks into command codes, cmd.h), CON_getch (also
+	  handles status panel commands itself), CON_gets (line input).
+	- Mouse: pointer shape, direction from pointer position, hit-testing of
+	  the map view, the icon bar and the status panel views.
+	- Keyboard "slot cursor" for the equipment/portrait views.
+	- Game load/save/restore (savegame\objlist).
 */
 #include "u6.h"
 
@@ -12,52 +32,55 @@
 /*0493*/char AimX = 0;
 /*0494*/char AimY = 0;
 /*0495*/char SelectRange = 0;
-static unsigned char D_0496 = 0;/*force some refresh*/
-unsigned char D_0497 = 0;
-static unsigned char D_0498 = 0;/*some flag for text control '`'*/
-char D_0499 = 3;
-char D_049A = 0;
-static unsigned char D_049B = 0;/*string input flag*/
-unsigned char D_049C = 1;
-int D_049D = 1;
-int D_049F = 0;
-int D_04A1 = 1;/*help flag*/
-int D_04A3 = 0;
+/*0496*/static unsigned char SpellbookSelectFirst = 0;/*spellbook page changed by keyboard: put the selection arrow on its first spell*/
+/*0497*/unsigned char FreeAimMode = 0;/*free aiming (TAB pressed with no command pending)*/
+/*0498*/static unsigned char CapitalizeNext = 0;/*'`' seen: capitalize next char (if clip _attr & 4)*/
+/*0499*/char SlotCursorCol = 3;/*slot cursor column (equipment view: 0~2 equipment, 3~6 inventory; bottom row: button #)*/
+/*049A*/char SlotCursorRow = 0;/*slot cursor row (-1 container slot, 0~2 slots, 3 bottom buttons row)*/
+/*049B*/static unsigned char InGetString = 0;/*CON_gets() in progress*/
+/*049C*/unsigned char AnimateAtPrompt = 1;/*run animations while waiting at the prompt*/
+/*049D*/int LastNumberPlural = 1;/*last number printed was != 1 (plural, for '/' and '\\' escapes)*/
+/*049F*/int EndPagingAtPrompt = 0;/*clear the paginate attribute (0x10) at next prompt*/
+/*04A1*/int HelpOn = 1;/*help flag: highlight '@' keywords*/
+/*04A3*/int InHiddenSection = 0;/*inside a '&'...'&' section: hidden unless SpeakGargish (SpeakGarglish)*/
 /*04A5*/int TextOn = 1;
-int D_04A7 = -1;
-int D_04A9 = 0;
-static int D_04AB = 1;/*kbd input related*/
-int D_04AD = 0;
-int D_04AF = 1;
-int D_04B1 = 1;
-int D_04B3 = 0;/*currently displayed character info #*/
-unsigned char D_04B5 = 0;/*current incantation index*/
-unsigned long D_04B6 = 0;/*spell mask*/
+/*04A7*/int LastAttackTarget = -1;/*last attack target object (or -1)*/
+/*04A9*/int SkipNewlines = 0;/*ignore '\n' in scrolling window until a printable char*/
+/*04AB*/static int KbdKeepLastOnly = 1;/*keyboard: keep only the last key in the BIOS buffer*/
+/*04AD*/int GetsAborted = 0;/*last CON_gets() was aborted with ESC*/
+/*04AF*/int CookedInput = 1;/*0 = return raw keys (used by "more" prompt), 1 = full command processing*/
+/*04B1*/int InputToUpper = 1;/*convert input keys to uppercase*/
+/*04B3*/int StatusMember = 0;/*party member # shown in portrait/equipment view*/
+/*04B5*/unsigned char IncantLen = 0;/*number of syllables in the current incantation*/
+/*04B6*/unsigned long IncantMask = 0;/*incantation as a mask of syllable letters (bit n = 'A'+n)*/
 /*04BA*/int MousePress = 0;
 /*04BC*/int MouseTrigger = 0;
 /*04BE*/int MouseMode = 0;
-/*04C0*/int StatusDisplay = CMD_91;
-int D_04C2 = CMD_8F;
+/*04C0*/int StatusDisplay = CMD_STAT_PARTY;
+/*04C2*/int PendingCommand = CMD_PASS;/*command currently being executed (waiting for a target)*/
 /*04C4*/int AllowMouseMov = 0;
 /*04C6*/int MouseMapX = -1;
 /*04C8*/int MouseMapY = -1;
-unsigned char D_04CA = 88;
-unsigned char D_04CB = 88;
-void C_0C9C_0286(int ch, int x, int y);/*"put char" callback*/
-void C_0C9C_02F1(int x, int y, int w, int h);/*"scroll up" callback*/
-void (*D_04CC)(int, int, int) = C_0C9C_0286;/*"put char" callback pointer*/
-void (*D_04D0)(int, int, int, int) = C_0C9C_02F1;/*"scroll up" callback pointer*/
+/*screen pixel used as origin by MkDirection() (88,88: party leader in the map view)*/
+/*04CA*/unsigned char DirOriginX = 88;
+/*04CB*/unsigned char DirOriginY = 88;
+/*C_0C9C_0286*/void CON_DrawCharCb(int ch, int x, int y);/*"put char" callback*/
+/*C_0C9C_02F1*/void CON_ScrollUpCb(int x, int y, int w, int h);/*"scroll up" callback*/
+/*04CC*/void (*CON_PutCharFn)(int, int, int) = CON_DrawCharCb;/*"put char" callback pointer*/
+/*04D0*/void (*CON_ScrollUpFn)(int, int, int, int) = CON_ScrollUpCb;/*"scroll up" callback pointer*/
 /*04D4*/int PromptCh = 5;
-struct tClipInfo D_04D6 = {
+/*initial text window: full 40x25 screen, white on black*/
+/*04D6*/struct tClipInfo BootClip = {
 	0, 0, 40, 25,
 	0, 0,
 	0xf, 0,
 	0
 };
-struct tClipInfo *D_04DF = &D_04D6;/*current clip*/
-int D_04E1 = 1;/*original attributes*/
-/*-- 3x5 font*/
-unsigned D_04E3[] = {
+/*04DF,04D6*/struct tClipInfo *CurClip = &BootClip;/*current clip*/
+/*04E1*/int DefaultClipAttr = 1;/*_attr given to new clips by CON_createClip (word wrap)*/
+/*-- 3x5 font, used to print quantities over inventory tiles
+  (5 rows of 3 bits, MSB first; the low bit is unused)*/
+/*04E3*/unsigned TinyFont[] = {
 	0xF6DE,/*'0'*/
 	0x4924,/*'1'*/
 	0xE7CE,/*'2'*/
@@ -85,529 +108,585 @@ unsigned D_04E3[] = {
 	0x03DE,/*'O'*/
 	0xF7C8 /*'P'*/
 };
-unsigned char D_0517[][4] = {
+/*x position (in the 16x16 tile) of each digit, least significant first,
+  for a number of 1~4 digits: right aligned*/
+/*0517*/unsigned char TinyDigitX[][4] = {
 	{ 7,0,0,0},/*1 digit*/
 	{ 9,4,0,0},/*2 digit*/
 	{11,7,3,0},/*3 digit*/
 	{13,9,5,1} /*4 digit*/
 };
-int D_0527 = -1;
-int D_0529 = -1;
-int D_052B[][4] = {
+/*map view tile last pointed at by the mouse (for continuous walking)*/
+/*0527*/int LastMouseTileX = -1;
+/*0529*/int LastMouseTileY = -1;
+/*mouse hit zones {left,top,right,bottom}, see mkMouseCommand()*/
+/*052B*/int MouseZones[][4] = {
 	{  8,  8,167,167},/*map view?*/
 	{  8,176,167,191},/*icons?*/
 	{168,  8,311,103},/*party/portrait/equip view?*/
 	{  0,  0,319,199} /*all screen*/
 };
-/*"slots" x & y*/
-int D_054B[] = {176,200,224,248,264,280,296};
-unsigned char D_0559[][7] = {
+/*equipment view "slots" screen x [column] & y [row][column]
+(columns 0~2: equipment, 3~6: inventory)*/
+/*054B*/int SlotScrX[] = {176,200,224,248,264,280,296};
+/*0559*/unsigned char SlotScrY[][7] = {
 	{24,16,24,32,32,32,32},
 	{40,40,40,48,48,48,48},
 	{56,64,56,64,64,64,64}
 };
-/*some icons*/
-int D_056E[] = {TIL_183,TIL_180,TIL_181,TIL_184,TIL_187};
-int D_0578 = 0;
-unsigned char D_057A = 0;
-unsigned char D_057B = 0;
-unsigned char D_057C = 1;
-unsigned char D_057D = 0;
+/*tiles of the buttons row (x = 176 + 16 * i, y = 88) of the
+  portrait/equipment views, used to erase the slot cursor (updated by DrawSlotCursor)*/
+/*056E*/int SlotButtonTiles[] = {TIL_BUTTON_NEXT_LEFT,TIL_BUTTON_PARTY,TIL_BUTTON_PORTRAIT,TIL_BUTTON_NEXT_RIGHT,TIL_BUTTON_COMBAT_MODE};
+/*0578*/int PendingSelect = 0;/*next CON_getch() returns CMD_TARGET at once (target already selected by right click)*/
+/*057A*/unsigned char LineBufLen = 0;/*line buffer: length (= column of next char)*/
+/*057B*/unsigned char LineBufDrawn = 0;/*line buffer: chars before this column are already on screen*/
+/*057C*/unsigned char LineAcceptSpace = 1;/*0 = skip spaces (at the start of a word-wrapped line)*/
+/*057D*/unsigned char PendingEscape = 0;/*pending CON_putch() escape char ('#','$','%','/','@','\\','^') or 0*/
 
-#define LEFT_CLICK (D_B72B & 1)
-#define RIGHT_CLICK (D_B72B & 2)
+/*MouseButtons: mouse buttons, bit0 left, bit1 right*/
+#define LEFT_CLICK (MouseButtons & 1)
+#define RIGHT_CLICK (MouseButtons & 2)
 
-/*HideMouseInArea?*/
+/*hide the mouse pointer if it is inside the screen rectangle
+  (x0,y0)-(x1,y1), before drawing there.
+  returns 1 if it was hidden: pass the result to CON_mouseOn() afterwards.
+  (the result is uninitialized when there is no mouse; harmless since
+  CON_mouseOn() tests MouseOn too)*/
 /*C_0C9C_0007*/CON_mouseOffAt(int x0, int y0, int x1, int y1) {
-	int si;
+	int inArea;
 
 	if(MouseOn) {
 		MouseArea.left = x0;
 		MouseArea.top = y0;
 		MouseArea.right = x1;
 		MouseArea.bottom = y1;
-		si = MOUSE_IN_AREA(&MouseArea);
+		inArea = MOUSE_IN_AREA(&MouseArea);
 		if(MOUSE_IN_AREA(&MouseArea))
 			MOUSE_HIDE();
 	}
-	return si;
+	return inArea;
 }
 
-/*mouse on if bp06*/
-/*C_0C9C_0050*/CON_mouseOn(int bp06) {
-	if(MouseOn && bp06)
+/*show the mouse pointer again if mustShow (result of CON_mouseOffAt)*/
+/*C_0C9C_0050*/CON_mouseOn(int mustShow) {
+	if(MouseOn && mustShow)
 		MOUSE_SHOW();
 }
 
-/*get mouse "direction"*/
+/*direction (0=N,1=NE,2=E ... 7=NW, -1 = none) pointed at by the screen
+  pixel (x,y), relative to the origin (DirOriginX,DirOriginY).
+  Near the origin (48x48 box) the 16x16 cell decides (-1 for the center cell);
+  farther, the slope decides: mostly horizontal/vertical (ratio >= 2) gives
+  E/W/N/S, else a diagonal.*/
 /*C_0C9C_0069*/MkDirection(int x, int y) {
 	int dir;
-	int delta_x, delta_y;
+	int deltaX, deltaY;
 
 	dir = -1;
-	delta_x = abs(x - D_04CA);
-	delta_y = abs(y - D_04CB);
+	deltaX = abs(x - DirOriginX);
+	deltaY = abs(y - DirOriginY);
 	if(
-		D_04CA - 24 <= x && D_04CA + 24 > x &&
-		D_04CB - 24 <= y && D_04CB + 24 > y
+		DirOriginX - 24 <= x && DirOriginX + 24 > x &&
+		DirOriginY - 24 <= y && DirOriginY + 24 > y
 	) {
-		if(D_04CA - 8 > x) {
-			if(D_04CB - 8 > y)
+		if(DirOriginX - 8 > x) {
+			if(DirOriginY - 8 > y)
 				dir = 7;
-			else if(D_04CB + 8 > y)
+			else if(DirOriginY + 8 > y)
 				dir = 6;
 			else
 				dir = 5;
-		} else if(D_04CA + 8 > x) {
-			if(D_04CB - 8 > y)
+		} else if(DirOriginX + 8 > x) {
+			if(DirOriginY - 8 > y)
 				dir = 0;
-			else if(D_04CB + 8 > y)
+			else if(DirOriginY + 8 > y)
 				dir = -1;
 			else
 				dir = 4;
 		} else {
-			if(D_04CB - 8 > y)
+			if(DirOriginY - 8 > y)
 				dir = 1;
-			else if(D_04CB + 8 > y)
+			else if(DirOriginY + 8 > y)
 				dir = 2;
 			else
 				dir = 3;
 		}
 	} else {
-		if(delta_x > delta_y) {
-			if(delta_y == 0 || (delta_x / delta_y) >= 2) {
-				dir = (D_04CA <= x)?2:6;
+		if(deltaX > deltaY) {
+			if(deltaY == 0 || (deltaX / deltaY) >= 2) {
+				dir = (DirOriginX <= x)?2:6;
 			}
 		} else {
-			if(delta_x == 0 || (delta_y / delta_x) >= 2) {
-				dir = (D_04CB <= y)?4:0;
+			if(deltaX == 0 || (deltaY / deltaX) >= 2) {
+				dir = (DirOriginY <= y)?4:0;
 			}
 		}
 		if(dir == -1) {
-			if(D_04CA <= x) {
-				dir = (D_04CB <= y)?3:1;
+			if(DirOriginX <= x) {
+				dir = (DirOriginY <= y)?3:1;
 			} else {
-				dir = (D_04CB <= y)?5:7;
+				dir = (DirOriginY <= y)?5:7;
 			}
 		}
 	}
 	return dir;
 }
 
-/*mouse callback:
-update mouse pointer type according to position*/
-C_0C9C_01FB() {
-	int si;
+/*mouse callback (Mouse.f_14), also called after mode changes:
+update mouse pointer shape according to position.
+shapes: 0 arrow (outside the map view), 1 target/crosshair (MouseMode != 0,
+or center of the map), 2~9 direction arrows (2 + direction)*/
+/*C_0C9C_01FB*/CON_UpdateMousePointer() {
+	int dir;
 
 	if(!MouseOn)
 		return;
-	if(Mouse.f_02 >= 8 && Mouse.f_02 < 168 && Mouse.f_04 >= 8 && Mouse.f_04 < 168) {
+	if(Mouse.posX >= 8 && Mouse.posX < 168 && Mouse.posY >= 8 && Mouse.posY < 168) {
 		if(MouseMode == 0) {
-			si = MkDirection(Mouse.f_02, Mouse.f_04);
-			if(si >= 0) {
-				MOUSE_POINTER(D_B623, si + 2);
+			dir = MkDirection(Mouse.posX, Mouse.posY);
+			if(dir >= 0) {
+				MOUSE_POINTER(PointerShapes, dir + 2);
 				return;
 			}
 		}
 	} else {
 		if(MouseMode == 0) {
-			MOUSE_POINTER(D_B623, 0);
+			MOUSE_POINTER(PointerShapes, 0);
 			return;
 		}
 	}
-	MOUSE_POINTER(D_B623, 1);
+	MOUSE_POINTER(PointerShapes, 1);
 }
 
-/*"put char" callback*/
-void C_0C9C_0286(int ch, int x, int y) {
-	int bp_02;
+/*"put char" callback (CON_PutCharFn):
+draw character ch at text cell (x,y) with the current clip's colors*/
+/*C_0C9C_0286*/void CON_DrawCharCb(int ch, int x, int y) {
+	int mouseHidden;
 
 	x <<= 3;
 	y <<= 3;
-	bp_02 = CON_mouseOffAt(x, y, x + 7, y + 7);
-	D_ECC4->_0b = D_04DF->_bg;
-	D_ECC4->_0a = D_04DF->_fg;
-	GR_1E(ch, x, y);
-	CON_mouseOn(bp_02);
+	mouseHidden = CON_mouseOffAt(x, y, x + 7, y + 7);
+	GrInfo->textBg = CurClip->bgColor;
+	GrInfo->textFg = CurClip->fgColor;
+	GR_PUT_CHAR(ch, x, y);
+	CON_mouseOn(mouseHidden);
 }
 
-/*"scroll up" callback*/
-void C_0C9C_02F1(int x, int y, int w, int h) {
-	int bp_02;
+/*"scroll up" callback (CON_ScrollUpFn):
+scroll the text window at cell (x,y) of w x h cells up by one line (8 pixels)
+and clear its last line with the background color*/
+/*C_0C9C_02F1*/void CON_ScrollUpCb(int x, int y, int w, int h) {
+	int mouseHidden;
 
 	x <<= 3;
 	y <<= 3;
 	w <<= 3;
 	h <<= 3;
-	bp_02 = CON_mouseOffAt(x, y, x + w - 1, y + h - 1);
-	GR_15(x, y, x + w - 1, y + h - 1, -8);
-	GR_06(D_04DF->_bg);
-	GR_12(x, y + h - 8, x + w - 1, y + h - 1);
-	CON_mouseOn(bp_02);
+	mouseHidden = CON_mouseOffAt(x, y, x + w - 1, y + h - 1);
+	GR_SCROLL_RECT_Y(x, y, x + w - 1, y + h - 1, -8);
+	GR_SET_COLOR(CurClip->bgColor);
+	GR_FILL_RECT(x, y + h - 8, x + w - 1, y + h - 1);
+	CON_mouseOn(mouseHidden);
 }
 
-/*Restore game?*/
-C_0C9C_0397() {
-	int si;
+/*Restore game: throw away the current state and reload the saved game
+(called from the main loop when DiskFullChoice == 'R')*/
+/*C_0C9C_0397*/GAME_Restore() {
+	int i;
 
 	IsArmageddon = 0;
-	D_0340 = 1;
+	MapAnimEnabled = 1;
 	SelectMode = 0;
-	StatusDisplay = CMD_91;
-	D_04B3 = 0;
+	StatusDisplay = CMD_STAT_PARTY;
+	StatusMember = 0;
 	StatusDirty = 1;
-	D_2E9E = ' ';
-	C_1184_26E2();/*delete "savegame\\objblk??.tmp" files?*/
-	for(si = 0; si < 0x45; si++)
-		D_065C[si] = 0;
-	C_1184_3B1D();
-	C_101C_052D();
+	DiskFullChoice = ' ';
+	OBJ_DeleteTmpBlocks();/*delete "savegame\\objblk??.tmp" files?*/
+	for(i = 0; i < 0x45; i++)
+		ObjBlkTmpPending[i] = 0;
+	OBJ_InitLists();
+	MAP_InitChunkCache();
 	setDefaultCommand(0xff);
 	StatusDirty = 1;
-	OSI_close(D_05CC);
-	C_0C9C_042A();
-	C_1E0F_512A();
-	MUS_09A8();
+	OSI_close(ChunksFile);
+	GAME_Load();
+	InitNPCTracker();
+	MUS_PlayAreaSong();
 	if(InCombat)
 		COMBAT_begin();
 	else
 		COMBAT_breakOff();
-	C_0A33_1355(0);
+	PassTime(0);
 	PromptFlag = 1;
 }
 
-C_0C9C_042A() {
-	int si, di;
+/*Load game: read "schedule", "basetile" and the saved state in
+"savegame\\objlist" (same layout as written by GAME_Save), then rebuild
+the map around the party and open the "chunks" file*/
+/*C_0C9C_042A*/GAME_Load() {
+	int fd, i;
 
-	D_05DA = D_05DC = D_05DE = -1;
+	BuiltAreaX = BuiltAreaY = BuiltAreaZ = -1;
 
-	DISK_confirm(DISK_4);
-	si = OSI_open(/*057E*/"schedule");
-	OSI_read(si, 0, (0x100 + 1) * sizeof(int), SchedPointer);
-	OSI_read(si, -1, (long)SchedPointer[0x100] * sizeof(struct tSchedule), Schedule);
-	OSI_close(si);
+	DISK_confirm(DISK_GAME);
+	fd = OSI_open(/*057E*/"schedule");
+	OSI_read(fd, 0, (0x100 + 1) * sizeof(int), SchedPointer);
+	OSI_read(fd, -1, (long)SchedPointer[0x100] * sizeof(struct tSchedule), Schedule);
+	OSI_close(fd);
 
-	DISK_confirm(DISK_4);
-	si = OSI_open(/*0587*/"basetile");
-	OSI_Read(si, 0L, 0x800L, BaseTile);
-	OSI_close(si);
+	DISK_confirm(DISK_GAME);
+	fd = OSI_open(/*0587*/"basetile");
+	OSI_Read(fd, 0L, 0x800L, BaseTile);
+	OSI_close(fd);
 
-	DISK_confirm(DISK_8);
-	si = OSI_open(/*0590*/"savegame\\objlist");
-	OSI_read(si, 0, 0x100, ObjStatus);
-	OSI_read(si, -1, 0x100 * sizeof(struct coord), ObjPos);
-	OSI_read(si, -1, 0x200, ObjShapeType);
-	OSI_read(si, -1, 0x200, Amount);
-	OSI_read(si, -1, 0x100, NPCStatus);
-	OSI_read(si, -1, 0x100, STREN);
-	OSI_read(si, -1, 0x100, DEXTE);
-	OSI_read(si, -1, 0x100, INTEL);
-	OSI_read(si, -1, 0x200, ExpPoints);
-	OSI_read(si, -1, 0x100, HitPoints);
-	OSI_read(si, -1, 16 * 14, Names);
-	OSI_read(si, -1, 0x10, Party);
-	OSI_read(si, -1, 1, &PartySize);
-	OSI_read(si, -1, 0x100, Level);
-	OSI_read(si, -1, 0x100, SchedIndex);
-	OSI_read(si, -1, 0x100, NPCMode);
-	OSI_read(si, -1, 0x100, NPCComMode);
-	OSI_read(si, -1, 0x100, MAGIC);
-	OSI_read(si, -1, 0x100, MovePts);
-	OSI_read(si, -1, 0x100 * sizeof(int), OrigShapeType);
-	OSI_read(si, -1, 0x100, TalkFlags);
-	OSI_read(si, -1, 0x100, Leader);
-	OSI_read(si, -1, 0x100, NPCFlag);
-	OSI_read(si, -1, 0x100, D_8C42);
-	OSI_read(si, -1, (long)((char *)&D_2CCC - (char *)&obj_2C4A), &obj_2C4A);
-	OSI_close(si);
+	DISK_confirm(DISK_PLAYER);
+	fd = OSI_open(/*0590*/"savegame\\objlist");
+	OSI_read(fd, 0, 0x100, ObjStatus);
+	OSI_read(fd, -1, 0x100 * sizeof(struct coord), ObjPos);
+	OSI_read(fd, -1, 0x200, ObjShapeType);
+	OSI_read(fd, -1, 0x200, Amount);
+	OSI_read(fd, -1, 0x100, NPCStatus);
+	OSI_read(fd, -1, 0x100, STREN);
+	OSI_read(fd, -1, 0x100, DEXTE);
+	OSI_read(fd, -1, 0x100, INTEL);
+	OSI_read(fd, -1, 0x200, ExpPoints);
+	OSI_read(fd, -1, 0x100, HitPoints);
+	OSI_read(fd, -1, 16 * 14, Names);
+	OSI_read(fd, -1, 0x10, Party);
+	OSI_read(fd, -1, 1, &PartySize);
+	OSI_read(fd, -1, 0x100, Level);
+	OSI_read(fd, -1, 0x100, SchedIndex);
+	OSI_read(fd, -1, 0x100, NPCMode);
+	OSI_read(fd, -1, 0x100, NPCComMode);
+	OSI_read(fd, -1, 0x100, MAGIC);
+	OSI_read(fd, -1, 0x100, MovePts);
+	OSI_read(fd, -1, 0x100 * sizeof(int), OrigShapeType);
+	OSI_read(fd, -1, 0x100, TalkFlags);
+	OSI_read(fd, -1, 0x100, Leader);
+	OSI_read(fd, -1, 0x100, NPCFlag);
+	OSI_read(fd, -1, 0x100, PathData);
+	OSI_read(fd, -1, (long)((char *)&GameStateEnd - (char *)&GameStateStart), &GameStateStart);
+	OSI_close(fd);
 
-	C_1184_3B7D();
+	OBJ_RelinkNPCs();
 	VarInt['Q' - 0x37] = IsOnQuest;
 	MapX = GetX(Party[Active]);
 	MapY = GetY(Party[Active]);
 	MapZ = GetZ(Party[Active]);
 
-	for(di = 0; di < NumAnimData; di ++) {
+	/*chains, cranks and bells only animate when triggered*/
+	for(i = 0; i < NumAnimData; i ++) {
 		if(
-			D_67E4[di] == BaseTile[OBJ_125] ||
-			D_67E4[di] == BaseTile[OBJ_120] ||
-			D_67E4[di] == BaseTile[OBJ_0EC]
+			AnimTile[i] == BaseTile[OBJ_CHAIN] ||
+			AnimTile[i] == BaseTile[OBJ_CRANK] ||
+			AnimTile[i] == BaseTile[OBJ_BELL]
 		)
-			StateAnimData[di] = 0;
+			StateAnimData[i] = 0;
 		else
-			StateAnimData[di] = 1;
+			StateAnimData[i] = 1;
 	}
 
 	setDefaultCommand(DefaultCommand);
 	LoadNewRegions(MapX, MapY, MapZ);
-	C_101C_00D7(MapX, MapY, MapZ);
+	MAP_LoadChunkIndexes(MapX, MapY, MapZ);
 
-	DISK_confirm(DISK_5);
-	D_05CC = OSI_open(/*05A1*/"chunks");
-	D_06E6 = 1;
-	C_101C_054C();
+	DISK_confirm(DISK_MAP);
+	ChunksFile = OSI_open(/*05A1*/"chunks");
+	MoveAppliesTerrain = 1;
+	MAP_LoadAround();
+	/*party members aboard a vehicle are kept off the map*/
 	if(IN_VEHICLE) {
-		for(di = 0; di < PartySize; di++)
-			InsertObj(Party[di], 0, INVEN);
+		for(i = 0; i < PartySize; i++)
+			InsertObj(Party[i], 0, INVEN);
 	}
-	C_1100_0306();
+	VIS_UpdateView();
 }
 
-/*Save game?*/
-C_0C9C_089F() {
-	int si, di;
+/*Save game: write the state to "savegame\\objlist" (party members aboard
+a vehicle are put back on the map for the time of the save)*/
+/*C_0C9C_089F*/GAME_Save() {
+	int fd, i;
 
-	D_2E9E = ' ';
-	D_05DA = D_05DC = D_05DE = -1;
+	DiskFullChoice = ' ';
+	BuiltAreaX = BuiltAreaY = BuiltAreaZ = -1;
 	if(IN_VEHICLE) {
-		for(di = 0; di < PartySize; di++)
-			MoveObj(Party[di], MapX, MapY, MapZ);
+		for(i = 0; i < PartySize; i++)
+			MoveObj(Party[i], MapX, MapY, MapZ);
 	}
-	DISK_confirm(DISK_8);
-	C_1184_33CA();
+	DISK_confirm(DISK_PLAYER);
+	OBJ_CommitBlocks();
 	IsOnQuest = VarInt['Q' - 0x37];
 
-	DISK_confirm(DISK_8);
-	si = OSI_create(/*0590*/"savegame\\objlist");
-	OSI_write(si, 0, 0x100, ObjStatus);
-	OSI_write(si, -1, 0x100 * sizeof(struct coord), ObjPos);
-	OSI_write(si, -1, 0x200, ObjShapeType);
-	OSI_write(si, -1, 0x200, Amount);
-	OSI_write(si, -1, 0x100, NPCStatus);
-	OSI_write(si, -1, 0x100, STREN);
-	OSI_write(si, -1, 0x100, DEXTE);
-	OSI_write(si, -1, 0x100, INTEL);
-	OSI_write(si, -1, 0x200, ExpPoints);
-	OSI_write(si, -1, 0x100, HitPoints);
-	OSI_write(si, -1, 16 * 14, Names);
-	OSI_write(si, -1, 0x10, Party);
-	OSI_write(si, -1, 1, &PartySize);
-	OSI_write(si, -1, 0x100, Level);
-	OSI_write(si, -1, 0x100, SchedIndex);
-	OSI_write(si, -1, 0x100, NPCMode);
-	OSI_write(si, -1, 0x100, NPCComMode);
-	OSI_write(si, -1, 0x100, MAGIC);
-	OSI_write(si, -1, 0x100, MovePts);
-	OSI_write(si, -1, 0x100 * sizeof(int), OrigShapeType);
-	OSI_write(si, -1, 0x100, TalkFlags);
-	OSI_write(si, -1, 0x100, Leader);
-	OSI_write(si, -1, 0x100, NPCFlag);
-	OSI_write(si, -1, 0x100, D_8C42);
-	OSI_write(si, -1, (long)((char *)&D_2CCC - (char *)&obj_2C4A), &obj_2C4A);
-	OSI_close(si);
+	DISK_confirm(DISK_PLAYER);
+	fd = OSI_create(/*0590*/"savegame\\objlist");
+	OSI_write(fd, 0, 0x100, ObjStatus);
+	OSI_write(fd, -1, 0x100 * sizeof(struct coord), ObjPos);
+	OSI_write(fd, -1, 0x200, ObjShapeType);
+	OSI_write(fd, -1, 0x200, Amount);
+	OSI_write(fd, -1, 0x100, NPCStatus);
+	OSI_write(fd, -1, 0x100, STREN);
+	OSI_write(fd, -1, 0x100, DEXTE);
+	OSI_write(fd, -1, 0x100, INTEL);
+	OSI_write(fd, -1, 0x200, ExpPoints);
+	OSI_write(fd, -1, 0x100, HitPoints);
+	OSI_write(fd, -1, 16 * 14, Names);
+	OSI_write(fd, -1, 0x10, Party);
+	OSI_write(fd, -1, 1, &PartySize);
+	OSI_write(fd, -1, 0x100, Level);
+	OSI_write(fd, -1, 0x100, SchedIndex);
+	OSI_write(fd, -1, 0x100, NPCMode);
+	OSI_write(fd, -1, 0x100, NPCComMode);
+	OSI_write(fd, -1, 0x100, MAGIC);
+	OSI_write(fd, -1, 0x100, MovePts);
+	OSI_write(fd, -1, 0x100 * sizeof(int), OrigShapeType);
+	OSI_write(fd, -1, 0x100, TalkFlags);
+	OSI_write(fd, -1, 0x100, Leader);
+	OSI_write(fd, -1, 0x100, NPCFlag);
+	OSI_write(fd, -1, 0x100, PathData);
+	OSI_write(fd, -1, (long)((char *)&GameStateEnd - (char *)&GameStateStart), &GameStateStart);
+	OSI_close(fd);
 
-	C_101C_054C();
+	MAP_LoadAround();
 	if(IN_VEHICLE) {
-		for(di = 0; di < PartySize; di++)
-			InsertObj(Party[di], 0, INVEN);
+		for(i = 0; i < PartySize; i++)
+			InsertObj(Party[i], 0, INVEN);
 	}
 	StatusDirty ++;
 }
 
-C_0C9C_0BCE(int ftile, int btile, int x, int y) {
-	GR_42(btile, 0, 0);
-	GR_42(ftile, 0, 0);
+/*draw tile ftile over background tile btile at screen (x,y)
+(composed in the backbuffer's top-left 16x16 corner, then copied)*/
+/*C_0C9C_0BCE*/DrawTileOnBg(int ftile, int btile, int x, int y) {
+	GR_PUT_TILE(btile, 0, 0);
+	GR_PUT_TILE(ftile, 0, 0);
 	/*backbuffer {0,0} 15x15 -> screen {x,y}*/
-	GR_45(0, 0, 15, 15, x, y);
+	GR_COPY_TO_SCREEN(0, 0, 15, 15, x, y);
 }
 
-/*display 3x5 character?
-'0'-'9' and 'A'-'P'*/
-C_0C9C_0C10(int bp08, int bp06) {
-	int si, di;
-	unsigned bp_02;
+/*draw a 3x5 character in the backbuffer's 16x16 work tile, at
+column xOfs, rows 11~15 (bottom of the tile), in text color.
+glyph: 0~9 = '0'-'9', 10~25 = 'A'-'P'*/
+/*C_0C9C_0C10*/DrawTinyGlyph(int glyph, int xOfs) {
+	int px, py;
+	unsigned bits;
 
-	D_ECC4->_0f = 1;
-	bp_02 = D_04E3[bp08];
-	GR_06(D_2A56);
-	for(di = 11; di < 16; di++) {
-		for(si = bp06; si < bp06 + 3; si ++) {
-			if(bp_02 & 0x8000) {
-				GR_09(si, di);
+	GrInfo->toBackBuffer = 1;
+	bits = TinyFont[glyph];
+	GR_SET_COLOR(ColorText);
+	for(py = 11; py < 16; py++) {
+		for(px = xOfs; px < xOfs + 3; px ++) {
+			if(bits & 0x8000) {
+				GR_PUT_PIXEL(px, py);
 			}
-			bp_02 <<= 1;
+			bits <<= 1;
 		}
 	}
-	D_ECC4->_0f = 0;
+	GrInfo->toBackBuffer = 0;
 }
 
-/*display integer in 3x5 font?*/
-C_0C9C_0C7D(int ftile, int val, int x, int y) {
-	int si, bp_02;
+/*draw tile ftile on an empty slot at screen (x,y) with the number val
+(0~9999, right aligned, 3x5 font) printed over its bottom*/
+/*C_0C9C_0C7D*/DrawTileWithNumber(int ftile, int val, int x, int y) {
+	int numDigits, digit;
 
-	GR_42(TIL_19B, 0, 0);
-	GR_42(ftile, 0, 0);
+	GR_PUT_TILE(TIL_SLOT_EMPTY, 0, 0);
+	GR_PUT_TILE(ftile, 0, 0);
 	if(val < 10)
-		si = 1;
+		numDigits = 1;
 	else if(val < 100)
-		si = 2;
+		numDigits = 2;
 	else if(val < 1000)
-		si = 3;
+		numDigits = 3;
 	else if(val < 10000)
-		si = 4;
+		numDigits = 4;
 	else
-		si = 0;
-	for(bp_02 = 0; bp_02 < si; bp_02 ++) {
-		C_0C9C_0C10(val % 10, D_0517[si - 1][bp_02]);
+		numDigits = 0;
+	for(digit = 0; digit < numDigits; digit ++) {
+		DrawTinyGlyph(val % 10, TinyDigitX[numDigits - 1][digit]);
 		val /= 10;
 	}
-	GR_45(0, 0, 15, 15, x, y);
+	GR_COPY_TO_SCREEN(0, 0, 15, 15, x, y);
 }
 
-/*display object quality/quantity*/
-C_0C9C_0D31(int objNum, int x, int y) {
-	int bp_04, ftile;
+/*draw an inventory object in its slot at screen (x,y):
+keys show their quality as a letter ('A' = key #1), gold (QuanType 4)
+its amount, stackable objects (QuanType 2) their quantity*/
+/*C_0C9C_0D31*/DrawInvObject(int objNum, int x, int y) {
+	int quanType, ftile;
 
-	bp_04 = QuanType(ObjShapeType[objNum]);
+	quanType = QuanType(ObjShapeType[objNum]);
 	ftile = TILE_FRAME(objNum);
-	if(GetType(objNum) == OBJ_040) {
-		GR_42(TIL_19B, 0, 0);
-		GR_42(ftile, 0, 0);
-		C_0C9C_0C10(GetQual(objNum) + 9, 7);
-		GR_45(0, 0, 15, 15, x, y);
-	} else if(bp_04 == 4) {
-		GR_2D(TIL_19B, x, y);
-		C_0C9C_0C7D(ftile, Amount[objNum], x, y);
-	} else if(bp_04 == 2) {
-		GR_2D(TIL_19B, x, y);
-		C_0C9C_0C7D(ftile, GetQuan(objNum), x, y);
+	if(GetType(objNum) == OBJ_KEY) {
+		GR_PUT_TILE(TIL_SLOT_EMPTY, 0, 0);
+		GR_PUT_TILE(ftile, 0, 0);
+		DrawTinyGlyph(GetQual(objNum) + 9, 7);
+		GR_COPY_TO_SCREEN(0, 0, 15, 15, x, y);
+	} else if(quanType == 4) {
+		GR_PUT_TILE_SCREEN(TIL_SLOT_EMPTY, x, y);
+		DrawTileWithNumber(ftile, Amount[objNum], x, y);
+	} else if(quanType == 2) {
+		GR_PUT_TILE_SCREEN(TIL_SLOT_EMPTY, x, y);
+		DrawTileWithNumber(ftile, GetQuan(objNum), x, y);
 	} else {
-		C_0C9C_0BCE(ftile, TIL_19B, x, y);
+		DrawTileOnBg(ftile, TIL_SLOT_EMPTY, x, y);
 	}
 }
 
-C_0C9C_0E57(int ftile, int btile, int x, int y) {
-	C_0C9C_0BCE(ftile, btile, x, y);
+/*same as DrawTileOnBg (entry point used by the status views)*/
+/*C_0C9C_0E57*/DrawSlotTile(int ftile, int btile, int x, int y) {
+	DrawTileOnBg(ftile, btile, x, y);
 }
 
+/*poll for one key at the text cursor of the current clip.
+while no key is available, draw one frame of the animated cursor
+(PromptCh + 0~3) and run the idle animations once.
+returns the key code (see KBD_GetKey: ASCII, or 0x100 + scan code for
+extended keys/keypad) or 0 if none*/
 /*C_0C9C_0E6E*/CON_prompt() {
 	int promptX, promptY;
-	int ch, bp_02;
+	int ch, savedFg;
 
 	/*backup/set new fg*/
-	bp_02 = D_04DF->_fg;
-	D_04DF->_fg = D_2A56;
+	savedFg = CurClip->fgColor;
+	CurClip->fgColor = ColorText;
 
-	D_B729 = D_04DF->_h;
-	if(D_049F) {
-		D_04DF->_attr &= ~0x10;
-		D_049F = 0;
+	/*the player is reading: reset the "more" line counter*/
+	LinesBeforeMore = CurClip->rows;
+	if(EndPagingAtPrompt) {
+		CurClip->attrFlags &= ~0x10;/*end of paginated text*/
+		EndPagingAtPrompt = 0;
 	}
-	D_2FFE = 0;
-	if(D_04DF->_curx >= D_04DF->_w)
-		CON_putch0(0);
-	promptX = D_04DF->_curx + D_04DF->_x0;
-	promptY = D_04DF->_cury + D_04DF->_y0;
-	ch = C_31FA_000C(D_04AB);/*keyboard function*/
+	TextIdle = 0;
+	if(CurClip->curX >= CurClip->cols)
+		CON_putch0(0);/*line full: new line*/
+	promptX = CurClip->curX + CurClip->originX;
+	promptY = CurClip->curY + CurClip->originY;
+	ch = KBD_GetKey(KbdKeepLastOnly);/*keyboard function*/
 	if(ch == 0) {/*animated cursor*/
-		(*D_04CC)(PromptCh + ((PromptCnt ++) & 3), promptX, promptY);
-		D_033E = 1;
-		if(D_049C) {
-			OtherAnimations();
+		(*CON_PutCharFn)(PromptCh + ((PromptCnt ++) & 3), promptX, promptY);
+		IdleAnimTick = 1;
+		if(AnimateAtPrompt) {
+			DisplayTick();
 			PaletteAnimation();
 		} else {
 			OSI_delay(1);
 		}
 		ServeMouse
 	}
-	(*D_04CC)(' ', promptX, promptY);
-	D_2FFE = 1;
+	(*CON_PutCharFn)(' ', promptX, promptY);
+	TextIdle = 1;
 
 	/*restore fg*/
-	D_04DF->_fg = bp_02;
+	CurClip->fgColor = savedFg;
 
 	return ch;
 }
 
-C_0C9C_0F52(int ch) {
-	int si, di;
+/*echo one typed character for CON_gets(), directly at the cursor
+(no line buffer); '\b' erases the previous char, also across lines*/
+/*C_0C9C_0F52*/CON_EchoChar(int ch) {
+	int scrX, scrY;
 
-	si = D_04DF->_curx + D_04DF->_x0;
-	di = D_04DF->_cury + D_04DF->_y0;
-	D_2FFE = 0;
+	scrX = CurClip->curX + CurClip->originX;
+	scrY = CurClip->curY + CurClip->originY;
+	TextIdle = 0;
 	if(ch == '\b') {/*backspace*/
-		if(D_04DF->_curx) {
-			D_04DF->_curx --;
-			si --;
-		} else if(D_04DF->_cury) {
-			D_04DF->_cury --;
-			di --;
-			D_04DF->_curx = D_04DF->_w - 1;
-			si = D_04DF->_curx + D_04DF->_x0;
+		if(CurClip->curX) {
+			CurClip->curX --;
+			scrX --;
+		} else if(CurClip->curY) {
+			CurClip->curY --;
+			scrY --;
+			CurClip->curX = CurClip->cols - 1;
+			scrX = CurClip->curX + CurClip->originX;
 		}
-		(*D_04CC)(' ', si, di);
+		(*CON_PutCharFn)(' ', scrX, scrY);
 	} else {
-		(*D_04CC)(ch, si, di);
-		if(++D_04DF->_curx >= D_04DF->_w) {
-			D_04DF->_curx = 0;
-			if(D_04DF->_cury < D_04DF->_h - 1) {
-				D_04DF->_cury ++;
-			} else if(D_04DF->_attr & 0x20) {
-				D_2FFE = 1;
-				(*D_04D0)(D_04DF->_x0, D_04DF->_y0, D_04DF->_w, D_04DF->_h);
-				D_2FFE = 0;
+		(*CON_PutCharFn)(ch, scrX, scrY);
+		if(++CurClip->curX >= CurClip->cols) {
+			CurClip->curX = 0;
+			if(CurClip->curY < CurClip->rows - 1) {
+				CurClip->curY ++;
+			} else if(CurClip->attrFlags & 0x20) {
+				TextIdle = 1;
+				(*CON_ScrollUpFn)(CurClip->originX, CurClip->originY, CurClip->cols, CurClip->rows);
+				TextIdle = 0;
 			}
 		}
 	}
-	D_2FFE = 1;
+	TextIdle = 1;
 }
 
-/*uncalled?*/
-__0C9C_102A(unsigned char *bp0a, int bp08, int bp06) {
-	while(*bp0a) {
-		(*D_04CC)(*bp0a++, bp08++, bp06);
+/*uncalled?
+draw string str directly at text cell (x,y), no clipping*/
+/*__0C9C_102A*/CON_PutStrAt(unsigned char *str, int x, int y) {
+	while(*str) {
+		(*CON_PutCharFn)(*str++, x++, y);
 	}
 }
 
+/*mouse held over the map view without command: return the walking
+direction (MkDirection, -1 = center) and, if AllowMouseMov, update the
+walk target MouseMapX/Y (map coordinates of the pointed tile; used by
+the walking code to slide around obstacles). The target is kept while the
+pointer stays on the same tile, unless the party is next to it on the same
+row/column or the button was just pressed.*/
 static /*C_0C9C_1054*/mkMouseDir() {
-	int si, di;
-	int bp_02;
+	int tileX, tileY;
+	int dir;
 
-	si = SCR2TIL(PointerX);
-	di = SCR2TIL(PointerY);
-	bp_02 = MkDirection(PointerX, PointerY);
+	tileX = SCR2TIL(PointerX);
+	tileY = SCR2TIL(PointerY);
+	dir = MkDirection(PointerX, PointerY);
 
 	if(AllowMouseMov) {
 		if(
 			MouseTrigger || MouseMapX == -1 ||
 			(MouseMapX == MapX && abs(MouseMapY - MapY) < 2) ||
 			(MouseMapY == MapY && abs(MouseMapX - MapX) < 2) ||
-			si != D_0527 || di != D_0529
+			tileX != LastMouseTileX || tileY != LastMouseTileY
 		) {
-			MouseMapX = si + MapX - 5;
-			MouseMapY = di + MapY - 5;
-			D_0527 = si;
-			D_0529 = di;
+			MouseMapX = tileX + MapX - 5;
+			MouseMapY = tileY + MapY - 5;
+			LastMouseTileX = tileX;
+			LastMouseTileY = tileY;
 		}
 	} else {
 		MouseMapX =
 		MouseMapY = -1;
 	}
 
-	return bp_02;
+	return dir;
 }
 
+/*fill Selection (x, y, obj) from the pointer position PointerX/Y.
+- map view: Selection.x/y = map coordinates; returns CMD_HIT_MAP_OBJ if there is
+  an object (the first visible one, COMBAT_GetTargetAt), else Selection.obj = -1
+  and SelectionIsDark tells if the tile is hidden/darkness.
+- equipment view: returns CMD_HIT_INVEN_SLOT for an inventory slot or the container
+  slot (STAT_PickInvenSlot), CMD_HIT_EQUIP_SLOT for an equipment slot (STAT_PickEquipSlot).
+returns 0 when nothing selectable is pointed at*/
 static /*C_0C9C_1107*/mkMouseSelection() {
-	int si;
+	int tile;
 
-	D_B6DF = 0;
+	SelectionIsDark = 0;
 	if(PointerX < 168) {
 		Selection.x = SCR2TIL(PointerX) + MapX - 5;
 		Selection.y = SCR2TIL(PointerY) + MapY - 5;
 		if(Obj_11x11[SCR2TIL(PointerY)][SCR2TIL(PointerX)] || Tile_11x11[SCR2TIL(PointerY)][SCR2TIL(PointerX)] >= 0x200) {
-			Selection.obj = C_2337_08F1(Party[Active], Selection.x, Selection.y);
-			return CMD_9D;
+			Selection.obj = COMBAT_GetTargetAt(Party[Active], Selection.x, Selection.y);
+			return CMD_HIT_MAP_OBJ;
 		}
 		Selection.obj = -1;
-		si = Tile_11x11[SCR2TIL(PointerY)][SCR2TIL(PointerX)];
-		D_B6DF = (si == TIL_0FF || si == TIL_1BC);
-	} else if(StatusDisplay == CMD_92) {
+		tile = Tile_11x11[SCR2TIL(PointerY)][SCR2TIL(PointerX)];
+		SelectionIsDark = (tile == TIL_HIDDEN || tile == TIL_DARKNESS);
+	} else if(StatusDisplay == CMD_STAT_EQUIP) {
 		Selection.x = -1;
 		Selection.y = -1;
-		if(C_155D_1267())
-			return CMD_9B;
-		if(C_155D_130E())
-			return CMD_9C;
+		if(STAT_PickInvenSlot())
+			return CMD_HIT_INVEN_SLOT;
+		if(STAT_PickEquipSlot())
+			return CMD_HIT_EQUIP_SLOT;
 	} else {
 		Selection.x = -1;
 		Selection.y = -1;
@@ -616,184 +695,217 @@ static /*C_0C9C_1107*/mkMouseSelection() {
 	return 0;
 }
 
-/*Status:Party*/
-static /*C_0C9C_121F*/do_CMD_91() {
-	int si;
+/*Status:Party
+mouse click in the party view: returns the command to execute (0 = none).
+Each member line is 16 pixels high, from y = 24; PartyListTop = first line shown.
+Clicking the portrait column (x > 192) opens his portrait, the
+small icon column (176 < x <= 192) his equipment; the arrows scroll the list.
+Selection.obj = party index*/
+static /*C_0C9C_121F*/MouseInPartyView() {
+	int cmd;
 
-	si = 0;
+	cmd = 0;
 	if(PointerY > 24) {
 		if(PointerX > 192) {/*to portrait view*/
-			si = CMD_90;
-			Selection.obj = SCR2TIL(PointerY - 28) + D_07CC;
+			cmd = CMD_STAT_PORTRAIT;
+			Selection.obj = SCR2TIL(PointerY - 28) + PartyListTop;
 			if(PartySize <= Selection.obj)
-				si = 0;
+				cmd = 0;
 		} else if(PointerX > 176) {/*to inventory view*/
-			si = CMD_92;
-			Selection.obj = SCR2TIL(PointerY - 24) + D_07CC;
+			cmd = CMD_STAT_EQUIP;
+			Selection.obj = SCR2TIL(PointerY - 24) + PartyListTop;
 			if(PartySize <= Selection.obj)
-				si = 0;
+				cmd = 0;
 		} else if(PointerY >= 24 && PointerY < 40) {/*party up*/
-			if(D_07CC != 0)
-				si = CMD_93;
+			if(PartyListTop != 0)
+				cmd = CMD_PARTY_SCROLL_UP;
 		} else if(PointerY >= 88) {/*party down*/
-			if(D_07CC < PartySize - 5)
-				si = CMD_94;
+			if(PartyListTop < PartySize - 5)
+				cmd = CMD_PARTY_SCROLL_DOWN;
 		}
 	}
 
-	return si;
+	return cmd;
 }
 
-/*Status:Portrait*/
-static /*C_0C9C_12B7*/do_CMD_90() {
-	int si;
+/*Status:Portrait
+mouse click in the portrait view: only the buttons row (y >= 88) reacts.
+returns the command (0 = none)*/
+static /*C_0C9C_12B7*/MouseInPortraitView() {
+	int cmd;
 
-	si = 0;
+	cmd = 0;
 	if(PointerY >= 88) {
 		if(PointerX >= 192 && PointerX < 208) {/*to party view*/
-			si = CMD_91;
+			cmd = CMD_STAT_PARTY;
 		} else if(PointerX >= 208 && PointerX < 224) {/*to inventory view*/
-			si = CMD_92;
+			cmd = CMD_STAT_EQUIP;
 			Selection.obj = -1;
 		} else if(PointerX >= 224 && PointerX < 240) {/*next char*/
-			si = CMD_99;
+			cmd = CMD_NEXT_MEMBER;
 		} else if(PointerX >= 176 && PointerX < 192) {/*previous char*/
-			si = CMD_9A;
+			cmd = CMD_PREV_MEMBER;
 		}
 	}
-	return si;
+	return cmd;
 }
 
-/*Status:Equipment*/
-static /*C_0C9C_131D*/do_CMD_92() {
-	int si, di;
-	int bp_02;
+/*Status:Equipment
+mouse click (or slot cursor validation) in the equipment/inventory view.
+returns the command (0 = none). Some actions are done here directly:
+the combat mode button (240,88; not for the Avatar) cycles the member's
+combat mode; clicking a locked chest prints "It's locked."; a trapped
+chest springs its trap before being opened*/
+static /*C_0C9C_131D*/MouseInEquipView() {
+	int cmd, objType;
+	int selKind;
 
-	si = 0;
+	cmd = 0;
 	if(IsInConversation)
-		return si;
+		return cmd;
 
+	/*combat mode button: cycle AI_COMMAND ... AI_ASSAULT*/
 	if(
-		D_04B3 != 0 &&
+		StatusMember != 0 &&
 		PointerX >= 240 && PointerX < 256 && 
 		PointerY >= 88 && PointerY < 104
 	) {
-		NPCComMode[Party[D_04B3]] ++;
-		if(NPCComMode[Party[D_04B3]] == AI_ASSAULT + 1)
-			NPCComMode[Party[D_04B3]] = AI_COMMAND;
+		NPCComMode[Party[StatusMember]] ++;
+		if(NPCComMode[Party[StatusMember]] == AI_ASSAULT + 1)
+			NPCComMode[Party[StatusMember]] = AI_COMMAND;
 		if(
 			InCombat && 
-			Active != D_04B3 && 
-			!IsCharmed(Party[D_04B3])
-		) NPCMode[Party[D_04B3]] = NPCComMode[Party[D_04B3]];
+			Active != StatusMember && 
+			!IsCharmed(Party[StatusMember])
+		) NPCMode[Party[StatusMember]] = NPCComMode[Party[StatusMember]];
 		STAT_refreshComMode();
 	} else if(PointerY >= 88) {
 		if(PointerX >= 192 && PointerX < 208) {/*to party view*/
-			si = CMD_91;
+			cmd = CMD_STAT_PARTY;
 		} else if(PointerX >= 208 && PointerX < 224) {/*to portrait view*/
-			si = CMD_90;
+			cmd = CMD_STAT_PORTRAIT;
 			Selection.obj = -1;
 		} else if(PointerX >= 224 && PointerX < 240) {/*next char*/
-			si = CMD_99;
+			cmd = CMD_NEXT_MEMBER;
 		} else if(PointerX >= 176 && PointerX < 192) {/*previous char*/
-			si = CMD_9A;
+			cmd = CMD_PREV_MEMBER;
 		}
 	} else if(PointerX >= 240 && PointerX < 248) {
 		if(PointerY >= 32 && PointerY < 40) {/*inventory up*/
-			if(D_07CE != 0)
-				si = CMD_95;
+			if(InvenScroll != 0)
+				cmd = CMD_INVEN_SCROLL_UP;
 		} else if(PointerY >= 72 && PointerY < 80) {/*inventory down*/
-			if(InvenSize - D_07CE > 12)
-				si = CMD_96;
+			if(InvenSize - InvenScroll > 12)
+				cmd = CMD_INVEN_SCROLL_DOWN;
 		}
 	} else if(
 		PointerX >= 272 && PointerX < 288 &&
 		PointerY >= 16 && PointerY < 32 &&
 		MouseMode == 0
-	) {/*inventory out/up?*/
-		si = CMD_9F;
-	} else if(MouseMode == 0 && D_04C2 != CMD_87) {
-		bp_02 = mkMouseSelection();
+	) {/*container slot (top right): back to the parent container/owner*/
+		cmd = CMD_CONTAINER_UP;
+	} else if(MouseMode == 0 && PendingCommand != CMD_MOVE) {
+		selKind = mkMouseSelection();
 		if(Selection.obj != -1) {
-			if(bp_02 == CMD_9B) {
-				di = GetType(Selection.obj);
-				if(!C_27A1_0082(di) || di == OBJ_039) {
-					si = CMD_A7;
-				} else if(di == OBJ_062 && (GetFrame(Selection.obj) & 2)) {
+			if(selKind == CMD_HIT_INVEN_SLOT) {
+				/*inventory object: ready it, or open it if it is a container*/
+				objType = GetType(Selection.obj);
+				if(!IsContainerType(objType) || objType == OBJ_SPELLBOOK) {
+					cmd = CMD_READY;
+				} else if(objType == OBJ_OPEN_CHEST && (GetFrame(Selection.obj) & 2)) {/*frame bit 1: locked*/
 					CON_printf(/*05A8*/"It's locked.\n");
 					CON_printf(/*05B6*/"\n%s:\n%>", Names[Active]);
 					CON_putch0(-1);
 				} else if(
-					di == OBJ_062 && GetFrame(Selection.obj) == 1 &&
-					FindInvType(Selection.obj, OBJ_151, SPELL_16) != -1
+					objType == OBJ_OPEN_CHEST && GetFrame(Selection.obj) == 1 &&
+					FindInvType(Selection.obj, OBJ_EFFECT, SPELL_TRAP) != -1
 				) {
-					C_27A1_28A3(Selection.obj);
+					SpringTrap(Selection.obj);
 					CON_printf(/*05B6*/"\n%s:\n%>", Names[Active]);
-					si = CMD_A0;
+					cmd = CMD_CONTAINER_OPEN;
 				} else {
-					si = CMD_A0;
+					cmd = CMD_CONTAINER_OPEN;
 				}
-			} else if(bp_02 == CMD_9C) {
-				si = CMD_A8;
+			} else if(selKind == CMD_HIT_EQUIP_SLOT) {
+				/*equipped object: unready it*/
+				cmd = CMD_UNREADY;
 			}
 		}
 	}
 
-	return si;
+	return cmd;
 }
 
-/*Status:Spellbook*/
-static /*C_0C9C_15EB*/do_CMD_A1() {
-	int si, di;
+/*Status:Spellbook
+mouse click in the spellbook view. returns the command (0 = none).
+The bottom row has 4 navigation buttons, 16 pixels each from x = 176
+(see SPELL_RefreshPage): previous circle, previous page, next page,
+next circle -> CMD_SPELLBOOK_PREV_CIRCLE + 0~3. SpellPageNav[] (SpellPageNav[3] is SpellNextCircle)
+is 0xff for a button not available.
+Clicking a spell line returns CMD_TARGET with Selection.obj = line # (0~7)*/
+static /*C_0C9C_15EB*/MouseInSpellbook() {
+	int cmd, button;
 
-	si = 0;
+	cmd = 0;
 	if(
 		PointerY >= 88 && PointerY < 104 &&
 		PointerX >= 176 && PointerX < 240
 	) {
-		/*navigation button?*/
-		if(D_EBAD[di = SCR2TIL(PointerX - 176)] != 0xff)
-			si = CMD_A2 + di;
+		/*navigation button*/
+		if(SpellPageNav[button = SCR2TIL(PointerX - 176)] != 0xff)
+			cmd = CMD_SPELLBOOK_PREV_CIRCLE + button;
 		Selection.x = Selection.y = -1;
 	} else if(PointerX > 184 && PointerY >= 16 && PointerY < 80) {
-		/*selected spell?*/
-		si = CMD_8E;
+		/*spell line (8 pixels high, from y = 16)*/
+		cmd = CMD_TARGET;
 		Selection.obj = (PointerY - 16) >> 3;
-		if(D_EBAA <= Selection.obj)
-			si = 0;
+		if(SpellbookPageCount <= Selection.obj)
+			cmd = 0;
 		Selection.x = Selection.y = -1;
 	}
-	return si;
+	return cmd;
 }
 
-static /*C_0C9C_166D*/setDefaultCommand(int bp06) {
-	int si;
+/*set the default command (one of CMD_ATTACK~CMD_COMBAT, or 0xff = none),
+executed by a right click; it is shown by a line under its icon
+(icons are 16 pixels wide from x = 8, line at y = 192)*/
+static /*C_0C9C_166D*/setDefaultCommand(int cmd) {
+	int x;
 
 	HideMouse
 	if(DefaultCommand != 0xff) {
-		GR_06(D_2A54);
-		si = TIL2SCR(DefaultCommand - CMD_81) + 8;
-		GR_12(si, 192, si + 15, 192);
+		GR_SET_COLOR(ColorPaper);
+		x = TIL2SCR(DefaultCommand - CMD_ATTACK) + 8;
+		GR_FILL_RECT(x, 192, x + 15, 192);
 	}
-	DefaultCommand = bp06;
+	DefaultCommand = cmd;
 	if(DefaultCommand != 0xff) {
-		GR_06(D_2A4E);
-		si = TIL2SCR(DefaultCommand - CMD_81) + 8;
-		GR_12(si, 192, si + 15, 192);
+		GR_SET_COLOR(ColorBlue);
+		x = TIL2SCR(DefaultCommand - CMD_ATTACK) + 8;
+		GR_FILL_RECT(x, 192, x + 15, 192);
 	}
 	ShowMouse
 }
 
+/*translate the current mouse button state (MouseButtons, MouseTrigger = just
+pressed) at PointerX/Y into a command code (0 = none), by zone (MouseZones):
+- map view: walk (CMD_DIRECTION + AdvanceDir; repeated while held unless the last
+  step was blocked, AdvanceBlocked), pass (center), target (CMD_TARGET when a command
+  waits for one, MouseMode != 0), right click = default command (CMD_DEFAULT_ACTION)
+- icon bar: left click = command icon, right click = set default command
+- status panel: depends on StatusDisplay
+- elsewhere: pass*/
 static /*C_0C9C_1714*/mkMouseCommand() {
-	int mouse_cmd, zone;
-	int mouse_dir;
+	int mouseCmd, zone;
+	int mouseDir;
 
-	mouse_cmd = 0;
+	mouseCmd = 0;
 	
+	/*(zone 3 is the whole screen: always found)*/
 	for(zone = 0; ; zone ++) {
 		if(
-			D_052B[zone][0] <= PointerX && D_052B[zone][2] >= PointerX &&
-			D_052B[zone][1] <= PointerY && D_052B[zone][3] >= PointerY
+			MouseZones[zone][0] <= PointerX && MouseZones[zone][2] >= PointerX &&
+			MouseZones[zone][1] <= PointerY && MouseZones[zone][3] >= PointerY
 		) break;
 	}
 	switch(zone) {
@@ -801,69 +913,72 @@ static /*C_0C9C_1714*/mkMouseCommand() {
 			if(MouseMode == 0) {
 				if(DefaultCommand != 0xff && RIGHT_CLICK) {
 					if(MouseTrigger) {
-						mouse_cmd = CMD_A9;
+						mouseCmd = CMD_DEFAULT_ACTION;
 						mkMouseSelection();
 					}
 				} else {
-					mouse_dir = mkMouseDir();
-					if(mouse_dir == -1) {
+					mouseDir = mkMouseDir();
+					if(mouseDir == -1) {
 						if(MouseTrigger)
-							mouse_cmd = CMD_8F;
+							mouseCmd = CMD_PASS;
 						else
-							mouse_cmd = 0;
-					} else if(MouseTrigger || D_17AE == 0 || mouse_dir != AdvanceDir) {
-						mouse_cmd = CMD_80;
-						AdvanceDir = mouse_dir;
+							mouseCmd = 0;
+					} else if(MouseTrigger || AdvanceBlocked == 0 || mouseDir != AdvanceDir) {
+						mouseCmd = CMD_DIRECTION;
+						AdvanceDir = mouseDir;
 					}
 				}
 			} else if(MouseTrigger) {
-				mouse_cmd = CMD_8E;
+				mouseCmd = CMD_TARGET;
 				mkMouseSelection();
 			}
 		break;
-		case 1:/*icons*/
+		case 1:/*icons: 10 icons of 16 pixels from x = 8, CMD_ATTACK~CMD_COMBAT*/
 			if(MouseTrigger) {
 				if(LEFT_CLICK)
-					mouse_cmd = CMD_81 + SCR2TIL(PointerX - 8);
+					mouseCmd = CMD_ATTACK + SCR2TIL(PointerX - 8);
 				else
-					setDefaultCommand(CMD_81 + SCR2TIL(PointerX - 8));
+					setDefaultCommand(CMD_ATTACK + SCR2TIL(PointerX - 8));
 			}
 		break;
 		case 2:/*party/portait/equip view*/
 			if(MouseTrigger) {
 				if(DefaultCommand != 0xff && MouseMode == 0 && RIGHT_CLICK) {
-					mouse_cmd = CMD_A9;
+					mouseCmd = CMD_DEFAULT_ACTION;
 					mkMouseSelection();
 				} else {
 					switch(StatusDisplay) {
-						case CMD_91: mouse_cmd = do_CMD_91(); break;
-						case CMD_90: mouse_cmd = do_CMD_90(); break;
-						case CMD_92:
-							mouse_cmd = do_CMD_92();
-							if(mouse_cmd == 0 && MouseMode == 1 && mkMouseSelection())
-								mouse_cmd = CMD_8E;
+						case CMD_STAT_PARTY: mouseCmd = MouseInPartyView(); break;
+						case CMD_STAT_PORTRAIT: mouseCmd = MouseInPortraitView(); break;
+						case CMD_STAT_EQUIP:
+							mouseCmd = MouseInEquipView();
+							if(mouseCmd == 0 && MouseMode == 1 && mkMouseSelection())
+								mouseCmd = CMD_TARGET;
 						break;
-						case CMD_A1: mouse_cmd = do_CMD_A1(); break;
+						case CMD_STAT_SPELLBOOK: mouseCmd = MouseInSpellbook(); break;
 					}
 				}
 			}
 		break;
 		case 3:/*all screen*/
 			if(MouseTrigger) {
-				mouse_cmd = CMD_8F;
+				mouseCmd = CMD_PASS;
 				Selection.x =
 				Selection.y = -1;
 			}
 		break;
 	}
 
-	return mouse_cmd;
+	return mouseCmd;
 }
 
-/*check if spell in spell list*/
-static /*C_0C9C_18D8*/__Incant2Spell() {
+/*find the spell whose incantation matches the typed syllables (IncantMask,
+compared as letter sets, so the order does not matter) among the spells
+in the spellbook (SpellList). prints NotInBookMsg if none.
+returns the spell number or -1*/
+static /*C_0C9C_18D8*/IncantToSpell() {
 	int i;
-	unsigned char *di;
+	unsigned char *syllable;
 	int spellNum;
 	long spellMask;
 
@@ -871,9 +986,9 @@ static /*C_0C9C_18D8*/__Incant2Spell() {
 	for(i = 0; i < 8 * 0x10; i ++) {
 		if(SpellList[i >> 4] & (1 << (i & 0xf))) {
 			spellMask = 0;
-			for(di = SpellCode[i]; *di; di ++)
-				spellMask |= 1L << (*di - 'A');
-			if(spellMask == D_04B6) {
+			for(syllable = SpellCode[i]; *syllable; syllable ++)
+				spellMask |= 1L << (*syllable - 'A');
+			if(spellMask == IncantMask) {
 				spellNum = i;
 				break;
 			}
@@ -882,173 +997,205 @@ static /*C_0C9C_18D8*/__Incant2Spell() {
 	if(spellNum < 0)
 		CON_printf(NotInBookMsg);
 	CON_printf(/*05A8+0Ch*/"\n");
-	D_04B6 = 0;
+	IncantMask = 0;
 	SelectMode = 1;
 
 	return spellNum;
 }
 
-static C_0C9C_1991(int spellNum) {
-	D_EBB3 = spellNum;
+/*make spellNum the selected spell (SelectedSpell); it is remembered in the
+quality of the spellbook(s) readied*/
+/*C_0C9C_1991*/static SPELL_SetSelected(int spellNum) {
+	SelectedSpell = spellNum;
 	if(Spellbook[0])
 		SetQual(Spellbook[0], spellNum);
 	if(Spellbook[1])
 		SetQual(Spellbook[1], spellNum);
 }
 
-/*spellbook navigation?*/
-static C_0C9C_19D6() {
-	int si, di;
+/*spellbook navigation with the direction keys:
+right = next page (CMD_SPELLBOOK_NEXT_PAGE), left = previous page (CMD_SPELLBOOK_PREV_PAGE),
+up/down = move the selection arrow (char 0x1a) on the page,
+line i of the page being at text row i + 1 of the status clip.
+returns the command or 0*/
+/*C_0C9C_19D6*/static SpellbookKeyNav() {
+	int line, cmd;
 
-	if(AdvanceDir == 2 && D_EBAD[2] != 0xff) {
-		di = CMD_A4;
-		D_0496 = 1;
-	} else if(AdvanceDir == 6 && D_EBAD[1] != 0xff) {
-		di = CMD_A3;
-		D_0496 = 1;
+	if(AdvanceDir == 2 && SpellPageNav[2] != 0xff) {
+		cmd = CMD_SPELLBOOK_NEXT_PAGE;
+		SpellbookSelectFirst = 1;
+	} else if(AdvanceDir == 6 && SpellPageNav[1] != 0xff) {
+		cmd = CMD_SPELLBOOK_PREV_PAGE;
+		SpellbookSelectFirst = 1;
 	} else {
 		if(AdvanceDir == 0) {
-			si = C_1944_06CA(D_EBB3);
-			if(si == -1)
-				si = 0;
-			if(si) {
-				CON_setClip(&D_B6B5[1]);
-				CON_gotoxy(0, si + 1);
+			line = SPELL_FindPageLine(SelectedSpell);
+			if(line == -1)
+				line = 0;
+			if(line) {
+				CON_setClip(&TextWindows[1]);
+				CON_gotoxy(0, line + 1);
 				CON_putch0(' ');
-				CON_gotoxy(0, si);
+				CON_gotoxy(0, line);
 				CON_putch0(0x1a);
-				CON_setClip(&D_B6B5[3]);
-				C_0C9C_1991(D_EBB6[si-1]);
+				CON_setClip(&TextWindows[3]);
+				SPELL_SetSelected(SpellbookPage[line-1]);
 			}
 		} else if(AdvanceDir == 4) {
-			si = C_1944_06CA(D_EBB3);
-			if(si == -1)
-				si = 0;
-			if(D_EBAA - 1 > si && si < 7) {
-				CON_setClip(&D_B6B5[1]);
-				CON_gotoxy(0, si + 1);
+			line = SPELL_FindPageLine(SelectedSpell);
+			if(line == -1)
+				line = 0;
+			if(SpellbookPageCount - 1 > line && line < 7) {
+				CON_setClip(&TextWindows[1]);
+				CON_gotoxy(0, line + 1);
 				CON_putch0(' ');
-				CON_gotoxy(0, si + 2);
+				CON_gotoxy(0, line + 2);
 				CON_putch0(0x1a);
-				CON_setClip(&D_B6B5[3]);
-				C_0C9C_1991(D_EBB6[si+1]);
+				CON_setClip(&TextWindows[3]);
+				SPELL_SetSelected(SpellbookPage[line+1]);
 			}
 		}
-		di = 0;
+		cmd = 0;
 	}
-	return di;
+	return cmd;
 }
 
-/*draw equipment selector?*/
-C_0C9C_1AE5(int bp06) {
+/*keyboard "slot cursor" of the equipment/portrait views (SelectMode 2),
+at column SlotCursorCol / row SlotCursorRow:
+ mode 1: draw the cursor,
+ mode 0: erase it (redraw the slot's object or button),
+ mode 2: move PointerX/Y on the slot (to validate it like a mouse click).
+In every mode PointerX/Y are first set inside the slot, so that
+mkMouseSelection()/MouseInEquipView() can hit-test it.*/
+/*C_0C9C_1AE5*/DrawSlotCursor(int mode) {
 	int x, y;
-	int bp_06, bp_04, bp_02;
+	int selKind, objType, mouseHidden;
 
 	if(SelectMode != 2)
 		return;
-	if(StatusDisplay != CMD_92 && StatusDisplay != CMD_90)
+	if(StatusDisplay != CMD_STAT_EQUIP && StatusDisplay != CMD_STAT_PORTRAIT)
 		return;
-	if(D_04B3 == 0) {
-		D_056E[0] =
-		D_056E[4] = TIL_19B;
+	if(StatusMember == 0) {
+		SlotButtonTiles[0] =
+		SlotButtonTiles[4] = TIL_SLOT_EMPTY;
 	} else {
-		D_056E[0] = TIL_183;
-		D_056E[4] = TIL_187;
+		SlotButtonTiles[0] = TIL_BUTTON_NEXT_LEFT;
+		SlotButtonTiles[4] = TIL_BUTTON_COMBAT_MODE;
 	}
-	if(PartySize - 1 == D_04B3)
-		D_056E[3] = TIL_19B;
+	if(PartySize - 1 == StatusMember)
+		SlotButtonTiles[3] = TIL_SLOT_EMPTY;
 	else
-		D_056E[3] = TIL_184;
-	if(StatusDisplay == CMD_90)
-		D_056E[2] = TIL_182;
+		SlotButtonTiles[3] = TIL_BUTTON_NEXT_RIGHT;
+	if(StatusDisplay == CMD_STAT_PORTRAIT)
+		SlotButtonTiles[2] = TIL_BUTTON_BAG;
 	else
-		D_056E[2] = TIL_181;
-	if(StatusDisplay == CMD_90) {
-		D_049A = 3;
-		if(D_0499 > 3)
-			D_0499 = 3;
+		SlotButtonTiles[2] = TIL_BUTTON_PORTRAIT;
+	if(StatusDisplay == CMD_STAT_PORTRAIT) {
+		SlotCursorRow = 3;
+		if(SlotCursorCol > 3)
+			SlotCursorCol = 3;
 	}
-	if(D_049A < 0) {
+	if(SlotCursorRow < 0) {
+		/*container/owner slot*/
 		x = 272;
 		PointerX = 272;
 		y = 16;
 		PointerY = 16;
-	} else if(D_049A > 2) {
-		if(D_0499 > 4)
-			D_0499 = 4;
-		x = D_0499 * 16 + 176;
+	} else if(SlotCursorRow > 2) {
+		/*buttons row*/
+		if(SlotCursorCol > 4)
+			SlotCursorCol = 4;
+		x = SlotCursorCol * 16 + 176;
 		PointerX = x;
 		y = 88;
 		PointerY = y;
-	} else if(D_0499 < 3) {
-		PointerX = D_0499 * 24 + 176;
-		PointerY = D_049A * 20 + 24;
+	} else if(SlotCursorCol < 3) {
+		/*equipment slots*/
+		PointerX = SlotCursorCol * 24 + 176;
+		PointerY = SlotCursorRow * 20 + 24;
 	} else {
-		PointerX = D_0499 * 16 + 200;
-		PointerY = D_049A * 16 + 32;
+		/*inventory slots*/
+		PointerX = SlotCursorCol * 16 + 200;
+		PointerY = SlotCursorRow * 16 + 32;
 	}
-	if(D_049A >= 0 && D_049A < 3) {
-		x = D_054B[D_0499];
-		y = D_0559[D_049A][D_0499];
+	if(SlotCursorRow >= 0 && SlotCursorRow < 3) {
+		x = SlotScrX[SlotCursorCol];
+		y = SlotScrY[SlotCursorRow][SlotCursorCol];
 	}
-	bp_02 = CON_mouseOffAt(x, y, x + 15, y + 15);
-	if(bp06 == 1) {
-		GR_2D(TIL_16D, x, y);
-	} else if(bp06 == 0) {
-		bp_06 = mkMouseSelection();
-		if(D_049A > 2) {
-			GR_2D(D_056E[D_0499], x, y);
-		} else if((bp_06 == CMD_9B || bp_06 == CMD_9C) && Selection.obj >= 0) {
-			if(D_049A < 0) {
-				bp_04 = GetType(Selection.obj);
-				C_0C9C_0BCE(OBJ_MakeDirFrame(bp_04, 4) + BaseTile[bp_04], TIL_19B, x, y);
+	mouseHidden = CON_mouseOffAt(x, y, x + 15, y + 15);
+	if(mode == 1) {
+		GR_PUT_TILE_SCREEN(TIL_CURSOR_SELECT, x, y);
+	} else if(mode == 0) {
+		selKind = mkMouseSelection();
+		if(SlotCursorRow > 2) {
+			GR_PUT_TILE_SCREEN(SlotButtonTiles[SlotCursorCol], x, y);
+		} else if((selKind == CMD_HIT_INVEN_SLOT || selKind == CMD_HIT_EQUIP_SLOT) && Selection.obj >= 0) {
+			if(SlotCursorRow < 0) {
+				/*container slot: object (or character, facing south)*/
+				objType = GetType(Selection.obj);
+				DrawTileOnBg(OBJ_MakeDirFrame(objType, 4) + BaseTile[objType], TIL_SLOT_EMPTY, x, y);
 			} else {
-				C_0C9C_0D31(Selection.obj, x, y);
+				DrawInvObject(Selection.obj, x, y);
 			}
 		} else if(
-			D_049A == 1 && D_0499 == 2 &&
-			((!ShowNPCInven && Party_1Hand[D_04B3]) || (ShowNPCInven && NPC_1Hand))
+			SlotCursorRow == 1 && SlotCursorCol == 2 &&
+			((!ShowNPCInven && Party_2Handed[StatusMember]) || (ShowNPCInven && NPC_2Handed))
 		) {
-			GR_2D(TIL_185, x, y);
+			/*left hand slot taken by a two-handed weapon*/
+			GR_PUT_TILE_SCREEN(TIL_SLOT_TWO_HANDED, x, y);
 		} else {
-			GR_2D(TIL_19A, x, y);
+			/*empty slot (so the TIL_SLOT_FRAME name of this tile looks doubtful)*/
+			GR_PUT_TILE_SCREEN(TIL_SLOT_FRAME, x, y);
 		}
-	} else if(bp06 == 2) {
+	} else if(mode == 2) {
 		PointerX = x;
 		PointerY = y;
 	}
-	CON_mouseOn(bp_02);
+	CON_mouseOn(mouseHidden);
 }
 
-static C_0C9C_1D59() {
-	int ptr_buttons, ptr_x;
-	int ch, ptr_y, bp_06, bp_04, i;
+/*wait for the next input and translate it into a key or a command code.
+- mouse: mkMouseCommand(); while the button is held, the command produced
+  by the press (MouseHeldCmd) is repeated (e.g. walking), others are ignored.
+- keyboard: direction keys -> CMD_DIRECTION + AdvanceDir, <ALT+letter> sets the
+  default command; then according to SelectMode
+  (0 none, 1 aiming cursor AimX/AimY on the map, 2 slot cursor in the
+  equipment/portrait view, 3 typing an incantation for "Cast"):
+  the command letter again or <ENTER> validates, <SPACE>/<ESC> cancels,
+  <TAB> switches between map aiming and slot cursor, '1'~'9' selects a
+  party member; plus the status view hotkeys
+  ('*' '/' F10 '+' '-' F1~F8 '`').
+CookedInput == 0 returns the raw key (used for "more" prompts).
+returns a key code, a CMD_xx code, never 0*/
+/*C_0C9C_1D59*/static CON_ReadCommand() {
+	int buttons, mouseX;
+	int ch, mouseY, newX, newY, i;
 
-	if(D_04AF)
+	if(CookedInput)
 		CON_putch0(-1);
 	ch = 0;
-	D_B729 = D_04DF->_h;
+	LinesBeforeMore = CurClip->rows;
 	while(!ch) {
 		/* */
 		if(MouseOn) {
 			MOUSE_SERVE();
-			ptr_buttons = (Mouse.f_00?1:0) | (Mouse.f_01?2:0);
-			ptr_x = Mouse.f_02;
-			ptr_y = Mouse.f_04;
-			if(ptr_buttons & 3) {
+			buttons = (Mouse.buttonL?1:0) | (Mouse.buttonR?2:0);
+			mouseX = Mouse.posX;
+			mouseY = Mouse.posY;
+			if(buttons & 3) {
 				if(!MousePress) {
 					MousePress =
 					MouseTrigger = 1;
 				} else {
 					MouseTrigger = 0;
 				}
-				PointerX = ptr_x;
-				PointerY = ptr_y;
-				D_B72B = ptr_buttons;
+				PointerX = mouseX;
+				PointerY = mouseY;
+				MouseButtons = buttons;
 				ch = mkMouseCommand();
 				if(MouseTrigger)
-					D_B64F = ch;
-				else if(D_B64F != ch)
+					MouseHeldCmd = ch;
+				else if(MouseHeldCmd != ch)
 					ch = 0;
 			} else {
 				MousePress =
@@ -1063,92 +1210,102 @@ static C_0C9C_1D59() {
 			MouseMapX =
 			MouseMapY = -1;
 		}
-		if(D_04B1 && ch < 0x100)
+		if(InputToUpper && ch < 0x100)
 			ch = toupper(ch);
+		/*0x1xx = 0x100 + BIOS scan code (arrows/keypad, <ALT+key>)*/
 		switch(ch) {
-			case 0x148: ch = CMD_80; AdvanceDir = 0; break;/*up*/
-			case 0x150: ch = CMD_80; AdvanceDir = 4; break;/*down*/
-			case 0x14b: ch = CMD_80; AdvanceDir = 6; break;/*left*/
-			case 0x14d: ch = CMD_80; AdvanceDir = 2; break;/*right*/
-			case 0x147: ch = CMD_80; AdvanceDir = 7; break;/*up left*/
-			case 0x149: ch = CMD_80; AdvanceDir = 1; break;/*up right*/
-			case 0x14f: ch = CMD_80; AdvanceDir = 5; break;/*down left*/
-			case 0x151: ch = CMD_80; AdvanceDir = 3; break;/*down right*/
-			case 0x11e: setDefaultCommand(CMD_81); ch = 0; break;/*<ALT A>*/
-			case 0x12e: setDefaultCommand(CMD_82); ch = 0; break;/*<ALT C>*/
-			case 0x114: setDefaultCommand(CMD_83); ch = 0; break;/*<ALT T>*/
-			case 0x126: setDefaultCommand(CMD_84); ch = 0; break;/*<ALT L>*/
-			case 0x122: setDefaultCommand(CMD_85); ch = 0; break;/*<ALT G>*/
-			case 0x120: setDefaultCommand(CMD_86); ch = 0; break;/*<ALT D>*/
-			case 0x132: setDefaultCommand(CMD_87); ch = 0; break;/*<ALT M>*/
-			case 0x116: setDefaultCommand(CMD_88); ch = 0; break;/*<ALT U>*/
-			case 0x113: setDefaultCommand(CMD_89); ch = 0; break;/*<ALT R>*/
-			case 0x130: setDefaultCommand(CMD_8A); ch = 0; break;/*<ALT B>*/
+			case 0x148: ch = CMD_DIRECTION; AdvanceDir = 0; break;/*up*/
+			case 0x150: ch = CMD_DIRECTION; AdvanceDir = 4; break;/*down*/
+			case 0x14b: ch = CMD_DIRECTION; AdvanceDir = 6; break;/*left*/
+			case 0x14d: ch = CMD_DIRECTION; AdvanceDir = 2; break;/*right*/
+			case 0x147: ch = CMD_DIRECTION; AdvanceDir = 7; break;/*up left*/
+			case 0x149: ch = CMD_DIRECTION; AdvanceDir = 1; break;/*up right*/
+			case 0x14f: ch = CMD_DIRECTION; AdvanceDir = 5; break;/*down left*/
+			case 0x151: ch = CMD_DIRECTION; AdvanceDir = 3; break;/*down right*/
+			case 0x11e: setDefaultCommand(CMD_ATTACK); ch = 0; break;/*<ALT A>*/
+			case 0x12e: setDefaultCommand(CMD_CAST); ch = 0; break;/*<ALT C>*/
+			case 0x114: setDefaultCommand(CMD_TALK); ch = 0; break;/*<ALT T>*/
+			case 0x126: setDefaultCommand(CMD_LOOK); ch = 0; break;/*<ALT L>*/
+			case 0x122: setDefaultCommand(CMD_GET); ch = 0; break;/*<ALT G>*/
+			case 0x120: setDefaultCommand(CMD_DROP); ch = 0; break;/*<ALT D>*/
+			case 0x132: setDefaultCommand(CMD_MOVE); ch = 0; break;/*<ALT M>*/
+			case 0x116: setDefaultCommand(CMD_USE); ch = 0; break;/*<ALT U>*/
+			case 0x113: setDefaultCommand(CMD_REST); ch = 0; break;/*<ALT R>*/
+			case 0x130: setDefaultCommand(CMD_COMBAT); ch = 0; break;/*<ALT B>*/
 		}
-		if(MouseMode == 0 && !D_0497) {
-			C_0C9C_1AE5(0);
+		if(MouseMode == 0 && !FreeAimMode) {
+			DrawSlotCursor(0);
 			SelectMode = 0;
 		}
-		if(D_04AF == 0 || (D_049B && ch == '\r'))
+		/*raw key wanted: the loop ends since ch != 0 (unless no key)*/
+		if(CookedInput == 0 || (InGetString && ch == '\r'))
 			continue;
 		if(SelectMode != 0) {
+			/*pressing the pending command's letter again = <ENTER>*/
 			if(
-				(D_04C2 == CMD_81 && ch == 'A') ||
-				(D_04C2 == CMD_82 && ch == 'C' && SelectMode == 1) ||
-				(D_04C2 == CMD_83 && ch == 'T') ||
-				(D_04C2 == CMD_84 && ch == 'L') ||
-				(D_04C2 == CMD_85 && ch == 'G') ||
-				(D_04C2 == CMD_86 && ch == 'D') ||
-				(D_04C2 == CMD_87 && ch == 'M') ||
-				(D_04C2 == CMD_88 && ch == 'U')
+				(PendingCommand == CMD_ATTACK && ch == 'A') ||
+				(PendingCommand == CMD_CAST && ch == 'C' && SelectMode == 1) ||
+				(PendingCommand == CMD_TALK && ch == 'T') ||
+				(PendingCommand == CMD_LOOK && ch == 'L') ||
+				(PendingCommand == CMD_GET && ch == 'G') ||
+				(PendingCommand == CMD_DROP && ch == 'D') ||
+				(PendingCommand == CMD_MOVE && ch == 'M') ||
+				(PendingCommand == CMD_USE && ch == 'U')
 			) ch = '\r';
 
-			if(D_04C2 == CMD_82 && SelectMode == 3) {
-				/*magic incantation?*/
+			if(PendingCommand == CMD_CAST && SelectMode == 3) {
+				/*magic incantation: each letter prints its syllable (MagicWords,
+				"An", "Bet", ...); up to 4 syllables, their screen positions
+				are kept in IncantScrX/IncantScrY for <BACKSPACE>*/
 				if(ch >= 'A' && ch <= 'Z') {
-					if(D_04B5 < 4) {
-						D_B6DB[D_04B5] = ch;
-						D_B6A7[D_04B5] = D_04DF->_curx;
-						D_B6AB[D_04B5] = D_04DF->_cury;
-						CON_printf(D_0BF0[ch - 'A']);
+					if(IncantLen < 4) {
+						IncantLetters[IncantLen] = ch;
+						IncantScrX[IncantLen] = CurClip->curX;
+						IncantScrY[IncantLen] = CurClip->curY;
+						CON_printf(MagicWords[ch - 'A']);
 						CON_putch(' ');
 						CON_putch0(-1);
-						if(D_04DF->_curx >= D_04DF->_w)
+						if(CurClip->curX >= CurClip->cols)
 							CON_putch0(0);
-						if(D_04DF->_cury == D_B6AB[D_04B5] && D_04DF->_curx < D_B6A7[D_04B5]) {
-							for(i = 0; i <= D_04B5; i ++)
-								D_B6AB[i] --;
+						/*same row but cursor went left: the window has
+						scrolled, move the saved rows up*/
+						if(CurClip->curY == IncantScrY[IncantLen] && CurClip->curX < IncantScrX[IncantLen]) {
+							for(i = 0; i <= IncantLen; i ++)
+								IncantScrY[i] --;
 						}
-						D_04B5 ++;
+						IncantLen ++;
 					}
 					ch = 0;
-				} else if(ch == 0x10e/*backspace?*/ || ch == 0x7f) {
-					if(D_04B5) {
-						D_04B5 --;
-						i = D_B6DB[D_04B5] - 'A';
-						for(bp_06 = 0; D_0BF0[i][bp_06]; bp_06 ++);
-						if(D_04DF->_curx > bp_06)
-							CON_gotoxy(D_04DF->_curx - bp_06 - 1, D_04DF->_cury);
+				} else if(ch == 0x10e/*backspace (see KBD_GetKey)*/ || ch == 0x7f/*<CTRL+BACKSPACE>*/) {
+					/*erase the last syllable*/
+					if(IncantLen) {
+						IncantLen --;
+						i = IncantLetters[IncantLen] - 'A';
+						/*(newX used here as the syllable's length)*/
+						for(newX = 0; MagicWords[i][newX]; newX ++);
+						if(CurClip->curX > newX)
+							CON_gotoxy(CurClip->curX - newX - 1, CurClip->curY);
 						else
-							CON_gotoxy(D_B6A7[D_04B5], D_B6AB[D_04B5]);
-						C_0C9C_32DE(bp_06, ' ');
-						CON_gotoxy(D_B6A7[D_04B5], D_B6AB[D_04B5]);
+							CON_gotoxy(IncantScrX[IncantLen], IncantScrY[IncantLen]);
+						CON_PutRepeat(newX, ' ');
+						CON_gotoxy(IncantScrX[IncantLen], IncantScrY[IncantLen]);
 					}
 					ch = 0;
 				} else {
 					if(ch == ' ' || ch == 27) {
-						D_04B6 = 0;
-						D_04B5 = 0;
-						ch = CMD_8F;
+						IncantMask = 0;
+						IncantLen = 0;
+						ch = CMD_PASS;
 						Selection.x = Selection.y = -1;
 					} else if(ch == '\r') {
 						/*make spell mask*/
-						D_04B6 = 0;
-						for(i = 0; i < D_04B5; i ++)
-							D_04B6 |= 1L << (D_B6DB[i] - 'A');
-						if(D_04B6) {
-							i = __Incant2Spell();
+						IncantMask = 0;
+						for(i = 0; i < IncantLen; i ++)
+							IncantMask |= 1L << (IncantLetters[i] - 'A');
+						if(IncantMask) {
+							i = IncantToSpell();
 						} else {
+							/*nothing typed: the spell selected in the book*/
 							SelectMode = 1;
 							if(Spellbook[0])
 								i = GetQual(Spellbook[0]);
@@ -1156,147 +1313,157 @@ static C_0C9C_1D59() {
 								i = GetQual(Spellbook[1]);
 						}
 						if(i >= 0) {
-							D_EBB3 = i;
+							SelectedSpell = i;
 							if(Spellbook[0])
 								SetQual(Spellbook[0], i);
 							if(Spellbook[1])
 								SetQual(Spellbook[1], i);
 							SPELL_RefreshList(Spellbook[0], Spellbook[1]/*bug?*/);
 							SPELL_RefreshPage();
-							Selection.obj = C_1944_06CA(i);
+							Selection.obj = SPELL_FindPageLine(i);
 							Selection.x =
 							Selection.y = -1;
-							ch = CMD_8E;
+							ch = CMD_TARGET;
 						} else {
-							ch = CMD_8F;
+							ch = CMD_PASS;
 							Selection.x =
 							Selection.y = -1;
 						}
-					} else if(ch == CMD_80) {
-						ch = C_0C9C_19D6();
+					} else if(ch == CMD_DIRECTION) {
+						ch = SpellbookKeyNav();
 					} else {
 						ch = 0;
 					}
 				}
 			} else {
 				if(ch == 9) {
+					/*<TAB>: map aiming <-> slot cursor in the equipment view*/
 					if(SelectMode == 1) {
 						SelectMode = 2;
-						if(StatusDisplay  != CMD_92) {
+						if(StatusDisplay  != CMD_STAT_EQUIP) {
 							if(IN_VEHICLE)
-								D_04B3 = 0;
+								StatusMember = 0;
 							else
-								D_04B3 = Active;
-							StatusDisplay = CMD_92;
+								StatusMember = Active;
+							StatusDisplay = CMD_STAT_EQUIP;
 							StatusDirty = 1;
 							RefreshStatus();
 						}
-						C_0C9C_1AE5(1);
-					} else if(StatusDisplay != CMD_9E && !IsInConversation) {
-						C_0C9C_1AE5(0);
+						DrawSlotCursor(1);
+					} else if(StatusDisplay != CMD_STAT_TALK && !IsInConversation) {
+						DrawSlotCursor(0);
 						SelectMode = 1;
 					}
-					C_0A33_09CE(1);
+					DrawMapWindow(1);
 					ch = 0;
 				} else {
 					if(ch == ' ' || ch == 27) {
-						C_0C9C_1AE5(0);
+						DrawSlotCursor(0);
 						SelectMode = 0;
 						ch = 0;
 					} else if(ch == '\r') {
 						if(SelectMode == 1) {
-							ch = CMD_8E;
+							/*target = aimed map tile; free aiming
+							(no command) runs the default command*/
+							ch = CMD_TARGET;
 							if(MouseMode == 0) {
-								if(D_0497 && DefaultCommand != 0xff)
-									ch = CMD_A9;
-								D_0497 = 0;
+								if(FreeAimMode && DefaultCommand != 0xff)
+									ch = CMD_DEFAULT_ACTION;
+								FreeAimMode = 0;
 							}
 							SelectMode = 0;
 							PointerX = TIL2SCR(AimX);
 							PointerY = TIL2SCR(AimY);
 							mkMouseSelection();
 						} else if(SelectMode == 2) {
-							if(StatusDisplay == CMD_92 || StatusDisplay == CMD_90) {
-								C_0C9C_1AE5(2);
-								if(StatusDisplay == CMD_92)
-									ch = do_CMD_92();
+							if(StatusDisplay == CMD_STAT_EQUIP || StatusDisplay == CMD_STAT_PORTRAIT) {
+								DrawSlotCursor(2);
+								if(StatusDisplay == CMD_STAT_EQUIP)
+									ch = MouseInEquipView();
 								else
-									ch = do_CMD_90();
+									ch = MouseInPortraitView();
 								if(ch == 0 && MouseMode == 1 && mkMouseSelection())
-									ch = CMD_8E;
+									ch = CMD_TARGET;
 							}
 						}
-					} else if(ch == CMD_80) {
+					} else if(ch == CMD_DIRECTION) {
 						if(SelectMode == 1) {
+							/*move the aiming cursor inside the 11x11 view, within
+							SelectRange of the center; SelectRange -1 means
+							"adjacent tile": the direction selects at once*/
 							ch = 0;
-							bp_06 = AimX + DirIncrX[AdvanceDir];
-							bp_04 = AimY + DirIncrY[AdvanceDir];
+							newX = AimX + DirIncrX[AdvanceDir];
+							newY = AimY + DirIncrY[AdvanceDir];
 							if(
-								bp_06 >= 0 && bp_06 < 11 &&
-								bp_04 >= 0 && bp_04 < 11 &&
-								COMBAT_range(bp_06, bp_04, 5, 5) <= SelectRange
+								newX >= 0 && newX < 11 &&
+								newY >= 0 && newY < 11 &&
+								COMBAT_range(newX, newY, 5, 5) <= SelectRange
 							) {
-								AimX = bp_06;
-								AimY = bp_04;
-								C_0A33_09CE(1);
+								AimX = newX;
+								AimY = newY;
+								DrawMapWindow(1);
 							} else if(SelectRange == -1) {
-								ch = CMD_8E;
-								PointerX = TIL2SCR(bp_06);
-								PointerY = TIL2SCR(bp_04);
+								ch = CMD_TARGET;
+								PointerX = TIL2SCR(newX);
+								PointerY = TIL2SCR(newY);
 								mkMouseSelection();
 							}
-						} else if(SelectMode == 2 && StatusDisplay == CMD_92) {
+						} else if(SelectMode == 2 && StatusDisplay == CMD_STAT_EQUIP) {
+							/*move the slot cursor; past the edges it scrolls
+							the inventory, or goes to the container slot (up)
+							or to the buttons row (down)*/
 							ch = 0;
-							bp_06 = D_0499 + DirIncrX[AdvanceDir];
-							bp_04 = D_049A + DirIncrY[AdvanceDir];
+							newX = SlotCursorCol + DirIncrX[AdvanceDir];
+							newY = SlotCursorRow + DirIncrY[AdvanceDir];
 							if(
-								bp_06 >= 0 && bp_06 < 7 &&
-								bp_04 >= 0 && bp_04 < 3
+								newX >= 0 && newX < 7 &&
+								newY >= 0 && newY < 3
 							) {
-								C_0C9C_1AE5(0);
-								if(bp_06 == 1 && bp_04 == 1) {
-									bp_06 += DirIncrX[AdvanceDir];
-									bp_04 += DirIncrY[AdvanceDir];
+								DrawSlotCursor(0);
+								if(newX == 1 && newY == 1) {/*skip the paper doll's body*/
+									newX += DirIncrX[AdvanceDir];
+									newY += DirIncrY[AdvanceDir];
 								}
-								D_0499 = bp_06;
-								D_049A = bp_04;
-								C_0C9C_1AE5(1);
-							} else if((bp_06 > 2 && bp_06 < 7) || bp_04 > 2) {
-								if(bp_04 > 2 && InvenSize - D_07CE > 12 && AdvanceDir == 4) {
-									D_0499 = bp_06;
-									ch = CMD_96;
-								} else if(bp_04 < 0 && D_07CE) {
-									D_0499 = bp_06;
-									ch = CMD_95;
-								} else if(bp_04 < 0 && D_EBB5 == 0) {
-									C_0C9C_1AE5(0);
-									D_049A = 0xff;
-									C_0C9C_1AE5(1);
-								} else if(bp_04 > 2 && D_EBB5 == 0) {
-									C_0C9C_1AE5(0);
-									D_049A = 3;
-									D_0499 = bp_06;
-									if(D_0499 > 4)
-										D_0499 = 4;
-									else if(D_0499 < 0)
-										D_0499 = 0;
-									C_0C9C_1AE5(1);
+								SlotCursorCol = newX;
+								SlotCursorRow = newY;
+								DrawSlotCursor(1);
+							} else if((newX > 2 && newX < 7) || newY > 2) {
+								if(newY > 2 && InvenSize - InvenScroll > 12 && AdvanceDir == 4) {
+									SlotCursorCol = newX;
+									ch = CMD_INVEN_SCROLL_DOWN;
+								} else if(newY < 0 && InvenScroll) {
+									SlotCursorCol = newX;
+									ch = CMD_INVEN_SCROLL_UP;
+								} else if(newY < 0 && PickpocketActive == 0) {
+									DrawSlotCursor(0);
+									SlotCursorRow = 0xff;
+									DrawSlotCursor(1);
+								} else if(newY > 2 && PickpocketActive == 0) {
+									DrawSlotCursor(0);
+									SlotCursorRow = 3;
+									SlotCursorCol = newX;
+									if(SlotCursorCol > 4)
+										SlotCursorCol = 4;
+									else if(SlotCursorCol < 0)
+										SlotCursorCol = 0;
+									DrawSlotCursor(1);
 								}
 							}
-						} else if(SelectMode == 2 && StatusDisplay == CMD_90) {
+						} else if(SelectMode == 2 && StatusDisplay == CMD_STAT_PORTRAIT) {
 							ch = 0;
-							bp_06 = D_0499 + DirIncrX[AdvanceDir];
-							if(bp_06 < 0)
-								bp_06 = 0;
-							else if(bp_06 > 3)
-								bp_06 = 3;
-							C_0C9C_1AE5(0);
-							D_0499 = bp_06;
-							D_049A = 3;
-							C_0C9C_1AE5(1);
+							newX = SlotCursorCol + DirIncrX[AdvanceDir];
+							if(newX < 0)
+								newX = 0;
+							else if(newX > 3)
+								newX = 3;
+							DrawSlotCursor(0);
+							SlotCursorCol = newX;
+							SlotCursorRow = 3;
+							DrawSlotCursor(1);
 						}
 					} else if(ch >= '1' && ch - '1' < PartySize && SelectMode == 1) {
-						D_B6DF = 0;
+						/*'1'~: select a party member as target*/
+						SelectionIsDark = 0;
 						SelectMode = 0;
 						Selection.obj = Party[ch - '1'];
 						if(IN_VEHICLE) {
@@ -1306,74 +1473,76 @@ static C_0C9C_1D59() {
 							Selection.x = GetX(Selection.obj);
 							Selection.y = GetY(Selection.obj);
 						}
-						ch = CMD_8E;
+						ch = CMD_TARGET;
 					}
 				}
 			}
-		} else if(ch == 9 && StatusDisplay != CMD_9E && !IsInConversation) {
-			if(StatusDisplay == CMD_92) {
+		} else if(ch == 9 && StatusDisplay != CMD_STAT_TALK && !IsInConversation) {
+			/*<TAB> with no command pending: free aiming (FreeAimMode)*/
+			if(StatusDisplay == CMD_STAT_EQUIP) {
 				SelectMode = 2;
-				C_0C9C_1AE5(1);
-			} else if(StatusDisplay != CMD_A1) {
+				DrawSlotCursor(1);
+			} else if(StatusDisplay != CMD_STAT_SPELLBOOK) {
 				SelectMode = 1;
 			}
 			if(SelectMode != 0) {
 				AimX =
 				AimY = 5;
 				SelectRange = 7;
-				D_0497 = 1;
-				C_0A33_09CE(1);
+				FreeAimMode = 1;
+				DrawMapWindow(1);
 				ch = 0;
 			}
 		}
-		if(StatusDisplay == CMD_92 && !IsInConversation) {
+		if(StatusDisplay == CMD_STAT_EQUIP && !IsInConversation) {
 			/*character equipment view*/
 			if(ch == '*') {
-				ch = CMD_90;
+				ch = CMD_STAT_PORTRAIT;
 				Selection.obj = -1;
 			} else if(ch == '/' || ch == 0x144/*F10*/) {
-				ch = CMD_91;
+				ch = CMD_STAT_PARTY;
 			} else if(ch == '+') {
-				ch = CMD_99;
+				ch = CMD_NEXT_MEMBER;
 			} else if(ch == '-') {
-				ch = CMD_9A;
+				ch = CMD_PREV_MEMBER;
 			} else if(ch == '`' || ch == '~') {
+				/*"click" on the combat mode button*/
 				PointerX = 248;
 				PointerY = 96;
-				do_CMD_92();
+				MouseInEquipView();
 				ch = 0;
 			} else if(ch >= 0x13b/*F1*/ && PartySize + 0x13b > ch) {
 				Selection.obj = ch - 0x13b;
-				ch = CMD_92;
+				ch = CMD_STAT_EQUIP;
 			}
-		} else if(StatusDisplay == CMD_90 && !IsInConversation) {
+		} else if(StatusDisplay == CMD_STAT_PORTRAIT && !IsInConversation) {
 			/*character stat view*/
 			if(ch == '*') {
-				ch = CMD_92;
+				ch = CMD_STAT_EQUIP;
 				Selection.obj = -1;
 			} else if(ch == '/' || ch == 0x144/*F10*/) {
-				ch = CMD_91;
+				ch = CMD_STAT_PARTY;
 			} else if(ch == '+') {
-				ch = CMD_99;
+				ch = CMD_NEXT_MEMBER;
 			} else if(ch == '-') {
-				ch = CMD_9A;
+				ch = CMD_PREV_MEMBER;
 			} else if(ch >= 0x13b && PartySize + 0x13b > ch) {
 				Selection.obj = ch - 0x13b;
-				ch = CMD_90;
+				ch = CMD_STAT_PORTRAIT;
 			}
-		} else if(StatusDisplay == CMD_91 && !IsInConversation) {
-			if(ch == '+' && D_07CC < PartySize - 5) {
-				ch = CMD_94;
-			} else if(ch == '-' && D_07CC != 0) {
-				ch = CMD_93;
+		} else if(StatusDisplay == CMD_STAT_PARTY && !IsInConversation) {
+			if(ch == '+' && PartyListTop < PartySize - 5) {
+				ch = CMD_PARTY_SCROLL_DOWN;
+			} else if(ch == '-' && PartyListTop != 0) {
+				ch = CMD_PARTY_SCROLL_UP;
 			} else if(ch >= 0x13b/*F1*/ && PartySize + 0x13b > ch) {
 				Selection.obj = ch - 0x13b;
-				ch = CMD_92;
+				ch = CMD_STAT_EQUIP;
 			}
-		} else if(StatusDisplay == CMD_A1 && !IsInConversation) {
+		} else if(StatusDisplay == CMD_STAT_SPELLBOOK && !IsInConversation) {
 			/*look at the spellbook*/
 			if(ch == ' ' || ch == 27) {
-				ch = CMD_8F;
+				ch = CMD_PASS;
 				Selection.x = Selection.y = -1;
 			} else if(ch == '\r') {
 				SelectMode = 1;
@@ -1384,20 +1553,20 @@ static C_0C9C_1D59() {
 				if(i < 0) {
 					ch = 0;
 				} else {
-					D_EBB3 = i;
+					SelectedSpell = i;
 					if(Spellbook[0])
 						SetQual(Spellbook[0], i);
 					if(Spellbook[1])
 						SetQual(Spellbook[1], i);
 					SPELL_RefreshList(Spellbook[0], Spellbook[1]/*bug?*/);
 					SPELL_RefreshPage();
-					Selection.obj = C_1944_06CA(i);
+					Selection.obj = SPELL_FindPageLine(i);
 					Selection.x =
 					Selection.y = -1;
-					ch = CMD_8E;
+					ch = CMD_TARGET;
 				}
-			} else if(ch == CMD_80) {
-				ch = C_0C9C_19D6();
+			} else if(ch == CMD_DIRECTION) {
+				ch = SpellbookKeyNav();
 			}
 		}
 	}
@@ -1405,179 +1574,188 @@ static C_0C9C_1D59() {
 	return ch;
 }
 
-static C_0C9C_2A16() {
+/*redraw the spellbook page after a page change; if it was requested by
+the keyboard (SpellbookSelectFirst), select the page's first spell*/
+/*C_0C9C_2A16*/static SpellbookPageChanged() {
 	SPELL_RefreshPage();
-	if(D_0496) {
-		D_0496 = 0;
-		C_0C9C_1991(D_EBB6[0]);
-		CON_setClip(&D_B6B5[1]);
+	if(SpellbookSelectFirst) {
+		SpellbookSelectFirst = 0;
+		SPELL_SetSelected(SpellbookPage[0]);
+		CON_setClip(&TextWindows[1]);
 		CON_gotoxy(0, 1);
 		CON_putch0(0x1a);
-		CON_setClip(&D_B6B5[3]);
+		CON_setClip(&TextWindows[3]);
 	}
 }
 
-/*get char?
-wait for a char (or a mouse button)
-to be pressed*/
+/*get char:
+wait for a key or a command (CON_ReadCommand). The status panel commands
+(view changes, party/inventory scrolling, containers, ready/unready,
+spellbook pages) are executed here and the wait goes on; any other
+key/command is returned.
+CMD_DEFAULT_ACTION (default command on a right-clicked target) returns DefaultCommand
+and, except for cast/rest/save which ask for more input, makes the next
+call return CMD_TARGET at once since Selection is already filled*/
 /*C_0C9C_2A59*/CON_getch() {
-	int si, ch;
-	int endLoop, bp_04, bp_02;
+	int circle, ch;
+	int endLoop, spellIdx, oldFirst;
 
-	if(D_0578) {
-		D_0578 = 0;
-		return CMD_8E;
+	if(PendingSelect) {
+		PendingSelect = 0;
+		return CMD_TARGET;
 	}
 	do {
 		endLoop = 0;
-		ch = C_0C9C_1D59();
+		ch = CON_ReadCommand();
 		switch(ch) {
-			case CMD_A9:
+			case CMD_DEFAULT_ACTION:
 				ch = DefaultCommand;
-				if(ch != CMD_82 && ch != CMD_89 && ch != CMD_AA)
-					D_0578 = 1;
+				if(ch != CMD_CAST && ch != CMD_REST && ch != CMD_SAVE)
+					PendingSelect = 1;
 				endLoop = 1;
 			break;
-			case CMD_91:
+			case CMD_STAT_PARTY:
 				SelectMode = 0;
-				StatusDisplay = CMD_91;
-				D_04B3 = 0;
+				StatusDisplay = CMD_STAT_PARTY;
+				StatusMember = 0;
 				StatusDirty = 1;
 			break;
-			case CMD_90:
-				StatusDisplay = CMD_90;
+			case CMD_STAT_PORTRAIT:
+				StatusDisplay = CMD_STAT_PORTRAIT;
 				if(Selection.obj >= 0)
-					D_04B3 = Selection.obj;
+					StatusMember = Selection.obj;
 				StatusDirty = 1;
 			break;
-			case CMD_92:
-				StatusDisplay = CMD_92;
+			case CMD_STAT_EQUIP:
+				StatusDisplay = CMD_STAT_EQUIP;
 				if(Selection.obj >= 0)
-					D_04B3 = Selection.obj;
+					StatusMember = Selection.obj;
 				StatusDirty = 1;
 			break;
-			case CMD_9A:/*portrait/equipment select --*/
-				if(D_04B3 > 0) {
-					D_04B3 --;
+			case CMD_PREV_MEMBER:/*portrait/equipment select --*/
+				if(StatusMember > 0) {
+					StatusMember --;
 					StatusDirty = 1;
 					Selection.obj = -1;
 				}
 			break;
-			case CMD_99:/*portrait/equipment select ++*/
-				if(PartySize - 1 > D_04B3) {
-					D_04B3 ++;
+			case CMD_NEXT_MEMBER:/*portrait/equipment select ++*/
+				if(PartySize - 1 > StatusMember) {
+					StatusMember ++;
 					StatusDirty = 1;
 					Selection.obj = -1;
 				}
 			break;
-			case CMD_93:/*party select --*/
-				D_07CC --;
+			case CMD_PARTY_SCROLL_UP:/*party list scroll up*/
+				PartyListTop --;
 				StatusDirty = 1;
 			break;
-			case CMD_94:/*party select --*/
-				D_07CC ++;
+			case CMD_PARTY_SCROLL_DOWN:/*party list scroll down*/
+				PartyListTop ++;
 				StatusDirty = 1;
 			break;
-			case CMD_95:/*equipment scroll?*/
-				C_155D_123E(D_04B3);
-				C_0C9C_1AE5(1);
+			case CMD_INVEN_SCROLL_UP:/*inventory scroll up (4 slots = 1 row)*/
+				STAT_InvenScrollUp(StatusMember);
+				DrawSlotCursor(1);
 			break;
-			case CMD_96:/*equipment scroll?*/
-				C_155D_120A(D_04B3);
-				C_0C9C_1AE5(1);
+			case CMD_INVEN_SCROLL_DOWN:/*inventory scroll down*/
+				STAT_InvenScrollDown(StatusMember);
+				DrawSlotCursor(1);
 			break;
-			case CMD_9F:/*close container?*/
-				if(D_E709 < 0x100) {
-					StatusDisplay = CMD_91;
-					D_04B3 = 0;
+			case CMD_CONTAINER_UP:/*leave the container shown: back to its owner/parent container, or from a character to the party view*/
+				if(InvenOwner < 0x100) {
+					StatusDisplay = CMD_STAT_PARTY;
+					StatusMember = 0;
 					StatusDirty = 1;
 				} else {
-					D_E709 = GetAssoc(D_E709);
-					D_07CE = 0;
-					C_155D_1022(D_E709);
-					C_0C9C_1AE5(1);
+					InvenOwner = GetAssoc(InvenOwner);
+					InvenScroll = 0;
+					STAT_RefreshInventory(InvenOwner);
+					DrawSlotCursor(1);
 				}
 			break;
-			case CMD_A0:/*open container?*/
-				D_E709 = Selection.obj;
-				D_07CE = 0;
-				C_155D_1022(D_E709);
-				C_0C9C_1AE5(1);
+			case CMD_CONTAINER_OPEN:/*show the content of container Selection.obj*/
+				InvenOwner = Selection.obj;
+				InvenScroll = 0;
+				STAT_RefreshInventory(InvenOwner);
+				DrawSlotCursor(1);
 			break;
-			case CMD_A7:/*Ready ...*/
-				C_155D_144B();
-				C_0C9C_1AE5(1);
+			case CMD_READY:/*Ready ...*/
+				STAT_Ready();
+				DrawSlotCursor(1);
 			break;
-			case CMD_A8:/*Unready ...*/
-				C_155D_1738();
-				C_0C9C_1AE5(1);
+			case CMD_UNREADY:/*Unready ...*/
+				STAT_Unready();
+				DrawSlotCursor(1);
 			break;
-			case CMD_A2:/*spellbook related?*/
-				D_EBB1 = 0;
-				for(si = 0; si <= D_EBAD[0]; si ++) {
-					for(bp_04 = 0; bp_04 < 16; bp_04 ++) {
-						if(HAS_SPELL(si, bp_04)) {
-							if(D_EBAD[0] == si)
+			case CMD_SPELLBOOK_PREV_CIRCLE:/*previous circle: first page of circle SpellPageNav[0]*/
+				/*SpellbookFirst = index of the first spell displayed = number of known spells before that circle*/
+				SpellbookFirst = 0;
+				for(circle = 0; circle <= SpellPageNav[0]; circle ++) {
+					for(spellIdx = 0; spellIdx < 16; spellIdx ++) {
+						if(HAS_SPELL(circle, spellIdx)) {
+							if(SpellPageNav[0] == circle)
 								break;
-							D_EBB1 ++;
+							SpellbookFirst ++;
 						}
 					}
 				}
 				SPELL_RefreshPage();
 			break;
-			case CMD_A5:/*spellbook related?*/
-				D_EBB1 = 0;
-				for(si = 0; si <= D_EBB0; si ++) {
-					for(bp_04 = 0; bp_04 < 16; bp_04 ++) {
-						if(HAS_SPELL(si, bp_04)) {
-							if(D_EBB0 == si)
+			case CMD_SPELLBOOK_NEXT_CIRCLE:/*next circle: first page of circle SpellNextCircle (= SpellPageNav[3])*/
+				SpellbookFirst = 0;
+				for(circle = 0; circle <= SpellNextCircle; circle ++) {
+					for(spellIdx = 0; spellIdx < 16; spellIdx ++) {
+						if(HAS_SPELL(circle, spellIdx)) {
+							if(SpellNextCircle == circle)
 								break;
-							D_EBB1 ++;
+							SpellbookFirst ++;
 						}
 					}
 				}
 				SPELL_RefreshPage();
 			break;
-			case CMD_A3:/*spellbook related?*/
-				if(D_EBAD[1] == 2) {
-					D_EBB1 -= 8;
+			case CMD_SPELLBOOK_PREV_PAGE:/*previous page (8 spells per page); SpellPageNav[1] == 2: same circle*/
+				if(SpellPageNav[1] == 2) {
+					SpellbookFirst -= 8;
 				} else {
-					bp_02 = D_EBB1;
-					D_EBB1 = 0;
-					for(si = 0; si <= D_EBAD[0]; si ++) {
-						for(bp_04 = 0; bp_04 < 16; bp_04 ++) {
-							if(HAS_SPELL(si, bp_04)) {
-								if(D_EBAD[0] == si)
+					oldFirst = SpellbookFirst;
+					SpellbookFirst = 0;
+					for(circle = 0; circle <= SpellPageNav[0]; circle ++) {
+						for(spellIdx = 0; spellIdx < 16; spellIdx ++) {
+							if(HAS_SPELL(circle, spellIdx)) {
+								if(SpellPageNav[0] == circle)
 									break;
-								D_EBB1 ++;
+								SpellbookFirst ++;
 							}
 						}
 					}
-					if(bp_02 - D_EBB1 > 8)
-						D_EBB1 += 8;
+					/*previous circle has a 2nd page: go to it*/
+					if(oldFirst - SpellbookFirst > 8)
+						SpellbookFirst += 8;
 				}
-				C_0C9C_2A16();
+				SpellbookPageChanged();
 			break;
-			case CMD_A4:/*spellbook related?*/
-				if(D_EBAD[2] == 2) {
-					D_EBB1 += 8;
+			case CMD_SPELLBOOK_NEXT_PAGE:/*next page; SpellPageNav[2] == 2: same circle, else first page of the next circle*/
+				if(SpellPageNav[2] == 2) {
+					SpellbookFirst += 8;
 				} else {
-					D_EBB1 = 0;
-					for(si = 0; si <= D_EBB0; si ++) {
-						for(bp_04 = 0; bp_04 < 16; bp_04 ++) {
-							if(HAS_SPELL(si, bp_04)) {
-								if(D_EBB0 == si)
+					SpellbookFirst = 0;
+					for(circle = 0; circle <= SpellNextCircle; circle ++) {
+						for(spellIdx = 0; spellIdx < 16; spellIdx ++) {
+							if(HAS_SPELL(circle, spellIdx)) {
+								if(SpellNextCircle == circle)
 									break;
-								D_EBB1 ++;
+								SpellbookFirst ++;
 							}
 						}
 					}
 				}
-				C_0C9C_2A16();
+				SpellbookPageChanged();
 			break;
 			default:
 				endLoop = 1;
-			case CMD_A6: ;
+			case CMD_REFRESH_STATUS: ;/*(no producer found) only refreshes the status panel*/
 		}
 		if(!endLoop)
 			RefreshStatus();
@@ -1586,208 +1764,244 @@ to be pressed*/
 	return ch;
 }
 
-/*C_0C9C_2D3A*/CON_gets(char *bp08, int bp06) {
-	int si, di;
+/*read a line of at most maxLen printable chars into buf, echoing it.
+<ENTER> validates, <ESC> erases it and aborts (GetsAborted = 1, buf = "").
+returns the length*/
+/*C_0C9C_2D3A*/CON_gets(char *buf, int maxLen) {
+	int len, done;
 	int ch;
 
-	D_049B = 1;
-	D_04B1 = 0;
+	InGetString = 1;
+	InputToUpper = 0;
 	CON_putch0(-1);
-	si =
-	di = 0;
-	D_04AB = 0;
-	while(!di) {
+	len =
+	done = 0;
+	KbdKeepLastOnly = 0;
+	while(!done) {
 		while(!(ch = CON_prompt()));
 		switch(ch) {
 			case '\r':
-				bp08[si] = 0;
-				D_04AD = 0;
-				di ++;
+				buf[len] = 0;
+				GetsAborted = 0;
+				done ++;
 			break;
 			case 27:
-				bp08[0] = 0;
-				while(si --)
-					C_0C9C_0F52(8);
-				D_04AD = 1;
-				di ++;
+				buf[0] = 0;
+				while(len --)
+					CON_EchoChar(8);
+				GetsAborted = 1;
+				done ++;
 			break;
-			case 0x10e:
-				if(si) {
-					si --;
-					C_0C9C_0F52(8);
+			case 0x10e:/*backspace*/
+				if(len) {
+					len --;
+					CON_EchoChar(8);
 				}
 			break;
 			default:
-				if(si < bp06 && ch >= ' ' && ch <= '~') {
-					bp08[si] = ch;
-					si ++;
-					C_0C9C_0F52(ch);
+				if(len < maxLen && ch >= ' ' && ch <= '~') {
+					buf[len] = ch;
+					len ++;
+					CON_EchoChar(ch);
 				}
 		}
 	}
-	D_04AB = 1;
-	D_B729 = D_04DF->_h;
-	D_04B1 = 1;
-	D_049B = 0;
-	return si;
+	KbdKeepLastOnly = 1;
+	LinesBeforeMore = CurClip->rows;
+	InputToUpper = 1;
+	InGetString = 0;
+	return len;
 }
 
-/*C_0C9C_2E09*/CON_createClip(struct tClipInfo *si/*bp0e*/, int bp0c, int bp0a, int bp08, int bp06) {
-	D_04DF = si;
-	si->_x0 = bp0c;
-	si->_y0 = bp0a;
-	si->_w = bp08 - bp0c + 1;
-	si->_h = bp06 - bp0a + 1;
-	si->_curx = si->_cury = 0;
-	si->_bg = D_2A54;
-	si->_fg = D_2A56;
-	si->_attr = D_04E1;
+/*initialize text window clip on the text cells (x0,y0)-(x1,y1)
+(inclusive) with default colors/attributes, and make it current*/
+/*C_0C9C_2E09*/CON_createClip(struct tClipInfo *clip, int x0, int y0, int x1, int y1) {
+	CurClip = clip;
+	clip->originX = x0;
+	clip->originY = y0;
+	clip->cols = x1 - x0 + 1;
+	clip->rows = y1 - y0 + 1;
+	clip->curX = clip->curY = 0;
+	clip->bgColor = ColorPaper;
+	clip->fgColor = ColorText;
+	clip->attrFlags = DefaultClipAttr;
 }
 
-/*C_0C9C_2E54*/CON_setClip(struct tClipInfo *bp06) {
+/*make clip the current text window (pending text of the previous one
+is flushed first)*/
+/*C_0C9C_2E54*/CON_setClip(struct tClipInfo *clip) {
 	CON_putch0(-1);
-	D_04DF = bp06;
-	D_ECC4->_0b = D_04DF->_bg;
-	D_ECC4->_0a = D_04DF->_fg;
+	CurClip = clip;
+	GrInfo->textBg = CurClip->bgColor;
+	GrInfo->textFg = CurClip->fgColor;
 	CON_putch0(-1);
 }
 
-/*C_0C9C_2E8F*/CON_gotoxy(int bp08, int bp06)
+/*move the text cursor of the current clip to (x,y), clamped to it*/
+/*C_0C9C_2E8F*/CON_gotoxy(int x, int y)
 {
-	if(bp08 < 0)
-		bp08 = 0;
-	if(bp06 < 0)
-		bp06 = 0;
-	if(bp08 > D_04DF->_w)
-		bp08 = D_04DF->_w;
-	if(bp06 > D_04DF->_h)
-		bp06 = D_04DF->_h;
+	if(x < 0)
+		x = 0;
+	if(y < 0)
+		y = 0;
+	if(x > CurClip->cols)
+		x = CurClip->cols;
+	if(y > CurClip->rows)
+		y = CurClip->rows;
 	CON_putch0(-1);
-	D_04DF->_curx = bp08;
-	D_04DF->_cury = bp06;
+	CurClip->curX = x;
+	CurClip->curY = y;
 	CON_putch0(-1);
 }
 
-/*C_0C9C_2EFA*/CON_putch0(int bp06) {
-	int si, di;
-	int bp_06, bp_04, bp_02;
+/*low level character output to the current clip (no escapes).
+ch >= 0: the char is appended to the line buffer (LineBufChars/LineBufColors);
+  0 or '\n' ends the line. When the line is complete (newline, or buffer
+  full = window width) it is drawn: with word wrap (_attr & 1) the line is
+  cut after the last ' ' or '-' and the rest is carried to the next line,
+  with _attr & 2 it is centered. Then the cursor goes to the next line,
+  scrolling (_attr & 0x20) at the bottom. With _attr & 0x10 a "more"
+  prompt waits for a key when the window is full of new text (LinesBeforeMore).
+ch < 0 (-1): flush: draw the pending part of the line without ending it
+  (done before moving the cursor, changing the clip, or reading input)*/
+/*C_0C9C_2EFA*/CON_putch0(int ch) {
+	int i, key;
+	int breakPos, unusedMidX, row;
 
 	if(!TextOn)
 		return;
-	if(D_04A9 && (D_04DF->_attr & 0x20)) {
-		if(bp06 == '\n')
+	/*skip empty lines after an attack message (see SkipNewlines)*/
+	if(SkipNewlines && (CurClip->attrFlags & 0x20)) {
+		if(ch == '\n')
 			return;
-		if(bp06 >= 0)
-			D_04A9 = 0;
+		if(ch >= 0)
+			SkipNewlines = 0;
 	}
-	D_2FFE = 0;
-	if((D_04DF->_attr & 4) && D_0498)
-		bp06 = toupper(bp06);
-	D_0498 = 0;
-	if(bp06 == 0)
-		bp06 = '\n';
-	if((D_04DF->_attr & 8) && bp06 > ' ')
-		bp06 |= 0x80;
-	if(D_04DF->_w == D_057A || bp06 == '\n' || bp06 < 0) {
-		if(D_B729 && bp06 >= 0 && (D_04DF->_attr & 0x10))
-			D_B729 --;
-		if((D_04DF->_attr & 0x10) && D_B729 == 0 && bp06 >= 0) {
-			bp_04 = (D_04DF->_w >> 1) - 2;
-			bp_02 = (D_04DF->_h + D_04DF->_y0) - 1;
-			D_04AF = 0;
+	TextIdle = 0;
+	if((CurClip->attrFlags & 4) && CapitalizeNext)
+		ch = toupper(ch);
+	CapitalizeNext = 0;
+	if(ch == 0)
+		ch = '\n';
+	/*runic font: upper half of the character set*/
+	if((CurClip->attrFlags & 8) && ch > ' ')
+		ch |= 0x80;
+	if(CurClip->cols == LineBufLen || ch == '\n' || ch < 0) {
+		/*-- line complete (or flush): draw it --*/
+		if(LinesBeforeMore && ch >= 0 && (CurClip->attrFlags & 0x10))
+			LinesBeforeMore --;
+		if((CurClip->attrFlags & 0x10) && LinesBeforeMore == 0 && ch >= 0) {
+			/*"more": other cursor shape (PromptCh 1), raw keys*/
+			unusedMidX = (CurClip->cols >> 1) - 2;
+			row = (CurClip->rows + CurClip->originY) - 1;
+			CookedInput = 0;
 			PromptCh = 1;
 			do
-				di = CON_getch();
-			while(di != ' ' && di != '\r' && di != 27 && di != CMD_8F);
+				key = CON_getch();
+			while(key != ' ' && key != '\r' && key != 27 && key != CMD_PASS);
 			PromptCh = 5;
-			D_04AF = 1;
-			D_2FFE = 0;
-			for(si = 0; si < D_04DF->_w; si ++)
-				(*D_04CC)(' ', D_04DF->_x0 + si, bp_02);
-			D_B729 = D_04DF->_h - 1;
+			CookedInput = 1;
+			TextIdle = 0;
+			/*erase the bottom line (where the "more" cursor was)*/
+			for(i = 0; i < CurClip->cols; i ++)
+				(*CON_PutCharFn)(' ', CurClip->originX + i, row);
+			LinesBeforeMore = CurClip->rows - 1;
 		}
-		bp_06 = D_057A;
-		if((D_04DF->_attr & 1) && D_04DF->_w == D_057A && bp06 >= 0) {
-			D_B651[D_057A] = (bp06 == '\n')?' ':bp06;
-			D_B67A[D_057A] = D_04DF->_fg;
-			while(D_B651[bp_06] != ' ' && D_B651[bp_06 - 1] != '-' && D_057B < bp_06)
-				bp_06 --;
-			if(bp_06 == 0)
-				bp_06 = D_057A;
+		/*word wrap: find where to cut the full line (not before the part
+		already drawn; no break found: cut at the window width)*/
+		breakPos = LineBufLen;
+		if((CurClip->attrFlags & 1) && CurClip->cols == LineBufLen && ch >= 0) {
+			LineBufChars[LineBufLen] = (ch == '\n')?' ':ch;
+			LineBufColors[LineBufLen] = CurClip->fgColor;
+			while(LineBufChars[breakPos] != ' ' && LineBufChars[breakPos - 1] != '-' && LineBufDrawn < breakPos)
+				breakPos --;
+			if(breakPos == 0)
+				breakPos = LineBufLen;
 		}
-		bp_02 = D_04DF->_y0 + D_04DF->_cury;
-		if(D_04DF->_attr & 2) {
-			for(si = D_057B; si < ((D_04DF->_w - bp_06) >> 1) + D_057B; si++)
-				(*D_04CC)(' ', D_04DF->_x0 + si, bp_02);
+		row = CurClip->originY + CurClip->curY;
+		if(CurClip->attrFlags & 2) {
+			for(i = LineBufDrawn; i < ((CurClip->cols - breakPos) >> 1) + LineBufDrawn; i++)
+				(*CON_PutCharFn)(' ', CurClip->originX + i, row);
 		}
-		for(si = D_057B; si < bp_06; si ++) {
-			D_04DF->_fg = D_B67A[si];
-			(*D_04CC)(D_B651[si], D_04DF->_x0 + si, bp_02);
+		for(i = LineBufDrawn; i < breakPos; i ++) {
+			CurClip->fgColor = LineBufColors[i];
+			(*CON_PutCharFn)(LineBufChars[i], CurClip->originX + i, row);
 		}
-		D_04DF->_fg = D_2A56;
-		if(D_057B < bp_06)
-			D_04DF->_curx = bp_06;
-		if((D_04DF->_attr & 1) && D_04DF->_w == D_057A && bp06 >= 0) {
-			if(D_B651[bp_06] == ' ')
-				bp_06 ++;
-			for(si = bp_06; si <= D_057A; si ++) {
-				D_B651[si - bp_06] = D_B651[si];
-				D_B67A[si - bp_06] = D_B67A[si];
+		CurClip->fgColor = ColorText;
+		if(LineBufDrawn < breakPos)
+			CurClip->curX = breakPos;
+		if((CurClip->attrFlags & 1) && CurClip->cols == LineBufLen && ch >= 0) {
+			/*carry the cut word to the start of the buffer (dropping the space)*/
+			if(LineBufChars[breakPos] == ' ')
+				breakPos ++;
+			for(i = breakPos; i <= LineBufLen; i ++) {
+				LineBufChars[i - breakPos] = LineBufChars[i];
+				LineBufColors[i - breakPos] = LineBufColors[i];
 			}
-			D_057B = 0;
-			D_057A = si - bp_06;
-			if(bp06 == ' ')
-				D_057C = 0;
-		} else if(bp06 >= 0) {
-			D_057A = D_057B = 0;
-			if(bp06 >= 0 && bp06 != '\n') {
-				D_B67A[D_057A] = D_04DF->_fg;
-				D_B651[D_057A] = bp06;
-				D_057A ++;
+			LineBufDrawn = 0;
+			LineBufLen = i - breakPos;
+			if(ch == ' ')
+				LineAcceptSpace = 0;
+		} else if(ch >= 0) {
+			/*new empty line, then the char that did not fit (if any)*/
+			LineBufLen = LineBufDrawn = 0;
+			if(ch >= 0 && ch != '\n') {
+				LineBufColors[LineBufLen] = CurClip->fgColor;
+				LineBufChars[LineBufLen] = ch;
+				LineBufLen ++;
 			}
 		}
-		if(bp06 >= 0) {
-			D_04DF->_curx = 0;
-			if(D_04DF->_cury < D_04DF->_h - 1) {
-				D_04DF->_cury ++;
-			} else if(D_04DF->_attr & 0x20) {
-				D_2FFE = 1;
-				(*D_04D0)(D_04DF->_x0, D_04DF->_y0, D_04DF->_w, D_04DF->_h);
-				D_2FFE = 0;
+		if(ch >= 0) {
+			CurClip->curX = 0;
+			if(CurClip->curY < CurClip->rows - 1) {
+				CurClip->curY ++;
+			} else if(CurClip->attrFlags & 0x20) {
+				TextIdle = 1;
+				(*CON_ScrollUpFn)(CurClip->originX, CurClip->originY, CurClip->cols, CurClip->rows);
+				TextIdle = 0;
 			}
 		} else {
-			D_057B = D_057A = D_04DF->_curx;
-			D_04A3 = 0;
+			/*flush: the line stays open at the cursor*/
+			LineBufDrawn = LineBufLen = CurClip->curX;
+			InHiddenSection = 0;
 		}
-	} else if((D_04DF->_attr & 1) == 0 || bp06 != ' ' || D_057C) {
-		D_B67A[D_057A] = D_04DF->_fg;
-		D_B651[D_057A] = bp06;
-		D_057A ++;
+	} else if((CurClip->attrFlags & 1) == 0 || ch != ' ' || LineAcceptSpace) {
+		/*buffer the char (leading spaces of a wrapped line are dropped)*/
+		LineBufColors[LineBufLen] = CurClip->fgColor;
+		LineBufChars[LineBufLen] = ch;
+		LineBufLen ++;
 	}
-	if(bp06 != ' ')
-		D_057C = 1;
-	D_2FFE = 1;
+	if(ch != ' ')
+		LineAcceptSpace = 1;
+	TextIdle = 1;
 }
 
-C_0C9C_32DE(int bp08, int bp06) {
-	int si;
+/*output ch count times (no escapes)*/
+/*C_0C9C_32DE*/CON_PutRepeat(int count, int ch) {
+	int i;
 
-	for(si = 0; si < bp08; si ++)
-		CON_putch0(bp06);
+	for(i = 0; i < count; i ++)
+		CON_putch0(ch);
 }
 
-C_0C9C_32F8(unsigned char far *bp06) {
-	while(*bp06)
-		CON_putch0(*bp06++);
+/*output string str (no escapes)*/
+/*C_0C9C_32F8*/CON_PutsRaw(unsigned char far *str) {
+	while(*str)
+		CON_putch0(*str++);
 }
 
-/*C_0C9C_331A*/CON_atoi(unsigned number, char far *str, int maxLen, int base) {
-	int si;
-	char bp_0e[8];
-	int bp_06, isNegative, bp_02;
+/*misnamed: this is an itoa.
+convert number to a string in str, in base |base| (2~36); a negative
+base means signed (number taken as a signed int, '-' counts in maxLen).
+at most maxLen digits are kept (the most significant ones are lost).
+returns the length*/
+/*C_0C9C_331A*/CON_itoa(unsigned number, char far *str, int maxLen, int base) {
+	int len;
+	char digits[8];
+	int i, isNegative, digit;
 
 	isNegative = 0;
-	si = 0;
+	len = 0;
 	if(base < 0) {
 		base = -base;
 		if(number > 0x7fff) {
@@ -1796,181 +2010,205 @@ C_0C9C_32F8(unsigned char far *bp06) {
 			maxLen --;
 		}
 	}
+	/*digits, least significant first*/
 	if(base) {
-		while(number && si < maxLen) {
-			bp_02 = number % base;
-			bp_0e[si++] = (bp_02 < 10)?(bp_02 + '0'):(bp_02 - 10 + 'A');
+		while(number && len < maxLen) {
+			digit = number % base;
+			digits[len++] = (digit < 10)?(digit + '0'):(digit - 10 + 'A');
 			number /= base;
 		}
 	}
-	if(si == 0)
-		bp_0e[si++] = '0';
+	if(len == 0)
+		digits[len++] = '0';
 	if(isNegative)
-		bp_0e[si++] = '-';
-	for(bp_06 = 0; bp_06 < si; bp_06 ++)
-		str[bp_06] = bp_0e[si - bp_06 - 1];
-	str[bp_06] = 0;
-	return si;
+		digits[len++] = '-';
+	/*reverse*/
+	for(i = 0; i < len; i ++)
+		str[i] = digits[len - i - 1];
+	str[i] = 0;
+	return len;
 }
 
+/*character output with the in-text escapes (used by CON_puts/CON_printf,
+so by all game messages, books, signs and conversations):
+  #c   print VarInt[c] (c = '0'~'9' or 'A'~'Z')
+  $c   print VarStr[c]
+  /    following letters printed only if the last number was 1 (singular)
+  \    following letters printed only if the last number was not 1 (plural)
+       (both end at the next non letter)
+  ^c   print control char c & 0x1f (special glyphs)
+  @    following word is a keyword: highlighted (ColorRed) if help is on
+  %    cancels a pending '/' or '\' (no effect by itself)
+  *    flush and wait for a key
+  &    toggle a section hidden unless SpeakGargish (SpeakGarglish)
+  < >  begin/end runic font
+  `    capitalize the next char*/
 /*C_0C9C_33D3*/CON_putch(int ch) {
-	int si;
-	char bp_08[8];
+	int varIdx;
+	char numBuf[8];
 
 	if(!TextOn)
 		return;
-	if(ch != '&' && D_04A3 && !D_2CA8)
+	/*hidden '&' section*/
+	if(ch != '&' && InHiddenSection && !SpeakGargish)
 		return;
 	switch(ch) {
 		case '#': case '$': case '%':
 		case '/': case '@': case '\\':
-		case '^': D_057D = ch; return;
+		case '^': PendingEscape = ch; return;
 		case '*':
 			CON_putch0(-1);
 			PromptCh = 1;
 			CON_getch();
 			PromptCh = 5;
 		return;
-		case '&': D_04A3 = !D_04A3; return;
-		case '<': D_04DF->_attr |= 8; return;
-		case '>': D_04DF->_attr &= ~8; return;
-		case '`': D_0498 = 1; return;
+		case '&': InHiddenSection = !InHiddenSection; return;
+		case '<': CurClip->attrFlags |= 8; return;
+		case '>': CurClip->attrFlags &= ~8; return;
+		case '`': CapitalizeNext = 1; return;
 	}
-	switch(D_057D) {
+	switch(PendingEscape) {
 		case '#':
 			ch = toupper(ch);
 			if(ch >= '0' && ch <= '9')
-				si = ch - '0';
+				varIdx = ch - '0';
 			else if(ch >= 'A' && ch <= 'Z')
-				si = (ch - 'A') + 10;
+				varIdx = (ch - 'A') + 10;
 			else
-				si = 0;
-			D_049D = (VarInt[si] != 1);
-			CON_atoi(VarInt[si], bp_08, 6, -10);
-			C_0C9C_32F8(bp_08);
-			D_057D = 0;
+				varIdx = 0;
+			LastNumberPlural = (VarInt[varIdx] != 1);
+			CON_itoa(VarInt[varIdx], numBuf, 6, -10);
+			CON_PutsRaw(numBuf);
+			PendingEscape = 0;
 		break;
 		case '$':
 			ch = toupper(ch);
 			if(ch >= '0' && ch <= '9')
-				si = ch - '0';
+				varIdx = ch - '0';
 			else if(ch >= 'A' && ch <= 'Z')
-				si = (ch - 'A') + 10;
+				varIdx = (ch - 'A') + 10;
 			else
-				si = 0;
-			C_0C9C_32F8(VarStr[si]);
-			D_057D = 0;
+				varIdx = 0;
+			CON_PutsRaw(VarStr[varIdx]);
+			PendingEscape = 0;
 		break;
 		case '/':
-			if(!isalpha(ch) || !D_049D) {
+			if(!isalpha(ch) || !LastNumberPlural) {
 				CON_putch0(ch);
 				if(!isalpha(ch))
-					D_057D = 0;
+					PendingEscape = 0;
 			}
 		break;
 		case '\\':
-			if(!isalpha(ch) || D_049D) {
+			if(!isalpha(ch) || LastNumberPlural) {
 				CON_putch0(ch);
 				if(!isalpha(ch))
-					D_057D = 0;
+					PendingEscape = 0;
 			}
 		break;
 		case '^':
-			if(D_04DF->_attr & 8)
+			if(CurClip->attrFlags & 8)
 				CON_putch0((ch & 0x1f) | 0x80);
 			else
 				CON_putch0(ch & 0x1f);
-			D_057D = 0;
+			PendingEscape = 0;
 		break;
 		case '@':
+			/*keyword ends with punctuation/space*/
 			if(strchr(" ,.:;!?'-\"\n", ch)) {
-				D_057D = 0;
-				D_04DF->_fg = D_2A56;
-			} else if(D_04A1) {
-				D_04DF->_fg = D_2A4A;
+				PendingEscape = 0;
+				CurClip->fgColor = ColorText;
+			} else if(HelpOn) {
+				CurClip->fgColor = ColorRed;
 			}
+		/*no break: print it*/
 		default:
 			CON_putch0(ch);
 	}
 }
 
-/*C_0C9C_3621*/CON_puts(unsigned char far *bp06) {
-	while(*bp06)
-		CON_putch(*bp06++);
+/*output string str with escapes (CON_putch)*/
+/*C_0C9C_3621*/CON_puts(unsigned char far *str) {
+	while(*str)
+		CON_putch(*str++);
 }
 
+/*minimal printf: %[-][0][width] followed by d (signed), o, x, u, c, s;
+an unknown conversion prints its char raw ("%>" prints the '>' prompt);
+the numbers set LastNumberPlural (plural flag); literal chars go through
+CON_putch() so escapes apply, but the converted values (%s too) also do*/
 cdecl /*C_0C9C_3643*/CON_printf(unsigned char far *format, ...) {
-	void **si;
-	unsigned di;
-	char bp_16[8];
-	int bp_0e, bp_0c;
-	int bp_0a, bp_08, bp_06, bp_04;
-	char *bp_02;
+	void **argp;
+	unsigned num;
+	char numBuf[8];
+	int c, fmtCh;
+	int fieldWidth, len, padCh, leftAlign;
+	char *str;
 
 	if(!TextOn)
 		return;
-	si = ...;
+	argp = ...;/*Turbo C: address of the variable arguments*/
 	while(*format) {
-		bp_0e = *format++;
-		bp_0a = bp_08 = bp_04 = 0;
-		bp_06 = ' ';
-		bp_02 = bp_16;
-		switch(bp_0e) {
+		c = *format++;
+		fieldWidth = len = leftAlign = 0;
+		padCh = ' ';
+		str = numBuf;
+		switch(c) {
 		case '%':
-			bp_0c = *format++;
-			while(bp_0c == '0' || bp_0c == '-') {
-				switch(bp_0c) {
-					case '0': bp_06 = '0'; break;
-					case '-': bp_04 = 1; break;
+			fmtCh = *format++;
+			while(fmtCh == '0' || fmtCh == '-') {
+				switch(fmtCh) {
+					case '0': padCh = '0'; break;
+					case '-': leftAlign = 1; break;
 				}
-				bp_0c = *format++;
+				fmtCh = *format++;
 			}
-			while(bp_0c >= '0' && bp_0c <= '9') {
-				bp_0a *= 10;
-				bp_0a += bp_0c - '0';
-				bp_0c = *format++;
+			while(fmtCh >= '0' && fmtCh <= '9') {
+				fieldWidth *= 10;
+				fieldWidth += fmtCh - '0';
+				fmtCh = *format++;
 			}
-			switch(tolower(bp_0c)) {
+			switch(tolower(fmtCh)) {
 				case 'd':
-					di = *(int *)si++;
-					bp_08 = CON_atoi(di, bp_16, 6, -10);
-					D_049D = (di != 1);
+					num = *(int *)argp++;
+					len = CON_itoa(num, numBuf, 6, -10);
+					LastNumberPlural = (num != 1);
 				break;
 				case 'o':
-					di = *(int *)si++;
-					bp_08 = CON_atoi(di, bp_16, 6, 8);
-					D_049D = (di != 1);
+					num = *(int *)argp++;
+					len = CON_itoa(num, numBuf, 6, 8);
+					LastNumberPlural = (num != 1);
 				break;
 				case 'x':
-					di = *(int *)si++;
-					bp_08 = CON_atoi(di, bp_16, 4, 16);
-					D_049D = (di != 1);
+					num = *(int *)argp++;
+					len = CON_itoa(num, numBuf, 4, 16);
+					LastNumberPlural = (num != 1);
 				break;
 				case 'u':
-					di = *(int *)si++;
-					bp_08 = CON_atoi(di, bp_16, 5, 10);
-					D_049D = (di != 1);
+					num = *(int *)argp++;
+					len = CON_itoa(num, numBuf, 5, 10);
+					LastNumberPlural = (num != 1);
 				break;
 				case 'c':
-					bp_16[0] = *(char *)si++;
-					bp_16[1] = 0;
+					numBuf[0] = *(char *)argp++;
+					numBuf[1] = 0;
 				break;
 				case 's':
-					bp_02 = (char *)*si++;
-					bp_08 = strlen(bp_02);
+					str = (char *)*argp++;
+					len = strlen(str);
 				break;
 				default:
-					bp_16[0] = 0;
-					CON_putch0(bp_0c);
+					numBuf[0] = 0;
+					CON_putch0(fmtCh);
 			}
-			if(bp_04)
-				CON_puts(bp_02);
-			C_0C9C_32DE(bp_0a - bp_08, bp_06);
-			if(bp_04 == 0)
-				CON_puts(bp_02);
+			if(leftAlign)
+				CON_puts(str);
+			CON_PutRepeat(fieldWidth - len, padCh);
+			if(leftAlign == 0)
+				CON_puts(str);
 		break;
 		default:
-			CON_putch(bp_0e);
+			CON_putch(c);
 		}
 	}
 }
