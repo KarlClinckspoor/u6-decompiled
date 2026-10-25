@@ -576,6 +576,9 @@ rectangle <rects>; returns its index*/
 	return key;
 }
 
+/*the program: configuration (CONFIG.U6, then the command line), graphic
+and music drivers, screen surfaces, console, mouse, then the main menu
+until "journey onward" or quit*/
 /*C_00E1_0F23*/main(register int argc, char **argv) {
 	int i;
 	int fd;
