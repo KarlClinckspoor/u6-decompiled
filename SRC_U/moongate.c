@@ -70,14 +70,24 @@ extern TIM_calibrate();
 
 KeyPressed();
 
-/*a driver entry that returns something (gfxDrv.p.ofs selects it)*/
+/*a driver entry that returns something (gfxDrv.p.ofs selects it: 1Bh, which the EGA, CGA
+  and Tandy drivers have; the port has the MCGA driver only)*/
+#ifdef __TURBOC__
 #define DRVF(type) (*(type (far *)())gfxDrv.f)
+#else
+#define DRVF(type) (*(type (*)())UDRV_unsupported)
+#endif
 
 /*draws shape n of the introduction*/
 #define SHAPE(x, y, n) DRV(3)(&backBuffer, x, y, sceneShapes, n)
 
-/*the pixel of star i in MCGA video memory*/
+/*the pixel of star i in MCGA video memory (y * 320 is a 16-bit product: from line 103 on
+  it goes negative, the long's segment drops by one, and the star is 16 pixels to the left)*/
+#ifdef __TURBOC__
 #define STAR_PIXEL(i) *(char far *)((int32)(starY[i] * 320) + starX[i] + 0xa0000000L)
+#else
+#define STAR_PIXEL(i) *(char *)PORT_FAR32((int32)(int16)(starY[i] * 320) + starX[i] + 0xa0000000L)
+#endif
 
 /*shows the page that was drawn*/
 #define SHOW_PAGE() \

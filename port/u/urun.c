@@ -149,3 +149,12 @@ int u_putchar(int c)
 	}
 	return putchar(c);
 }
+
+/* a driver entry the MCGA driver does not have (uport.h) */
+int UDRV_unsupported(void)
+{
+	static int said;
+	if (!said++)
+		plat_log("U.EXE called a graphics driver entry MCGADRV.BIN does not have");
+	return 0;
+}

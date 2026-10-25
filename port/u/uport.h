@@ -13,6 +13,8 @@
 
 /* the graphics driver MCGADRV.BIN, in C: DRV(o)(...) is UDRV_o(...) (SRC_U/u.h) */
 #include "ugfx.h"
+/* an entry the port's driver does not have (the other adapters' 1Bh: moongate.c) */
+int UDRV_unsupported();
 
 /* _CS: the noise of the monitor and of the gypsy's pattern is random bytes of U.EXE's own
  * code (MK_FP(_CS, rand() & 0xe00)): the port loads U.EXE's image, and _CS is the

@@ -23,4 +23,9 @@ typedef int32_t int32;
 typedef uint32_t uint32;
 #endif
 
+/*a far pointer made from a long (segment in the high word), as Turbo C converts one*/
+#ifndef __TURBOC__
+#define PORT_FAR32(l) MK_FP((uint16)((uint32)(l) >> 16), (uint16)(uint32)(l))
+#endif
+
 #endif
