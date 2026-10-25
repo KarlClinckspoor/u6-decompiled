@@ -1,5 +1,6 @@
-# Builds the native port (port/) for Linux and Windows. Pushing a tag port-v* publishes
-# the builds as a GitHub release, with port/RELEASE_NOTES.md as its text.
+# Builds the native port (port/) for Linux and Windows. Pushing a tag port-v*, or running
+# the workflow by hand with a release tag, publishes the builds as a GitHub pre-release
+# (the tag is made on the commit built), with port/RELEASE_NOTES.md as its text.
 name: port builds
 
 on:
@@ -8,6 +9,11 @@ on:
     branches: [portable]
     paths: ['SRC/**', 'port/**', '.github/workflows/port-release.yml']
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Publish as this release tag (port-vX.Y.Z); empty: build only'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -54,7 +60,7 @@ jobs:
         with: {name: windows, path: u6port-windows-x64.zip}
 
   release:
-    if: startsWith(github.ref, 'refs/tags/port-v')
+    if: startsWith(github.ref, 'refs/tags/port-v') || inputs.release_tag != ''
     needs: [linux, windows]
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +69,8 @@ jobs:
         with: {path: dist, merge-multiple: true}
       - env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --prerelease \
-            --title "Ultima VI native port ${GITHUB_REF_NAME#port-v} (Windows, Linux)" \
+          gh release create "$TAG" dist/* --prerelease --target "$GITHUB_SHA" \
+            --title "Ultima VI native port ${TAG#port-v} (Windows, Linux)" \
             --notes-file port/RELEASE_NOTES.md
