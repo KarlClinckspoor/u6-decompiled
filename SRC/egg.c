@@ -25,15 +25,15 @@
 #undef abs
 #include <math.h>
 
-/*28A0*/int ForceHatching = 0;
+/*28A0*/int16 ForceHatching = 0;
 /*next segment index of the silver serpent being built (stored in the
   quality of every segment)*/
 /*28A2*/static unsigned char SerpentSegIndex = 0;
 
 /*uncalled?*/
 /*same as COMBAT_range(), but returns 8 when too far*/
-/*__2E2D_0003*/EGG_CombatRange(int x0, int y0, int x1, int y1) {
-	int delta_x, delta_y;
+/*__2E2D_0003*/EGG_CombatRange(int16 x0, int16 y0, int16 x1, int16 y1) {
+	int16 delta_x, delta_y;
 
 	delta_x = abs(x1 - x0);
 	delta_y = abs(y1 - y0);
@@ -44,8 +44,8 @@
 
 /*monster class (index in the monsdata.c tables) of an object type;
   -1 if the type is not a creature*/
-/*C_2E2D_004B*/GetMonsterClass(int objType) {
-	int i, cls;
+/*C_2E2D_004B*/GetMonsterClass(int16 objType) {
+	int16 i, cls;
 
 	cls = -1;
 	for(i = 0; MonsterTypes[i]; i ++) {
@@ -58,15 +58,15 @@
 }
 
 /*random value in [val - val/2, val + val/2] (triangular distribution)*/
-static /*C_2E2D_0088*/mkRandom(int val) {
-	int half = val >> 1;
+static /*C_2E2D_0088*/mkRandom(int16 val) {
+	int16 half = val >> 1;
 	if(half)
 		val = OSI_rand(0, half) + (val - half) + OSI_rand(0, half);
 	return val;
 }
 
 /*food found in monster loot*/
-/*28A3*/static unsigned LootFoodTypes[] = {OBJ_PORTION_OF_MEAT,OBJ_HAM,OBJ_LOAF_OF_BREAD};
+/*28A3*/static uint16 LootFoodTypes[] = {OBJ_PORTION_OF_MEAT,OBJ_HAM,OBJ_LOAF_OF_BREAD};
 
 /*generate monster posessions: the class list (MonsterInvLists at offset
   MonsterInvIndex[class]) is 4 zero-terminated byte lists:
@@ -74,10 +74,10 @@ static /*C_2E2D_0088*/mkRandom(int val) {
   treasures; the n-th entry of the last 3 lists is given with a
   1 in 2^n chance. OBJ_SPELL in the treasure list means "random loot"
   (gold, food, potion)*/
-/*C_2E2D_00BE*/static EGG_GivePossessions(int objNum, int objClass) {
-	int oneIn, j;
-	int newObj, numWeapons;
-	int chestObj;
+/*C_2E2D_00BE*/static EGG_GivePossessions(int16 objNum, int16 objClass) {
+	int16 oneIn, j;
+	int16 newObj, numWeapons;
+	int16 chestObj;
 	unsigned char itemType;
 	unsigned char far *pList;
 
@@ -149,9 +149,9 @@ static /*C_2E2D_0088*/mkRandom(int val) {
   attributes from its class (mkRandom'ized), level from HP, alignment
   from the class, AI_ASSAULT, extra parts of multi-tile monsters and its
   possessions. returns the new actor number (< 0 if none was free)*/
-/*C_2E2D_0499*/EGG_generate(int objType, int x, int y, int z) {
-	int objNum, partObj;
-	int objClass, dir, isMutant;
+/*C_2E2D_0499*/EGG_generate(int16 objType, int16 x, int16 y, int16 z) {
+	int16 objNum, partObj;
+	int16 objClass, dir, isMutant;
 
 	isMutant = 0;
 	if(objType & 0x8000) {
@@ -243,11 +243,11 @@ static /*C_2E2D_0088*/mkRandom(int val) {
   amulet of submission. When hostile creatures appear off-screen,
   Shamino may say where he hears something. The egg is then marked
   hatched (and invisible) whatever the result*/
-/*C_2E2D_0760*/EGG_hatches(int egg_objNum) {
-	int monster;
-	int i, seg, quan, objTyp, typParam, numMonsters;
-	int partObj, prevPart, x, y, embryo_objNum, alignment;
-	int dir, hostileOffscreen, isFirstBorn, npcMod, forceGarglGraze, onScreenNotOk;
+/*C_2E2D_0760*/EGG_hatches(int16 egg_objNum) {
+	int16 monster;
+	int16 i, seg, quan, objTyp, typParam, numMonsters;
+	int16 partObj, prevPart, x, y, embryo_objNum, alignment;
+	int16 dir, hostileOffscreen, isFirstBorn, npcMod, forceGarglGraze, onScreenNotOk;
 	
 	prevPart = 0;
 	npcMod = AI_MOTIONLESS;
@@ -418,7 +418,7 @@ static /*C_2E2D_0088*/mkRandom(int val) {
   with ForceHatching*/
 /*C_2E2D_0DFE*/EGG_hatchArea() {
 
-	int objNum, x, y, objTyp;
+	int16 objNum, x, y, objTyp;
 
 	if(IsArmageddon)
 		return;

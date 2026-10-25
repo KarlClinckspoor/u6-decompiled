@@ -41,24 +41,24 @@
 };
 /*driver init parameter, indexed by adapter type:
   BIOS video mode (MCGA/EGA/Tandy) or video segment (CGA/Hercules)*/
-/*2A3E*/int GrDriverParam[] = {
+/*2A3E*/int16 GrDriverParam[] = {
 	0x13,
 	0xD,
 	0x9,
 	0xB800,
 	0xB000
 };
-/*2A48*/int ScreenFade = 1;
+/*2A48*/int16 ScreenFade = 1;
 /*colors (VGA/EGA palette indexes)*/
-/*2A4A*/int ColorRed = 12;/*light red: low HP, conversation keywords, peer:damaging terrain*/
-/*2A4C*/int ColorGreen = 10;/*light green: poisoned, peer:passable terrain*/
-/*2A4E*/int ColorBlue = 9;/*light blue: default command underline, peer:deep water*/
-/*2A50*/int ColorMagenta = 13;/*light magenta: set before map redraw (DrawMapWindow)*/
-int ColorYellow = 14;/*yellow: unused*/
-/*2A54*/int ColorPaper = 0x31;/*background ("paper") color*/
-/*2A56*/int ColorText = 0x48;/*text color*/
-/*2A58*/int ColorBlack = 0;/*black: clock hands*/
-/*2A5A*/int ColorGray = 7;/*light gray: peer:impassable terrain*/
+/*2A4A*/int16 ColorRed = 12;/*light red: low HP, conversation keywords, peer:damaging terrain*/
+/*2A4C*/int16 ColorGreen = 10;/*light green: poisoned, peer:passable terrain*/
+/*2A4E*/int16 ColorBlue = 9;/*light blue: default command underline, peer:deep water*/
+/*2A50*/int16 ColorMagenta = 13;/*light magenta: set before map redraw (DrawMapWindow)*/
+int16 ColorYellow = 14;/*yellow: unused*/
+/*2A54*/int16 ColorPaper = 0x31;/*background ("paper") color*/
+/*2A56*/int16 ColorText = 0x48;/*text color*/
+/*2A58*/int16 ColorBlack = 0;/*black: clock hands*/
+/*2A5A*/int16 ColorGray = 7;/*light gray: peer:impassable terrain*/
 /*====---- ----====*/
 
 /*init gr:
@@ -87,8 +87,8 @@ int ColorYellow = 14;/*yellow: unused*/
   highlight effect: the high bits of the tile number (above 0x7ff) are
   drawing attributes for the driver; isTarget selects the effect
   (6<<10 for the target of a spell/item, 4<<10 for the caster)*/
-/*C_2FC1_00B0*/MagicalHalo(int objNum, int isTarget) {
-	int delta_x,delta_y,tileFrame;
+/*C_2FC1_00B0*/MagicalHalo(int16 objNum, int16 isTarget) {
+	int16 delta_x,delta_y,tileFrame;
 
 	if(GetCoordUse(objNum) != LOCXYZ)
 		return;
@@ -109,7 +109,7 @@ int ColorYellow = 14;/*yellow: unused*/
   extend the dirty rectangle DirtyRect (left,right,top,bottom) with the
   16x16 square centered on x,y (map buffer coordinates), clamped to the
   map window (8..167)*/
-/*C_2FC1_017F*/static ExtendDirtyRect(int x, int y) {
+/*C_2FC1_017F*/static ExtendDirtyRect(int16 x, int16 y) {
 	if(x < 16)
 		DirtyRect[0] = 8;
 	else if(x - 8 < DirtyRect[0])
@@ -134,8 +134,8 @@ int ColorYellow = 14;/*yellow: unused*/
 /*redraw frame if dirty:
   redraw (in the offscreen buffer) the tiles of the map window border
   that the rectangle x0,y0-x1,y1 overlaps*/
-/*C_2FC1_0212*/RedrawMapBorder(int x0, int y0, int x1, int y1) {
-	int i;
+/*C_2FC1_0212*/RedrawMapBorder(int16 x0, int16 y0, int16 x1, int16 y1) {
+	int16 i;
 
 	if(x0 < 16 && y0 < 16)
 		GR_PUT_TILE(TIL_FRAME_0, 0, 0);
@@ -160,9 +160,9 @@ int ColorYellow = 14;/*yellow: unused*/
 /*redraw, over the sprites, what must stay in front of them in the
   rectangle x0,y0-x1,y1 of the offscreen buffer: foreground tiles
   (TILE_FOREGROUND) of the objects, hidden/dark tiles and the window border*/
-/*C_2FC1_032B*/static RedrawForeground(int x0, int y0, int x1, int y1) {
-	int tx, ty;
-	int entry, tile;
+/*C_2FC1_032B*/static RedrawForeground(int16 x0, int16 y0, int16 x1, int16 y1) {
+	int16 tx, ty;
+	int16 entry, tile;
 
 	for(tx = SCR2TIL(x0); tx <= SCR2TIL(x1); tx ++) {
 		for(ty = SCR2TIL(y0); ty <= SCR2TIL(y1); ty ++) {
@@ -202,7 +202,7 @@ int ColorYellow = 14;/*yellow: unused*/
 };
 /*missile tiles; the following tables are indexed by the position of the
   projectile tile in this list ("misType", 0 = unknown tile)*/
-/*2B5C*/unsigned MissileTiles[] = {
+/*2B5C*/uint16 MissileTiles[] = {
 	0,
 	TIL_SPEAR,TIL_THROWING_AXE,TIL_DAGGER,TIL_BOOMERANG,TIL_ARROW,
 	TIL_BOLT,TIL_MISSILE_0,TIL_MISSILE_1,TIL_MAGIC_BOW,TIL_MISSILE_2,
@@ -241,33 +241,33 @@ int ColorYellow = 14;/*yellow: unused*/
    - MissileHitList = list of the NPCs (< 0x100) crossed/hit, -1 terminated.
   returns 1 if every projectile reached its destination*/
 /*C_2FC1_042D*/Missiles(
-	int src_x, int src_y,
-	int num_dst, int *pX_dst, int *pY_dst,
-	int max_range, int projTile,
-	int attr/*1=reverse,2=has trail,4=different sound,8=no rotation*/
+	int16 src_x, int16 src_y,
+	int16 num_dst, int16 *pX_dst, int16 *pY_dst,
+	int16 max_range, int16 projTile,
+	int16 attr/*1=reverse,2=has trail,4=different sound,8=no rotation*/
 ) {
-	int i;
-	int dst;
-	int objNum,refreshRate,temp,misType,delta_max;
-	int tile_delta_x,tile_delta_y;
-	int ret,whichDir;
-	int spr_new_x,spr_new_y;
-	int mustDisplay,numTile;
-	int unused242;
+	int16 i;
+	int16 dst;
+	int16 objNum,refreshRate,temp,misType,delta_max;
+	int16 tile_delta_x,tile_delta_y;
+	int16 ret,whichDir;
+	int16 spr_new_x,spr_new_y;
+	int16 mustDisplay,numTile;
+	int16 unused242;
 	/*current position in world pixels (tile * 16 + 8)*/
-	int cur_x[MAX_MISSILES],cur_y[MAX_MISSILES];
+	int16 cur_x[MAX_MISSILES],cur_y[MAX_MISSILES];
 	/*Bresenham: major/minor deltas, increments [0]=straight [1]=diagonal step*/
-	int delta_x[MAX_MISSILES],delta_y[MAX_MISSILES];
-	int incr_x[MAX_MISSILES][2],incr_y[MAX_MISSILES][2];
-	int b_error[MAX_MISSILES],berr_incr[MAX_MISSILES][2];
+	int16 delta_x[MAX_MISSILES],delta_y[MAX_MISSILES];
+	int16 incr_x[MAX_MISSILES][2],incr_y[MAX_MISSILES][2];
+	int16 b_error[MAX_MISSILES],berr_incr[MAX_MISSILES][2];
 
 	/*last tile entered*/
-	int tile_x[MAX_MISSILES],tile_y[MAX_MISSILES];
-	int spr_rot[MAX_MISSILES];
+	int16 tile_x[MAX_MISSILES],tile_y[MAX_MISSILES];
+	int16 spr_rot[MAX_MISSILES];
 	/*1 bit per NPC (0x100 NPCs)*/
-	int collision_mask[0x100/8];
+	int16 collision_mask[0x100/8];
 	/*sprite position in the map buffer*/
-	int spr_x[MAX_MISSILES],spr_y[MAX_MISSILES];
+	int16 spr_x[MAX_MISSILES],spr_y[MAX_MISSILES];
 
 #if 0
 	CON_printf("Missiles %03x,%03x\n", src_x, src_y);
@@ -551,9 +551,9 @@ c_0db6:
 /*explosion centered on x,y: 16 trails of missileTile toward the pattern
   above (range 3); returns the -1 terminated list (MissileHitList) of the NPCs
   hit, including those on the center tile*/
-int far /*C_2FC1_10D2*/*Explosion(int x, int y, int missileTile) {
-	int count, objNum;
-	int x_dst[MAX_MISSILES], y_dst[MAX_MISSILES];
+int16 far /*C_2FC1_10D2*/*Explosion(int16 x, int16 y, int16 missileTile) {
+	int16 count, objNum;
+	int16 x_dst[MAX_MISSILES], y_dst[MAX_MISSILES];
 
 	for(count = 0; count < MAX_MISSILES; count ++) {
 		x_dst[count] = ExplosionDX[count] + x;
@@ -581,9 +581,9 @@ int far /*C_2FC1_10D2*/*Explosion(int x, int y, int missileTile) {
   5 trails of missileTile (range 7), one aimed at x,y and two pairs going
   1 and 2 tiles to each side (the two side directions come from SpreadDirTable,
   high/low nibble). returns the list of NPCs hit (MissileHitList)*/
-int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
-	int sideDirs;
-	int x_dst[5], y_dst[5];
+int16 far /*C_2FC1_11EB*/*MagicWind(int16 objNum, int16 x, int16 y, int16 missileTile) {
+	int16 sideDirs;
+	int16 x_dst[5], y_dst[5];
 
 	sideDirs = SpreadDirTable[y - GetY(objNum) + 5][x - GetX(objNum) + 5];
 	x_dst[0] = x;
@@ -609,9 +609,9 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
 	+---+---+---+
 	| 5 | 4 | 3 |
 	+---+---+---+*/
-/*C_2FC1_131E*/AnimWebs(int objNum, int x, int y) {
-	int i;
-	int dst_x[9], dst_y[9];
+/*C_2FC1_131E*/AnimWebs(int16 objNum, int16 x, int16 y) {
+	int16 i;
+	int16 dst_x[9], dst_y[9];
 
 	for(i = 0; i < 8; i ++) {
 		dst_x[i] = x + DirIncrX[i];
@@ -626,13 +626,13 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
   10 to 30 hailstones (up to 6 at a time) fall diagonally (from 50 pixels
   up-left) to random points around x,y; each NPC on an impact tile loses
   1 HP (with a hit tile flash). returns the total experience earned*/
-/*C_2FC1_13B0*/AnimHailStorm(int x, int y) {
-	int i;
-	int stonesLeft;
-	int stone_x[6], stone_y[6];/*current position (world pixels), <0: free slot*/
-	int impact_x[6], impact_y[6];/*impact point (world pixels)*/
-	int scr_x, scr_y;
-	int objNum, anyFalling, frameCnt, soundArg, totalExp;
+/*C_2FC1_13B0*/AnimHailStorm(int16 x, int16 y) {
+	int16 i;
+	int16 stonesLeft;
+	int16 stone_x[6], stone_y[6];/*current position (world pixels), <0: free slot*/
+	int16 impact_x[6], impact_y[6];/*impact point (world pixels)*/
+	int16 scr_x, scr_y;
+	int16 objNum, anyFalling, frameCnt, soundArg, totalExp;
 
 	anyFalling = 0;
 	frameCnt = 0;
@@ -743,9 +743,9 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
 
 /*shake the map window "duration" times: the 144x144 inner part of the
   offscreen map is copied to screen at a random offset of +/-ampl pixels*/
-/*C_2FC1_18BD*/ShakeScreen(int duration, int ampl) {
-	int i;
-	int ofs_x, ofs_y;
+/*C_2FC1_18BD*/ShakeScreen(int16 duration, int16 ampl) {
+	int16 i;
+	int16 ofs_x, ofs_y;
 
 	DrawMapWindow(0);
 	for(i = 0; i < duration; i ++) {
@@ -760,7 +760,7 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
 /*clear the 11x11 view: all tiles hidden, no object, and rebuild the
   free list of the object tile entries (CellObjNext[i] = i + 1)*/
 /*C_2FC1_193C*/static ClearMapView() {
-	int i, j;
+	int16 i, j;
 
 	for(i = 0; i < 11; i ++) {
 		for(j = 0; j < 11; j ++)
@@ -796,8 +796,8 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
   eclipse (1st day of every 3rd month, or eclipse spell SpellFx[15]);
   underground, a cave ceiling. Also redraws the wind indicator*/
 /*C_2FC1_19C5*/DrawSkyBar() {
-	int i, sunTile;
-	int isEclipse;
+	int16 i, sunTile;
+	int16 isEclipse;
 
 	if(StatusDisplay != CMD_STAT_PARTY && StatusDisplay != CMD_STAT_TALK)
 		return;
@@ -861,10 +861,10 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
   (generic wisp/guard/gargoyle use 0xc0..0xc2), portrait.z the avatar
   portraits (objNum 1, number AvatarPortrait). Each file starts with a table of
   4-byte offsets to LZW-compressed pictures*/
-/*C_2FC1_1C19*/DrawPortrait(int objNum, int x, int y) {
-	int fd;
-	int objType;
-	long offset;
+/*C_2FC1_1C19*/DrawPortrait(int16 objNum, int16 x, int16 y) {
+	int16 fd;
+	int16 objType;
+	int32 offset;
 
 	objType = GetType(objNum);
 	/*temporary NPCs: generic portraits*/
@@ -902,7 +902,7 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
 	fd = OSI_open(PortraitFileName);
 	if(fd < 0)
 		return;
-	OSI_read(fd, (long)(objNum << 2), 4, &offset);
+	OSI_read(fd, (int32)(objNum << 2), 4, &offset);
 	decompress(fd, offset, ((struct tPixmap far *)ScratchBuf)->data, FP_SEG(ScratchBuf) + 0x100);
 	OSI_close(fd);
 	((struct tPixmap far *)ScratchBuf)->width = 56;
@@ -919,10 +919,10 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
   with a table of 4-byte offsets; at each offset a 4-byte unpacked size,
   followed by the LZW data (size 0 or >= 0x2800: stored uncompressed).
   returns objNum, or 0 if the NPC has no conversation*/
-/*C_2FC1_1D40*/LoadConversation(int objNum/*di,bp0a*/, void far *dest) {
-	int fd;
-	long offset, size;
-	int objType, convIndex;
+/*C_2FC1_1D40*/LoadConversation(int16 objNum/*di,bp0a*/, void far *dest) {
+	int16 fd;
+	int32 offset, size;
+	int16 objType, convIndex;
 
 	objType = GetType(objNum);
 	if(objNum >= 0xe0) {
@@ -954,7 +954,7 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
 	fd = OSI_open(ConverseFileName);
 	if(fd >= 0) {
 		/*read the NPC's data offset*/
-		OSI_read(fd, (long)(convIndex << 2), 4, &offset);
+		OSI_read(fd, (int32)(convIndex << 2), 4, &offset);
 		if(offset) {
 			/*loading the real conversation: stop the music*/
 			if(dest == TalkBuf)
@@ -974,7 +974,7 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
 }
 
 /*display equipment bg chara: the 2x2 tiles paper doll at screen x,y*/
-/*C_2FC1_1EAF*/DrawPaperDoll(int x/*si,bp08*/, int y/*di,bp06*/) {
+/*C_2FC1_1EAF*/DrawPaperDoll(int16 x/*si,bp08*/, int16 y/*di,bp06*/) {
 	GR_PUT_TILE_SCREEN(TIL_EQUIP_UP_LEFT, x,      y);
 	GR_PUT_TILE_SCREEN(TIL_EQUIP_UP_RIGHT, x + 16, y);
 	GR_PUT_TILE_SCREEN(TIL_EQUIP_DOWN_LEFT, x,      y + 16);
@@ -985,9 +985,9 @@ int far /*C_2FC1_11EB*/*MagicWind(int objNum, int x, int y, int missileTile) {
   tileNum < 0 = an NPC (white), TIL_HIDDEN = black, damaging = red,
   impassable = blue (wet) or gray, other terrain (< 0x100) = green;
   passable object tiles are not drawn*/
-static /*C_2FC1_1F14*/peer_tile(int tileNum, int x, int y) {
-	int color;
-	int i, j, pattern;
+static /*C_2FC1_1F14*/peer_tile(int16 tileNum, int16 x, int16 y) {
+	int16 color;
+	int16 i, j, pattern;
 
 	pattern = 1;
 	if(tileNum < 0) {
@@ -1025,9 +1025,9 @@ static /*C_2FC1_1F14*/peer_tile(int tileNum, int x, int y) {
   VIS_FloodFill) are shown. The party is a white square. Waits for a key
   (without animations), then recomputes the view*/
 /*C_2FC1_1FD6*/PeerMap() {
-	int row, col;
-	int rowStart, rowEnd, colStart, colEnd;
-	int tile, objNum, mouseState, isUnderground;
+	int16 row, col;
+	int16 rowStart, rowEnd, colStart, colEnd;
+	int16 tile, objNum, mouseState, isUnderground;
 
 	isUnderground = (MapZ > 0 && MapZ < 5);
 	for(row = 0; row < AREA_H; row ++) {

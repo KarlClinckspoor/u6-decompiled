@@ -26,9 +26,9 @@
 */
 #include "u6.h"
 
-/*05E4*/int ViewX = 12;
-/*05E6*/int ViewY = 12;
-/*05E8*/int XRayView = 0;/*XRay vision/see through walls: show all tiles, fully lit (X-ray spell, wizard eye...)*/
+/*05E4*/int16 ViewX = 12;
+/*05E6*/int16 ViewY = 12;
+/*05E8*/int16 XRayView = 0;/*XRay vision/see through walls: show all tiles, fully lit (X-ray spell, wizard eye...)*/
 
 /*rounded euclidean distance: DistanceTable[|dx|][|dy|] ~ sqrt(dx*dx + dy*dy)*/
 /*05EA*/static char DistanceTable[][8] = {
@@ -79,8 +79,8 @@
   coordinates)? opaque objects block, windows are only see-through
   from an orthogonally adjacent square of the party, opaque ground
   tiles block unless a background object is on them*/
-static /*C_1100_000B*/VIS_IsSeeThrough(int x, int y) {
-	int flag, tile;
+static /*C_1100_000B*/VIS_IsSeeThrough(int16 x, int16 y) {
+	int16 flag, tile;
 
 	tile = AreaTiles[0][AreaOffset];
 	flag = AreaFlags[0][AreaOffset];
@@ -105,7 +105,7 @@ static /*C_1100_000B*/VIS_IsSeeThrough(int x, int y) {
 
 /*queue area square (x, y) for the flood fill and mark it 0x40
   (the queue silently drops squares when full)*/
-static /*C_1100_00CF*/VIS_Enqueue(int x, int y) {
+static /*C_1100_00CF*/VIS_Enqueue(int16 x, int16 y) {
 	if(x >= 0 && x < AREA_W && y >= 0 && y < AREA_H) {
 		VisQueueX[visited_w] = x;
 		VisQueueY[visited_w] = y;
@@ -127,9 +127,9 @@ static /*C_1100_00CF*/VIS_Enqueue(int x, int y) {
   mode 0: light source (spreads up to distance lightBase + 3).
   If (x, y) itself blocks sight (e.g. a torch on a wall), the fill
   starts from its east and south neighbours instead.*/
-/*C_1100_0131*/VIS_FloodFill(int x, int y, int lightBase, int mode) {
-	int curX, curY;
-	int dir, light;
+/*C_1100_0131*/VIS_FloodFill(int16 x, int16 y, int16 lightBase, int16 mode) {
+	int16 curX, curY;
+	int16 dir, light;
 
 	/*AreaOffset = y * AREA_W + x*/
 	AreaOffset = y << 3;
@@ -189,10 +189,10 @@ static /*C_1100_00CF*/VIS_Enqueue(int x, int y) {
   area around the party, then redraw the map window*/
 /*C_1100_0306*/VIS_UpdateView() {
 	unsigned char *pTiles,*pFlags,*pLight;
-	int *pView;
-	int cellX,cellY,x,y;
-	int tile,terrain,wallBase,visibleSides,wallSides,nbTile,nbTerrain,objNum;
-	int light;
+	int16 *pView;
+	int16 cellX,cellY,x,y;
+	int16 tile,terrain,wallBase,visibleSides,wallSides,nbTile,nbTerrain,objNum;
+	int16 light;
 
 	if(XRayView) {
 		/*X-ray: everything visible and lit*/

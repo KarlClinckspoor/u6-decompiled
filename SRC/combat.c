@@ -35,10 +35,10 @@
 #include <math.h>
 
 /*when 0, the next COMBAT_showHit() call skips the hit flash*/
-/*1968*/int ShowHitFlash = 1;
+/*1968*/int16 ShowHitFlash = 1;
 /*object firing the current missile (-1: none); lets Missiles() find
   the object hit at the impact tile (MissileHitObj)*/
-/*196A*/int MissileShooter = -1;
+/*196A*/int16 MissileShooter = -1;
 
 /*range table: RangeTable[|dx|][|dy|] is the "combat distance" between two
   tiles (roughly max + min/2); everything 8 or more tiles away in one
@@ -85,12 +85,12 @@
 #undef MD
 };
 
-/*1A25*/static int NumEquipWeapons = 0;/*number of equiped weapons in EquipWeapons*/
-/*1A27*/static int CurEquipWeapon = 0;/*index in EquipWeapons of the weapon currently attacking*/
+/*1A25*/static int16 NumEquipWeapons = 0;/*number of equiped weapons in EquipWeapons*/
+/*1A27*/static int16 CurEquipWeapon = 0;/*index in EquipWeapons of the weapon currently attacking*/
 
 /*distance in tiles (max(|dx|,|dy|)) between an object and a location*/
-/*C_2337_000B*/COMBAT_TileDistance(int objNum, int x, int y) {
-	int delta_x, delta_y;
+/*C_2337_000B*/COMBAT_TileDistance(int16 objNum, int16 x, int16 y) {
+	int16 delta_x, delta_y;
 
 	delta_x = abs(GetX(objNum) - x);
 	delta_y = abs(GetY(objNum) - y);
@@ -102,7 +102,7 @@
 
 /*end the "charm" effect: restore the original alignment (kept in
   NPCFlag) and give the NPC back its normal mode*/
-/*C_2337_005E*/COMBAT_stopCharm(int objNum) {
+/*C_2337_005E*/COMBAT_stopCharm(int16 objNum) {
 	ClrCharmed(objNum);
 	SetAlignment(objNum, GetBKAlignment(objNum));
 	if(IsPlrControl(objNum))
@@ -120,7 +120,7 @@
   solo member otherwise) gets AI_COMMAND, the combat icon is drawn and
   the combat music starts*/
 /*C_2337_00C8*/COMBAT_begin() {
-	int partyIdx, mouseSave;
+	int16 partyIdx, mouseSave;
 
 	InCombat = 1;
 	for(partyIdx = 0; partyIdx < PartySize; partyIdx ++) {
@@ -150,8 +150,8 @@
 /*leave combat mode: party members follow again (or stay put in solo
   mode), the combat icon is cleared and the combat music stopped*/
 /*C_2337_01BC*/COMBAT_breakOff() {
-	int mouseSave;
-	int partyIdx, newMode;
+	int16 mouseSave;
+	int16 partyIdx, newMode;
 
 	InCombat =
 	EnemyWarningGiven = 0;
@@ -184,8 +184,8 @@
 /*move an object to a random free spot at most 3 tiles away (8 tries);
   with onScreenNotOk the spot must be outside the visible 11x11 area.
   returns 1 if the object was moved*/
-/*C_2337_02DC*/COMBAT_TryTeleport(int objNum, int onScreenNotOk) {
-	int tries, x, y, z, new_x, new_y;
+/*C_2337_02DC*/COMBAT_TryTeleport(int16 objNum, int16 onScreenNotOk) {
+	int16 tries, x, y, z, new_x, new_y;
 
 	if(objNum < 0)
 		return 0;
@@ -209,8 +209,8 @@
 }
 
 /*effective strength (-3 when cursed, minimum 1)*/
-/*C_2337_03E7*/GetStr(int objNum) {
-	int value = STREN[objNum];
+/*C_2337_03E7*/GetStr(int16 objNum) {
+	int16 value = STREN[objNum];
 	if(IsCursed(objNum)) {
 		if((value -= 3) < 1)
 			value = 1;
@@ -220,8 +220,8 @@
 
 /*effective dexterity (-3 when cursed, minimum 1; 1 when asleep, or for
   everyone but the party during "time stop")*/
-/*C_2337_0411*/GetDex(int objNum) {
-	int value = DEXTE[objNum];
+/*C_2337_0411*/GetDex(int16 objNum) {
+	int16 value = DEXTE[objNum];
 	if(IsCursed(objNum)) {
 		if((value -= 3) < 1)
 			value = 1;
@@ -234,8 +234,8 @@
 }
 
 /*effective intelligence (-3 when cursed, minimum 1)*/
-/*C_2337_0458*/GetInt(int objNum) {
-	int value = INTEL[objNum];
+/*C_2337_0458*/GetInt(int16 objNum) {
+	int16 value = INTEL[objNum];
 	if(IsCursed(objNum)) {
 		if((value -= 3) < 1)
 			value = 1;
@@ -245,7 +245,7 @@
 
 /*intelligence contest for spells: returns 1 when the target resists,
   i.e. when INT(target)/2 + 15 - INT(caster) > 1d30*/
-/*C_2337_0482*/COMBAT_ResistsSpell(int casterObj, int targetObj) {
+/*C_2337_0482*/COMBAT_ResistsSpell(int16 casterObj, int16 targetObj) {
 	if(GetInt(targetObj) / 2 + 15 - GetInt(casterObj) > OSI_rand(1, 30))
 		return 1;
 	return 0;
@@ -253,8 +253,8 @@
 
 /*uncalled*/
 /*level from experience: 1 + number of halvings to get 100xp or less*/
-/*__2337_04BE*/ComputeLevel(int objNum) {
-	unsigned lvl, xp;
+/*__2337_04BE*/ComputeLevel(int16 objNum) {
+	uint16 lvl, xp;
 
 	xp = ExpPoints[objNum];
 	lvl = 1;
@@ -265,12 +265,12 @@
 	return lvl;
 }
 
-/*C_2337_04E1*/GetLevel(int objNum) {
+/*C_2337_04E1*/GetLevel(int16 objNum) {
 	return Level[objNum];
 }
 
 /*add experience points (capped at 9999)*/
-/*C_2337_04F4*/AddXP(int objNum, int xp) {
+/*C_2337_04F4*/AddXP(int16 objNum, int16 xp) {
 	if(ExpPoints[objNum] < 9999 - xp)
 		ExpPoints[objNum] += xp;
 	else
@@ -278,8 +278,8 @@
 }
 
 /*maximum hit points: 30 per level, between 1 and 255*/
-/*C_2337_0529*/MaxHP(int objNum) {
-	int hp;
+/*C_2337_0529*/MaxHP(int16 objNum) {
+	int16 hp;
 	
 	hp = Level[objNum] * 30;
 	if(hp == 0)
@@ -291,8 +291,8 @@
 
 /*maximum magic points: 2*INT for the avatar, INT for a mage,
   INT/2 for a swashbuckler or long-caped musician, 0 otherwise*/
-/*C_2337_0559*/MaxMagic(int objNum) {
-	int objType, mana;
+/*C_2337_0559*/MaxMagic(int16 objNum) {
+	int16 objType, mana;
 
 	mana = 0;
 	objType = GetType(objNum);
@@ -306,7 +306,7 @@
 }
 
 /*object type==>corpse type*/
-/*1A29*/int DeadShape[] = {
+/*1A29*/int16 DeadShape[] = {
 	OBJ_HORSE,TypeFrame(OBJ_HORSES_CARCASS,1),
 	OBJ_DAEMON,TypeFrame(OBJ_DEAD_BODY,0),
 	OBJ_GARGOYLE,TypeFrame(OBJ_DEAD_BODY,0),
@@ -339,10 +339,10 @@
   without corpse vanish (with a flash for the MONSTER_VANISHES ones), a gazer
   turns into insects, slimes are re-joined, dragons removed, and the
   bleeding ones leave a pool of blood*/
-/*C_2337_05B4*/SetTypeUnconscious(int objNum) {
-	int objType, objCls;
-	int *pTypUnc;
-	int newObj, isDead;
+/*C_2337_05B4*/SetTypeUnconscious(int16 objNum) {
+	int16 objType, objCls;
+	int16 *pTypUnc;
+	int16 newObj, isDead;
 
 	objType = GetType(objNum);
 	isDead = IsDead(objNum);
@@ -404,8 +404,8 @@
 /*can viewerObj see (and so target) targetObj? not if it is invisible
   (unless both are party members), dragged under, a buried corpser, an
   "ignore" tile or on another level*/
-/*C_2337_0837*/COMBAT_canSee(int viewerObj, int targetObj) {
-	int isVisible;
+/*C_2337_0837*/COMBAT_canSee(int16 viewerObj, int16 targetObj) {
+	int16 isVisible;
 
 	isVisible = !IsInvisible(targetObj);
 
@@ -432,9 +432,9 @@
 /*pick the object targeted at (x,y) by viewerObj: the first visible
   living actor, else the first visible object, else the first hidden
   object; -1 if the tile is empty*/
-/*C_2337_08F1*/COMBAT_GetTargetAt(int viewerObj, int x, int y) {
-	int result;
-	int liveNpc, firstHidden;
+/*C_2337_08F1*/COMBAT_GetTargetAt(int16 viewerObj, int16 x, int16 y) {
+	int16 result;
+	int16 liveNpc, firstHidden;
 
 	firstHidden = -1;
 	/*first "canSee" object*/
@@ -464,7 +464,7 @@
 }
 
 /*armours ... and their protection (ArmorValues)*/
-/*1A87*/int ArmorTypes[] = {
+/*1A87*/int16 ArmorTypes[] = {
 	OBJ_LEATHER_HELM,OBJ_CHAIN_COIF,OBJ_IRON_HELM,OBJ_SPIKED_HELM,OBJ_WINGED_HELM,OBJ_BRASS_HELM,OBJ_GARGOYLE_HELM,OBJ_MAGIC_HELM,
 	OBJ_WOODEN_SHIELD,OBJ_CURVED_HEATER,OBJ_WINGED_SHIELD,OBJ_KITE_SHIELD,OBJ_SPIKED_SHIELD,OBJ_BLACK_SHIELD,OBJ_DOOR_SHIELD,OBJ_MAGIC_SHIELD,
 	OBJ_CLOTH_ARMOR,OBJ_LEATHER_ARMOR,OBJ_RING_MAIL,OBJ_SCALE_MAIL,OBJ_CHAIN_MAIL,OBJ_PLATE_MAIL,OBJ_MAGIC_ARMOR,OBJ_MAIN_GAUCHE,
@@ -478,8 +478,8 @@
 };
 
 /*protection given by an armour object (0 if not an armour)*/
-/*C_2337_0983*/GetArmorPoints(int objNum) {
-	int i, points;
+/*C_2337_0983*/GetArmorPoints(int16 objNum) {
+	int16 i, points;
 
 	points = 0;
 	for(i = 0; i < 26; i ++) {
@@ -493,8 +493,8 @@
 
 /*total protection of an actor: equipped armours, -3 cursed,
   +3 "protected"*/
-static /*C_2337_09BF*/__GetProtection(int objNum) {
-	int protection, invObj;
+static /*C_2337_09BF*/__GetProtection(int16 objNum) {
+	int16 protection, invObj;
 
 	protection = 0;
 	for(invObj = FindInv(objNum); invObj >= 0; invObj = NextInv()) {
@@ -510,7 +510,7 @@ static /*C_2337_09BF*/__GetProtection(int objNum) {
 }
 
 /*weapons with a range > 1 ... and their range (WeaponRanges)*/
-/*1AD5*/int RangedWeaponTypes[] = {
+/*1AD5*/int16 RangedWeaponTypes[] = {
 	OBJ_MORNING_STAR,OBJ_HALBERD,OBJ_DAGGER,OBJ_FLASK_OF_OIL,OBJ_SLING,OBJ_THROWING_AXE,OBJ_SPEAR,OBJ_BOW,
 	OBJ_CROSSBOW,OBJ_SPELLBOOK,OBJ_CHARGE,OBJ_BOOMERANG,OBJ_TRIPLE_CROSSBOW,OBJ_SHIP,OBJ_ZU_YLEM,OBJ_MAGIC_BOW,
 	OBJ_LIGHTNING_WAND,OBJ_FIRE_WAND
@@ -522,8 +522,8 @@ static /*C_2337_09BF*/__GetProtection(int objNum) {
 };
 
 /*range of a weapon (or of an actor's natural attack): 1 by default*/
-static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
-	int i, range;
+static /*C_2337_0A14*/__GetWeaponRange(int16 objNum) {
+	int16 i, range;
 
 	range = 1;
 	for(i = 0; i < 18; i ++) {
@@ -539,8 +539,8 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
   in combat modes Leader[] holds the last adjacent attacker (see
   __DoHit). returns 1 if that one is still able, at most 1 tile away
   and not frozen by "time stop"*/
-/*C_2337_0A4E*/static COMBAT_IsEngagedInMelee(int objNum) {
-	int engagedObj;
+/*C_2337_0A4E*/static COMBAT_IsEngagedInMelee(int16 objNum) {
+	int16 engagedObj;
 
 	if(NPCMode[objNum] > AI_FOLLOW && NPCMode[objNum] < AI_PATROL_NS && Leader[objNum] != objNum) {
 		engagedObj = Leader[objNum];
@@ -564,8 +564,8 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
 /*fire one missile (tile numTile, 0: invisible) from objNum toward
   *pX_dst,*pY_dst; on return they hold where it stopped and MissileHitObj the
   object found there. returns non-zero if it reached its destination*/
-/*C_2337_0B3F*/COMBAT_Missile(int objNum, int *pX_dst, int *pY_dst, int max_range, int numTile) {
-	int ret;
+/*C_2337_0B3F*/COMBAT_Missile(int16 objNum, int16 *pX_dst, int16 *pY_dst, int16 max_range, int16 numTile) {
+	int16 ret;
 
 	MissileShooter = objNum;
 	ret = Missiles(GetX(objNum), GetY(objNum), 1, pX_dst, pY_dst, max_range, numTile, 0);
@@ -579,10 +579,10 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
   impact tile (or lost in water/void, or destroyed if it hits an actor),
   burning oil, zu ylem (sleep), wands that may vanish (1 in 100).
   *pX_dest,*pY_dest are updated to the impact tile. returns 1*/
-/*C_2337_0B99*/static COMBAT_FireRangedWeapon(int att_objNum, int *pX_dest, int *pY_dest, int weap_objNum) {
-	int typ;
-	int foundSpare, itemObj, invChanged, range, dist_x;
-	int dist_y, missileTile, numBolts, spreadDirs, landTile;
+/*C_2337_0B99*/static COMBAT_FireRangedWeapon(int16 att_objNum, int16 *pX_dest, int16 *pY_dest, int16 weap_objNum) {
+	int16 typ;
+	int16 foundSpare, itemObj, invChanged, range, dist_x;
+	int16 dist_y, missileTile, numBolts, spreadDirs, landTile;
 
 	typ = GetType(weap_objNum);
 	range = __GetWeaponRange(weap_objNum);
@@ -721,7 +721,7 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
 }
 
 /*weapons ... and their damage (WeaponDamages)*/
-/*1B0B*/int WeaponTypes[] = {
+/*1B0B*/int16 WeaponTypes[] = {
 	OBJ_SPIKED_HELM,OBJ_SLING,OBJ_CLUB,OBJ_MAIN_GAUCHE,OBJ_SPEAR,OBJ_THROWING_AXE,OBJ_DAGGER,OBJ_MACE,
 	OBJ_MORNING_STAR,OBJ_BOW,OBJ_CROSSBOW,OBJ_SWORD,OBJ_TWO_HANDED_HAMMER,OBJ_TWO_HANDED_AXE,OBJ_TWO_HANDED_SWORD,OBJ_HALBERD,
 	OBJ_BOOMERANG,OBJ_TRIPLE_CROSSBOW,OBJ_GLASS_SWORD,OBJ_SPIKED_SHIELD,OBJ_CANNON,OBJ_FLASK_OF_OIL,OBJ_MAGIC_BOW,OBJ_ROLLING_PIN,
@@ -738,9 +738,9 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
 
 /*maximum damage of a weapon, or of an actor's natural attack (from its
   monster class); -1 if the object is not a weapon*/
-/*C_2337_10E4*/GetDamagePoints(int objNum) {
-	int i, damage;
-	int objCls;
+/*C_2337_10E4*/GetDamagePoints(int16 objNum) {
+	int16 i, damage;
+	int16 objCls;
 
 	damage = -1;
 	if(objNum < 0x100)
@@ -760,7 +760,7 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
 }
 
 /*copy the state of an actor into another one (slime division)*/
-/*C_2337_115F*/CloneObject(int src_objNum, int dst_objNum) {
+/*C_2337_115F*/CloneObject(int16 src_objNum, int16 dst_objNum) {
 	ObjStatus[dst_objNum] = ObjStatus[src_objNum];
 	if(GetType(src_objNum) != OBJ_SLIME)
 		ObjShapeType[dst_objNum] = ObjShapeType[src_objNum];
@@ -782,10 +782,10 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
 
 /*flash the "hit" tile over an object (if on screen and ShowHitFlash set) and
   wake it up if it was asleep*/
-/*C_2337_121F*/COMBAT_showHit(int objNum) {
+/*C_2337_121F*/COMBAT_showHit(int16 objNum) {
 	if(ShowHitFlash) {
-		int x = GetX(objNum) - MapX + 5;
-		int y = GetY(objNum) - MapY + 5;
+		int16 x = GetX(objNum) - MapX + 5;
+		int16 y = GetY(objNum) - MapY + 5;
 		if(x >= 0 && x < 11 && y >= 0 && y < 11) {
 			/*display hit?*/
 			ShowObjects();
@@ -812,10 +812,10 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
   hit points (slimes may divide). Tangle vine parts kill their pod.
   Breakable items lose "quantity" points and are broken at 0.
   returns the experience gained by killing a hostile monster*/
-/*C_2337_12F5*/LoseHP(int objNum, int damage) {
-	int i;
-	int new_x, new_y, otherObj, objTyp;
-	int mouseSave, objCls, xpGained, savedTextOn;
+/*C_2337_12F5*/LoseHP(int16 objNum, int16 damage) {
+	int16 i;
+	int16 new_x, new_y, otherObj, objTyp;
+	int16 mouseSave, objCls, xpGained, savedTextOn;
 
 	if(damage < 0)
 		return 0;
@@ -980,9 +980,9 @@ static /*C_2337_0A14*/__GetWeaponRange(int objNum) {
 /*does the attack hit? items are always hit, the glass sword always
   hits. Bludgeons (and MONSTER_STR_ATTACK monsters' natural attacks) use STR,
   other weapons DEX: hit if 1d30 >= (DEX(defender) + 30 - STAT) / 2*/
-static /*C_2337_18CF*/__AttackTest(int objNum_att, int objNum_def, int objNum_weapon) {
-	int objTyp, attackStat;
-	int defDex, objCls, strOverDex;
+static /*C_2337_18CF*/__AttackTest(int16 objNum_att, int16 objNum_def, int16 objNum_weapon) {
+	int16 objTyp, attackStat;
+	int16 defDex, objCls, strOverDex;
 
 	if(objNum_def >= 0x100)
 		return 1;
@@ -1006,8 +1006,8 @@ static /*C_2337_18CF*/__AttackTest(int objNum_att, int objNum_def, int objNum_we
 
 /*print how badly an actor is wounded (in quarters of its max HP);
   a critically wounded intelligent NPC in a mobile combat mode flees*/
-/*C_2337_198F*/COMBAT_displaySeverity(int objNum) {
-	int severity;
+/*C_2337_198F*/COMBAT_displaySeverity(int16 objNum) {
+	int16 severity;
 
 	if(GetType(objNum) == OBJ_BALLOON_INFLATED || HitPoints[objNum] == 0)
 		return;
@@ -1039,14 +1039,14 @@ static /*C_2337_18CF*/__AttackTest(int objNum_att, int objNum_def, int objNum_we
 }
 
 /*dissolvable objects*/
-/*1B7A*/int DissolvableTypes[] = {
+/*1B7A*/int16 DissolvableTypes[] = {
 	OBJ_CHAIN_COIF,OBJ_IRON_HELM,OBJ_SPIKED_HELM,OBJ_WINGED_HELM,OBJ_GARGOYLE_HELM,OBJ_CURVED_HEATER,OBJ_WINGED_SHIELD,OBJ_KITE_SHIELD,
 	OBJ_SPIKED_SHIELD,OBJ_DOOR_SHIELD,OBJ_RING_MAIL,OBJ_SCALE_MAIL,OBJ_CHAIN_MAIL,OBJ_PLATE_MAIL,OBJ_MAIN_GAUCHE,OBJ_DAGGER,
 	OBJ_SWORD,OBJ_CLEAVER,OBJ_KNIFE,
 	0
 };
 /*robbable objects (food stolen by gremlins)*/
-/*1BA2*/int StealableFoodTypes[] = {
+/*1BA2*/int16 StealableFoodTypes[] = {
 	OBJ_LOAF_OF_BREAD,OBJ_PORTION_OF_MEAT,OBJ_ROLLS,OBJ_CAKE,OBJ_CHEESE,OBJ_HAM,OBJ_HORSE_CHOPS,OBJ_MEAT_RIB,
 	OBJ_RIBS,OBJ_DEAD_ANIMAL,
 	0
@@ -1054,9 +1054,9 @@ static /*C_2337_18CF*/__AttackTest(int objNum_att, int objNum_def, int objNum_we
 
 /*pick a random object in ownerObj's inventory that can be dissolved by
   acid (wantFood == 0) or stolen by a gremlin (wantFood != 0); -1 if none*/
-/*C_2337_1A99*/static COMBAT_PickVulnerableItem(int ownerObj, int wantFood/*disolve/rob flag*/) {
-	int invObj, picked;
-	int *pList;
+/*C_2337_1A99*/static COMBAT_PickVulnerableItem(int16 ownerObj, int16 wantFood/*disolve/rob flag*/) {
+	int16 invObj, picked;
+	int16 *pList;
 
 	picked = -1;
 	for(invObj = FindInv(ownerObj); invObj >= 0; invObj = NextInv()) {
@@ -1076,7 +1076,7 @@ static /*C_2337_18CF*/__AttackTest(int objNum_att, int objNum_def, int objNum_we
 run after him: -5 karma, guards within 32 tiles arrest him, other
 neutral NPCs within 6 tiles become vigilantes (scheduled NPCs) or flee*/
 /*C_2337_1B0E*/COMBAT_RaiseAlarm() {
-	int objNum;
+	int16 objNum;
 
 	SubKarma(5);
 	for(objNum = 0; objNum < 0x100; objNum ++) {
@@ -1116,8 +1116,8 @@ neutral NPCs within 6 tiles become vigilantes (scheduled NPCs) or flee*/
   (COMBAT_RaiseAlarm). A scheduled NPC becomes a vigilante; otherwise the
   victim turns hostile toward the attacker's side (temporary monsters,
   0xe0 and above, also switch to assault)*/
-/*C_2337_1C1E*/COMBAT_ProvokeNeutral(int victim, int attacker, int damage) {
-	int objCls;
+/*C_2337_1C1E*/COMBAT_ProvokeNeutral(int16 victim, int16 attacker, int16 damage) {
+	int16 objCls;
 
 	if(victim >= 0x100)
 		return;
@@ -1151,10 +1151,10 @@ neutral NPCs within 6 tiles become vigilantes (scheduled NPCs) or flee*/
 /*a hit landed: roll the damage (1..hitPts; 255 is a sure kill), subtract
   1..armour, apply it, print the messages and the monster special
   attacks (drag under, acid, theft, poison)*/
-static /*C_2337_1D20*/__DoHit(int attacker, int defender, int hitPts) {
+static /*C_2337_1D20*/__DoHit(int16 attacker, int16 defender, int16 hitPts) {
 	char *pObjStr;
 	char defName[26];
-	int armorPts, objCls, lostObj, defTyp;
+	int16 armorPts, objCls, lostObj, defTyp;
 
 #if 0
 	CON_printf("%03x hits %03x (%03d)\n", attacker, defender, hitPts);
@@ -1254,9 +1254,9 @@ static /*C_2337_1D20*/__DoHit(int attacker, int defender, int hitPts) {
 /*not very proud of that name ...*/
 /*return the actor owning a part of a multi-tile monster (dragon,
   scorpion, ship, serpent, hydra body); the object itself otherwise*/
-/*C_2337_205C*/COMBAT_getHead(int objNum) {
-	int obj;
-	int objType, neck_x, neck_y;
+/*C_2337_205C*/COMBAT_getHead(int16 objNum) {
+	int16 obj;
+	int16 objType, neck_x, neck_y;
 
 	if(objNum < 0)
 		return -1;
@@ -1284,10 +1284,10 @@ static /*C_2337_1D20*/__DoHit(int attacker, int defender, int hitPts) {
   then hit a neighbouring tile), the triple crossbow, undead resistance
   and the glass sword / boomerang.
   returns 0: done, 1: engaged in melee (can't shoot), 2: out of range*/
-static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
-	int weap_typ, opp_objNum;
-	int dir, tmp, damage, didHit;
-	int delta_x, delta_y, isRanged, numBolts, savedActive, manaCost, objTyp;
+static /*C_2337_214D*/__TryHit(int16 att_objNum, int16 x, int16 y, int16 weap_objNum) {
+	int16 weap_typ, opp_objNum;
+	int16 dir, tmp, damage, didHit;
+	int16 delta_x, delta_y, isRanged, numBolts, savedActive, manaCost, objTyp;
 
 #if 0
 	CON_printf("%04x att. %03x,%03x w.%04x\n", att_objNum, x, y, weap_objNum);
@@ -1452,7 +1452,7 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 /*reset equiped weapon list: collect the (up to 8) equipped weapons of
   the active party member into EquipWeapons and print the first one*/
 /*C_2337_27C5*/static COMBAT_InitWeaponList() {
-	int invObj, attacker;
+	int16 invObj, attacker;
 
 	attacker = Party[Active];
 	NumEquipWeapons =
@@ -1476,8 +1476,8 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
   weapon (EquipWeapons[CurEquipWeapon], bare hands if none), then prepare the
   targeting of the next equipped weapon, or end the command*/
 /*C_2337_2875*/static COMBAT_AttackWithNextWeapon() {
-	int attacker, weapTyp;
-	int weapObj, hitResult;
+	int16 attacker, weapTyp;
+	int16 weapObj, hitResult;
 
 	attacker = Party[Active];
 	if(NumEquipWeapons == 0)
@@ -1538,7 +1538,7 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 /*the player's "Attack" command: select a target for each equipped
   weapon in turn*/
 /*C_2337_2AA9*/COMBAT_attack() {
-	int ch, weapon_objNum;
+	int16 ch, weapon_objNum;
 
 	CON_printf(AttackMsg);
 	if(IN_VEHICLE && GetType(Party[Active]) != OBJ_SHIP) {
@@ -1584,9 +1584,9 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 }
 
 /*combat distance between two locations (RangeTable; 9 if too far)*/
-/*C_2337_2BEE*/COMBAT_range(int x0, int y0, int x1, int y1) {
-	int delta_x, delta_y;
-	int range;
+/*C_2337_2BEE*/COMBAT_range(int16 x0, int16 y0, int16 x1, int16 y1) {
+	int16 delta_x, delta_y;
+	int16 range;
 
 	delta_x = abs(x0 - x1);
 	delta_y = abs(y0 - y1);
@@ -1601,10 +1601,10 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
   magic, more likely for low spells) an equipped spellbook/charge, else
   the equipped weapon with the best damage that reaches the opponent,
   else its natural attack (att_objNum itself)*/
-/*C_2337_2C43*/static __PickWeapon(int att_objNum, int opp_objNum) {
-	int ret, i;
-	int opp_x, opp_y, att_x, att_y;
-	int range, dmg, max_dmg, itemTyp;
+/*C_2337_2C43*/static __PickWeapon(int16 att_objNum, int16 opp_objNum) {
+	int16 ret, i;
+	int16 opp_x, opp_y, att_x, att_y;
+	int16 range, dmg, max_dmg, itemTyp;
 
 	ret = att_objNum;
 	max_dmg = 0;
@@ -1643,10 +1643,10 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
   hostile to monsters, CHAOTIC everything but chaotic, NEUTRAL nothing
   unless vigilante). Fleeing modes take any actor (the one to flee).
   Retreating actors off-screen are ignored. returns -1 if none*/
-/*C_2337_2D6E*/COMBAT_pickOpponent(int objNum) {
-	int i;
-	int x, y, opp_x, opp_y, objAln;
-	int dst2, ret, min_dst2;
+/*C_2337_2D6E*/COMBAT_pickOpponent(int16 objNum) {
+	int16 i;
+	int16 x, y, opp_x, opp_y, objAln;
+	int16 dst2, ret, min_dst2;
 
 	ret = -1;
 	objAln = GetAlignment(objNum);
@@ -1692,8 +1692,8 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 /*AI_ASSAULT (also the fallback of the other modes): attack the closest
   enemy if in range and in line of fire, else sidestep (90 degrees) or
   move toward it*/
-/*C_2337_2F3E*/COMBAT_AI_Assault(int objNum) {
-	int weapObj, opp_x, opp_y, x, y, range;
+/*C_2337_2F3E*/COMBAT_AI_Assault(int16 objNum) {
+	int16 weapObj, opp_x, opp_y, x, y, range;
 
 	Selection.obj = COMBAT_pickOpponent(objNum);
 	weapObj = __PickWeapon(objNum, Selection.obj);
@@ -1748,11 +1748,11 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
   (Party[0] plus one step for the party, EnemyFrontFirst for the enemies),
   sliding sideways along the line while that point is occupied.
   returns 1 if nothing was done (caller decides), 0 if handled*/
-/*C_2337_310E*/static COMBAT_MoveToFrontLine(int objNum) {
-	int axisX;
-	int onLeft, refObj, refDepth;
-	int cross, axisLen2, axisY, destX, destY, stepX, stepY;
-	int depthStepX, depthStepY, x, y, occupied, originX, originY, savedMovePts;
+/*C_2337_310E*/static COMBAT_MoveToFrontLine(int16 objNum) {
+	int16 axisX;
+	int16 onLeft, refObj, refDepth;
+	int16 cross, axisLen2, axisY, destX, destY, stepX, stepY;
+	int16 depthStepX, depthStepY, x, y, occupied, originX, originY, savedMovePts;
 
 	if((EnemiesNum == 0 || EnemyFrontFirst == 0) && !IsPlrControl(objNum)) {
 		SubMov(objNum, 5);
@@ -1836,7 +1836,7 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 /*AI_FRONT: take position on the front line (COMBAT_MoveToFrontLine); when that is
   not possible, enemies 8+ tiles from the party wait, the enemy anchor
   (EnemyFrontFirst) charges 1 time in 8, and the others assault*/
-/*C_2337_3464*/COMBAT_AI_Front(int objNum) {
+/*C_2337_3464*/COMBAT_AI_Front(int16 objNum) {
 	if(!COMBAT_MoveToFrontLine(objNum))
 		return;
 	if(!IsPlrControl(objNum)) {
@@ -1857,10 +1857,10 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
   AI_FRONT member of the same alignment) and between the two flank
   members; party members also stay within 3 tiles of the leader.
   attack (assault) when no move is needed or possible*/
-/*C_2337_34C9*/COMBAT_AI_Rear(int objNum) {
-	int axisX;
-	int i, axisY, pos, minFrontDepth, objAln;
-	int stuck, savedMovePts, originX, originY, leftFlank, rightFlank;
+/*C_2337_34C9*/COMBAT_AI_Rear(int16 objNum) {
+	int16 axisX;
+	int16 i, axisY, pos, minFrontDepth, objAln;
+	int16 stuck, savedMovePts, originX, originY, leftFlank, rightFlank;
 
 	stuck = 0;
 	if(IsPlrControl(objNum)) {
@@ -1928,13 +1928,13 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 /*AI_FLANK: go round the enemy line on our side; target the visible
   enemy furthest out on that side and approach it moving outward, attack
   when in range*/
-/*C_2337_37F2*/COMBAT_AI_Flank(int objNum) {
-	int i;
-	int vx, vy;
-	int selfX, selfY, cross, onLeft, oppSide;
-	int bestSide, bestOpp, oppX, oppY;
-	int objAln, outX, outY, mustMove, weapObj;
-	int range, delta_x, delta_y, savedMovePts;
+/*C_2337_37F2*/COMBAT_AI_Flank(int16 objNum) {
+	int16 i;
+	int16 vx, vy;
+	int16 selfX, selfY, cross, onLeft, oppSide;
+	int16 bestSide, bestOpp, oppX, oppY;
+	int16 objAln, outX, outY, mustMove, weapObj;
+	int16 range, delta_x, delta_y, savedMovePts;
 
 	if(
 		EnemiesNum == 0 ||
@@ -2049,10 +2049,10 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 
 /*AI_BERSEK: attack the strongest (STR+DEX+INT) visible enemy within 8
   tiles, whatever the distance from the party*/
-/*C_2337_3C3A*/COMBAT_AI_Berserk(int objNum) {
-	int i;
-	int weapObj, bestOpp, objAln, x, y, oppStats, maxStats;
-	int oppX, oppY, range, delta_x, delta_y, mustMove, savedMovePts;
+/*C_2337_3C3A*/COMBAT_AI_Berserk(int16 objNum) {
+	int16 i;
+	int16 weapObj, bestOpp, objAln, x, y, oppStats, maxStats;
+	int16 oppX, oppY, range, delta_x, delta_y, mustMove, savedMovePts;
 
 	bestOpp = -1;
 	mustMove = 0;
@@ -2122,9 +2122,9 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
   if cornered; good ones go back to the party. A retreating NPC regains
   1 HP 1 time in 4 and goes back to its combat mode when no longer
   critical*/
-/*C_2337_3ED2*/COMBAT_AI_Retreat(int objNum) {
-	int oppObjNum;
-	int delta_x, delta_y, fleeDist, savedMovePts;
+/*C_2337_3ED2*/COMBAT_AI_Retreat(int16 objNum) {
+	int16 oppObjNum;
+	int16 delta_x, delta_y, fleeDist, savedMovePts;
 
 	if(COMBAT_TileDistance(objNum, MapX, MapY) > 7) {
 		MovePts[objNum] = 0;
@@ -2159,9 +2159,9 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 }
 
 /*AI_LIKE: approach the party now and then when close, else wander*/
-/*C_2337_407F*/COMBAT_AI_Like(int objNum) {
-	int i;
-	int x, y, nearParty;
+/*C_2337_407F*/COMBAT_AI_Like(int16 objNum) {
+	int16 i;
+	int16 x, y, nearParty;
 
 	nearParty = 0;
 	x = GetX(objNum);
@@ -2190,9 +2190,9 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 
 /*AI_UNFRIENDLY: wander; when close to the party, 1 in 8 to turn into
   AI_ASSAULT*/
-/*C_2337_41B7*/COMBAT_AI_Unfriendly(int objNum) {
-	int i;
-	int x, y, nearParty;
+/*C_2337_41B7*/COMBAT_AI_Unfriendly(int16 objNum) {
+	int16 i;
+	int16 x, y, nearParty;
 
 	nearParty = 0;
 	x = GetX(objNum);
@@ -2221,9 +2221,9 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 
 /*AI_IMMOBILE: never moves; tries 16 random tiles within 4 for a
   visible enemy and attacks it*/
-/*C_2337_42EE*/COMBAT_AI_Immobile(int objNum) {
-	int i;
-	int objAln, opp_x, opp_y;
+/*C_2337_42EE*/COMBAT_AI_Immobile(int16 objNum) {
+	int16 i;
+	int16 objAln, opp_x, opp_y;
 
 	objAln = GetAlignment(objNum);
 	if(objAln != NEUTRAL) {
@@ -2262,8 +2262,8 @@ static /*C_2337_214D*/__TryHit(int att_objNum, int x, int y, int weap_objNum) {
 /*the tangle vine pod moves one tile in direction dir (0,2,4,6), leaving a
   vine segment (quality = pod number) behind; no going backward.
   returns 1 on success*/
-static /*C_2337_43D2*/__TryGrowVine(int objNum, int dir) {
-	int moved, x, y, prev_dir, vineObj;
+static /*C_2337_43D2*/__TryGrowVine(int16 objNum, int16 dir) {
+	int16 moved, x, y, prev_dir, vineObj;
 
 	dir &= 6;
 	x = GetX(objNum);
@@ -2288,10 +2288,10 @@ static /*C_2337_43D2*/__TryGrowVine(int objNum, int dir) {
 
 /*AI_TANGLE (tangle vine pod): hit an adjacent opponent, or grow toward
   one within 4 tiles, or grow at random (1 in 4)*/
-/*C_2337_44F6*/COMBAT_AI_Tangle(int objNum) {
+/*C_2337_44F6*/COMBAT_AI_Tangle(int16 objNum) {
 
-	int dir;
-	int opp_x, opp_y, tangle_x, tangle_y;
+	int16 dir;
+	int16 opp_x, opp_y, tangle_x, tangle_y;
 
 	Selection.obj = COMBAT_pickOpponent(objNum);
 	if(Selection.obj >= 0) {

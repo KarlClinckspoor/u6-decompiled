@@ -28,7 +28,7 @@
 
 /*red gate destinations, indexed by (red gate quality - 1)*/
 /*red gate X*/
-/*171C*/int RedGateX[] = {
+/*171C*/int16 RedGateX[] = {
 	0x383,0x3A7,0x1B3,0x1F7,0x093,
 	0x397,0x044,0x133,0x0BC,0x09F,
 	0x2E3,    0,    0,    0,0x0E3,
@@ -36,7 +36,7 @@
 	0x04B,0x147,0x183,0x33F,0x29B
 };
 /*red gate Y*/
-/*174E*/int RedGateY[] = {
+/*174E*/int16 RedGateY[] = {
 	0x1F3,0x106,0x18B,0x166,0x373,
 	0x3A6,0x02D,0x160,0x02D,0x3AE,
 	0x2BB,    0,    0,    0,0x083,
@@ -54,30 +54,30 @@
 
 /*furniture an NPC looks for, by "kind" (see FindFurnitureHere and AI_SEEKOBJ):
  0 chair (sit/play), 1 bed, 2 table = a chair next to a plate (eat), 3 bell pull chain*/
-/*1799*/int FurnitureTypes[] = {OBJ_CHAIR,OBJ_BED,OBJ_TABLE_SQUARE_CORNER_0E4,OBJ_PULL_CHAIN};
-/*17A1*/int AllowNPCTeleport = 0;
+/*1799*/int16 FurnitureTypes[] = {OBJ_CHAIR,OBJ_BED,OBJ_TABLE_SQUARE_CORNER_0E4,OBJ_PULL_CHAIN};
+/*17A1*/int16 AllowNPCTeleport = 0;
 /*set before UpdateMoveFrame when the object really stepped (multi-tile parts follow)*/
-/*17A3*/int StepMovesParts = 0;
+/*17A3*/int16 StepMovesParts = 0;
 /*number of schedule teleports done this turn (max 3)*/
-/*17A5*/static int TeleportCount = 0;
+/*17A5*/static int16 TeleportCount = 0;
 /*number of path searches done this turn (max 3)*/
-/*17A7*/static int PathSearchCount = 0;
+/*17A7*/static int16 PathSearchCount = 0;
 /*output of CanMoveTo: the tile holds damaging terrain*/
-/*17A9*/int HazardFound = 0;
+/*17A9*/int16 HazardFound = 0;
 /*never set: if non-zero TryMoveTo would not avoid damaging tiles*/
-/*17AB*/int IgnoreHazards = 0;
+/*17AB*/int16 IgnoreHazards = 0;
 /*print the "not upon a Sacred Quest" message (only once per party step)*/
 /*17AD*/unsigned char ShowQuestBarrierMsg = 0;
 /*the leader's last step was blocked (read by the mouse code to avoid repeats)*/
-/*17AE*/int AdvanceBlocked = 0;
+/*17AE*/int16 AdvanceBlocked = 0;
 /*visible area must be recomputed (see OtherAnimations/FlushViewIfDirty)*/
-/*17B0*/int VisibilityDirty = 0;
+/*17B0*/int16 VisibilityDirty = 0;
 /*CanMoveTo: party members may walk through each other*/
-/*17B2*/int PassThroughParty = 1;
+/*17B2*/int16 PassThroughParty = 1;
 /*CanMoveTo: refuse damaging terrain*/
-/*17B4*/int AvoidHazards = 0;
+/*17B4*/int16 AvoidHazards = 0;
 /*"Shamino hears/senses enemies" message already given*/
-/*17B6*/int EnemyWarningGiven = 0;
+/*17B6*/int16 EnemyWarningGiven = 0;
 
 /*follower formation: position k is FormationSide[k] tiles sideways and
  FormationBack[k] tiles behind the leader (relative to his facing)*/
@@ -101,11 +101,11 @@
  into account how the creature moves (walks, flies, swims, ethereal, boats).
  Returns 1 if passable. Side effect: HazardFound = 1 if the tile is damaging
  (fire, swamp...); with AvoidHazards set such tiles are refused.*/
-/*C_1E0F_000F*/CanMoveTo(int objNum, int x, int y) {
-	int otherObj, otherType;
-	int terrainFlags, tileTerrain;
-	int objTyp, retVal, flies, swims, walks, ethereal;
-	int objCls, otherTile, keepFind, skiffOrRaft, leaderObj, is2x2;
+/*C_1E0F_000F*/CanMoveTo(int16 objNum, int16 x, int16 y) {
+	int16 otherObj, otherType;
+	int16 terrainFlags, tileTerrain;
+	int16 objTyp, retVal, flies, swims, walks, ethereal;
+	int16 objCls, otherTile, keepFind, skiffOrRaft, leaderObj, is2x2;
 
 	retVal = 0;
 	HazardFound = 0;
@@ -293,7 +293,7 @@ c_04ed:
 }
 
 /*is the object outside of the 40x40 loaded area (or on another level)?*/
-static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
+static /*C_1E0F_056E*/IsOutOfArea(int16 objNum) {
 	return !(
 		GetZ(objNum) == MapZ &&
 		((GetX(objNum) - AreaX) & MapCoordMask) <= (AREA_W-1) &&
@@ -303,8 +303,8 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
 
 /*is (x, y, MapZ) blocked for a multi-tile animal turning diagonally?
  1 if the base tile or any object other than a party member is impassable*/
-/*C_1E0F_05D8*/IsBlockedAt(int x, int y) {
-	int obj;
+/*C_1E0F_05D8*/IsBlockedAt(int16 x, int16 y) {
+	int16 obj;
 
 	if(IsTerrainImpass(GetTileAtXYZ(x, y, MapZ)))
 		return 1;
@@ -345,10 +345,10 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
  (the object really moved) multi-tile creatures and ships drag their other
  parts along. Also handles seated NPCs, the bird, cyclops (shakes screen) and
  the dragon. Always clears StepMovesParts.*/
-/*C_1E0F_0664*/UpdateMoveFrame(int objNum, int dir) {
-	int objFrm, dirFram;
-	int partIdx, objTyp, tmpObj, isOnChair, seatType;
-	int cur_x, cur_y;
+/*C_1E0F_0664*/UpdateMoveFrame(int16 objNum, int16 dir) {
+	int16 objFrm, dirFram;
+	int16 partIdx, objTyp, tmpObj, isOnChair, seatType;
+	int16 cur_x, cur_y;
 
 	isOnChair = 0;
 	/*sitting on a chair or a throne (throne part 2 = seat)?*/
@@ -526,7 +526,7 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
 /*spend pts movement points (MovePts) for objNum: halved for a mounted
  horse, halved for the party / doubled for hostiles under SpellFx[10] /
  SpellFx[7] (these two effects are never set elsewhere); at least 1*/
-/*C_1E0F_0F54*/SubMov(int objNum, int pts) {
+/*C_1E0F_0F54*/SubMov(int16 objNum, int16 pts) {
 	if(GetType(objNum) == OBJ_MOUNTED_HORSE)
 		pts >>= 1;
 	if(SpellFx[10] && IsPlrControl(objNum))
@@ -540,7 +540,7 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
 
 /*actor held underground by a corpser tries to break free (STR vs 1d30).
  Returns 1 if it is still held (it is hurt and loses its turn), else 0.*/
-/*C_1E0F_0FA9*/static StruggleDraggedUnder(int npc) {
+/*C_1E0F_0FA9*/static StruggleDraggedUnder(int16 npc) {
 	if(IsDraggedUnder(npc)) {
 		if(NPCMode[npc] == AI_COMMAND)
 			CON_printf(ArghMsg, (char *)GetObjectString(npc));
@@ -563,9 +563,9 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
  placed in FormationObjs[] (leader first; a mounted horse counts for 2 tiles).
  Returns 0 if (x, y) is occupied by one of them (the mouse may share), else
  1 if (x, y) touches one of them (8-neighbourhood), else 0.*/
-/*C_1E0F_1056*/static IsNextToFormation(int count, int x, int y) {
-	int delta_x, delta_y;
-	int k, placedObj, placedType, isAdjacent, isMouse;
+/*C_1E0F_1056*/static IsNextToFormation(int16 count, int16 x, int16 y) {
+	int16 delta_x, delta_y;
+	int16 k, placedObj, placedType, isAdjacent, isMouse;
 
 	isAdjacent = 0;
 	isMouse = (GetType(FormationObjs[count]) == OBJ_MOUSE);
@@ -597,13 +597,13 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
  "pass" or after entering a map - every member not exactly on its slot).
  Each move picks among the 8 neighbours the one that keeps contact and is
  closest to the slot, avoiding damaging tiles. Followers pay 5 points.*/
-/*C_1E0F_1193*/MoveFollowers(int leader, int regroup) {
-	register int follower, follow_pos;
-	int partyIdx, try_dir, pass;
-	int follower_x, follower_y;
-	int try_x, try_y, eager, new_dir;
-	int max_eager, savedMovePts, facing_dir, leaderDir, x, y, target_x, target_y;
-	int leaderType, wasNextTo;
+/*C_1E0F_1193*/MoveFollowers(int16 leader, int16 regroup) {
+	register int16 follower, follow_pos;
+	int16 partyIdx, try_dir, pass;
+	int16 follower_x, follower_y;
+	int16 try_x, try_y, eager, new_dir;
+	int16 max_eager, savedMovePts, facing_dir, leaderDir, x, y, target_x, target_y;
+	int16 leaderType, wasNextTo;
 
 	if(IN_VEHICLE)
 		return;
@@ -704,9 +704,9 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
  (= object quantity) and the Avatar's name; the party members (and a skiff
  or raft we were already in) are put into its inventory and
  Active = PartySize (see IN_VEHICLE).*/
-/*C_1E0F_14BE*/Board(int objNum) {
-	int i;
-	int new_objNum, edgeFlags, partDir, carriedBoat;
+/*C_1E0F_14BE*/Board(int16 objNum) {
+	int16 i;
+	int16 new_objNum, edgeFlags, partDir, carriedBoat;
 
 	carriedBoat = -1;
 	/*clicked on the bow or stern of a ship: its edge flag points to the
@@ -770,9 +770,9 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
  the vehicle's type with its hit points as quantity, park actor 0 in limbo
  (z = 14) and let the party out. Unless onLand, a skiff or raft carried
  in a ship is dropped and boarded. Returns the new map object.*/
-/*C_1E0F_1745*/Unboard(int onLand) {
-	int boat, vehicle;
-	int mapObj;
+/*C_1E0F_1745*/Unboard(int16 onLand) {
+	int16 boat, vehicle;
+	int16 mapObj;
 
 	boat = -1;
 	vehicle = Party[PartySize];
@@ -833,8 +833,8 @@ static /*C_1E0F_056E*/IsOutOfArea(int objNum) {
  moongates, red gates, mine shafts and holes (entering a dungeon). All of
  these are refused while in solo mode (SoloMember != -1).*/
 /*C_1E0F_184D*/CheckGatesAndEntrances() {
-	int objNum, gateIdx;
-	int moonDiff, objType, needPartyMode;
+	int16 objNum, gateIdx;
+	int16 moonDiff, objType, needPartyMode;
 
 	needPartyMode = 0;
 	if(InCombat)
@@ -947,9 +947,9 @@ c_1922:
  a party member standing in the way, movement costs (wind for ships,
  current for skiffs, terrain otherwise), then moves the followers and checks
  gates/entrances. Sets AdvanceBlocked when the step was blocked.*/
-/*C_1E0F_1B0E*/PartyAdvance(int dir) {
-	int obj, tmp_dir;
-	int partyIdx, new_x, new_y, tileOrType, flow_dir;
+/*C_1E0F_1B0E*/PartyAdvance(int16 dir) {
+	int16 obj, tmp_dir;
+	int16 partyIdx, new_x, new_y, tileOrType, flow_dir;
 
 	ShowQuestBarrierMsg = 1;
 	obj = Party[Active];
@@ -1088,9 +1088,9 @@ c_1922:
  operates the door it stands on: closing = 1 when leaving the square (door
  frame 4..7), 0 when arriving (frame 0..3, open); a passthrough is toggled
  silently in both cases*/
-/*C_1E0F_2001*/OperateDoorUnder(int objNum, int closing) {
-	int obj, objTyp;
-	int frame, objCls;
+/*C_1E0F_2001*/OperateDoorUnder(int16 objNum, int16 closing) {
+	int16 obj, objTyp;
+	int16 frame, objCls;
 
 	objCls = GetMonsterClass(GetType(objNum));
 	if(objCls < 0 || !IsMonsterHuman(objCls) || IsPlrControl(objNum))
@@ -1113,8 +1113,8 @@ c_1922:
 
 /*look for a plate on the 4 squares next to {x, y, z} (N, E, S, W).
  Returns 1 + direction (1, 3, 5, 7) of the first plate found, 0 if none.*/
-/*C_1E0F_2125*/static FindAdjacentPlate(int x, int y, int z) {
-	int dir, obj;
+/*C_1E0F_2125*/static FindAdjacentPlate(int16 x, int16 y, int16 z) {
+	int16 dir, obj;
 
 	for(dir = 0; dir < 8; dir += 2) {
 		for(obj = FindLoc(DirIncrX[dir] + x, DirIncrY[dir] + y, z); obj >= 0; obj = NextLoc()) {
@@ -1132,9 +1132,9 @@ c_1922:
 /*look for the furniture FurnitureTypes[kind] on objNum's own square (a chair or a
  throne seat; for the table kind: a chair next to a plate).
  Returns the object found, or -1.*/
-/*C_1E0F_2184*/static FindFurnitureHere(int objNum, int kind) {
-	int obj, wantedType;
-	int x, y, z;
+/*C_1E0F_2184*/static FindFurnitureHere(int16 objNum, int16 kind) {
+	int16 obj, wantedType;
+	int16 x, y, z;
 
 	x = GetX(objNum);
 	y = GetY(objNum);
@@ -1163,10 +1163,10 @@ c_1922:
  area NPCMode is left at AI_SCHEDULE so this is retried when it comes into
  view. For the other actions, if the NPC is not on its scheduled square
  NPCMode becomes AI_FINDPATH so it walks there.*/
-static /*C_1E0F_2276*/StartScheduleAction(int objNum) {
-	int obj;
+static /*C_1E0F_2276*/StartScheduleAction(int16 objNum) {
+	int16 obj;
 	struct coord xyz;
-	int action, isAtDest, plateDir;
+	int16 action, isAtDest, plateDir;
 
 	action = Schedule[SchedIndex[objNum] + SchedPointer[objNum]].action;
 	xyz = Schedule[SchedIndex[objNum] + SchedPointer[objNum]].xyz;
@@ -1272,8 +1272,8 @@ static /*C_1E0F_2276*/StartScheduleAction(int objNum) {
  of steps in that direction; 0 ends the path.*/
 typedef struct {
 	unsigned char /*_0000*/PTH_map[AREA_H][AREA_W];
-	int /*_0640*/PTH_rank[0x100];
-	int /*_0840*/PTH_link[0x100];
+	int16 /*_0640*/PTH_rank[0x100];
+	int16 /*_0840*/PTH_link[0x100];
 	unsigned char /*_0a40*/PTH_x[0x100],/*_0b40*/PTH_y[0x100];
 	unsigned char /*_0c40*/PTH_resist[AREA_H][AREA_W];
 } t40x40;
@@ -1289,9 +1289,9 @@ typedef struct {
  reversed steps; then (two-ended search only) walk from the meeting cell
  down the goal front to the goal, appending the steps. Path longer than 31
  entries are truncated. The result goes to PathData->content[PTH_Index].*/
-/*C_1E0F_25F9*/static PTH_BuildPath(int area_x, int area_y) {
-	int i, dir;
-	int pathLen, some_min, dir_min, back_x, back_y, new_x, new_y;
+/*C_1E0F_25F9*/static PTH_BuildPath(int16 area_x, int16 area_y) {
+	int16 i, dir;
+	int16 pathLen, some_min, dir_min, back_x, back_y, new_x, new_y;
 
 	back_x = area_x;
 	back_y = area_y;
@@ -1376,9 +1376,9 @@ typedef struct {
 /*teleport an NPC directly to its scheduled location and start the action,
  unless it or the destination is within 5 squares of the player (on his
  level) - always done when AllowNPCTeleport is set. Frees its path slot.*/
-/*C_1E0F_291C*/static TeleportToSchedule(int objNum) {
+/*C_1E0F_291C*/static TeleportToSchedule(int16 objNum) {
 	struct coord sched_xyz;
-	int x, y, z;
+	int16 x, y, z;
 
 	x = GetX(objNum);
 	y = GetY(objNum);
@@ -1414,9 +1414,9 @@ typedef struct {
  flag_80 (0 or 0x80). Detects success (other front met, seeked object found,
  area edge reached in direction PTH_direct); otherwise queues the cell in
  bucket PTH_rank[resist] if this is cheaper than what it had.*/
-/*C_1E0F_2A74*/static PTH_Visit(int resist, int x, int y, int flag_80) {
-	int newTop, obj;
-	int origin_x, origin_y;
+/*C_1E0F_2A74*/static PTH_Visit(int16 resist, int16 x, int16 y, int16 flag_80) {
+	int16 newTop, obj;
+	int16 origin_x, origin_y;
 
 	if(
 		PTH_Found ||
@@ -1481,9 +1481,9 @@ typedef struct {
 /*reverse path slot "index" in place: entries in reverse order and each
  direction flipped (^2: N<->S, E<->W). Used when the search was run from
  the goal toward the NPC.*/
-static /*C_1E0F_2C9D*/PTH_ReversePath(int index) {
-	int k, len;
-	int tmp;
+static /*C_1E0F_2C9D*/PTH_ReversePath(int16 index) {
+	int16 k, len;
+	int16 tmp;
 
 	for(len = 0; len < 0x20; len ++) {
 		if(PathData->content[index][len] == 0)
@@ -1505,9 +1505,9 @@ static /*C_1E0F_2C9D*/PTH_ReversePath(int index) {
  - x < 0: to the nearest furniture of type y (AI_SEEKOBJ).
  Success: NPCMode = AI_ONPATH, Leader[npc] = path slot. Failure:
  AI_FINDPATH -> AI_PATH_FAILED (retry later), AI_SEEKOBJ -> AI_SCHEDULE.*/
-/*C_1E0F_2D37*/static PTH_FindPath(int objNum, int x, int y) {
-	int start_x, start_y, i, j, node;
-	int area_x, area_y, cost, flag_80, tmp, swapped;
+/*C_1E0F_2D37*/static PTH_FindPath(int16 objNum, int16 x, int16 y) {
+	int16 start_x, start_y, i, j, node;
+	int16 area_x, area_y, cost, flag_80, tmp, swapped;
 
 	PTH_Found = swapped = 0;
 	PTH_direct = -1;
@@ -1623,7 +1623,7 @@ static /*C_1E0F_2C9D*/PTH_ReversePath(int index) {
 
 /*random signed offset with a geometric distribution: 0 (50%), +-1 (25%)...*/
 /*C_1E0F_31C7*/static RandomSpread() {
-	int n;
+	int16 n;
 
 	for(n = 0; OSI_rand(0, 1); n ++);
 	if(OSI_rand(0, 1))
@@ -1634,9 +1634,9 @@ static /*C_1E0F_2C9D*/PTH_ReversePath(int index) {
 /*consume movement points according to terrain: 5 + the upper nibble of
  TerrainType (movement cost) of the base tile and of every object on the
  object's square (impassable tiles excluded)*/
-static /*C_1E0F_31F7*/SubTerrainMov(int numObject) {
-	int numTile, obj;
-	int x, y, z, pts;
+static /*C_1E0F_31F7*/SubTerrainMov(int16 numObject) {
+	int16 numTile, obj;
+	int16 x, y, z, pts;
 
 	pts = 5;
 	x = GetX(numObject);
@@ -1657,8 +1657,8 @@ static /*C_1E0F_31F7*/SubTerrainMov(int numObject) {
  avoidHazard). Pays the terrain cost even when blocked. A party member in
  combat won't leave the 17x17 square around the leader. Door-opening NPCs
  open/close doors on the way. Returns 1 if moved.*/
-/*C_1E0F_32D6*/TryStraightMove(int objNum, int dir, int avoidHazard) {
-	int new_x, new_y;
+/*C_1E0F_32D6*/TryStraightMove(int16 objNum, int16 dir, int16 avoidHazard) {
+	int16 new_x, new_y;
 
 	dir &= 7;
 	SubTerrainMov(objNum);
@@ -1686,8 +1686,8 @@ static /*C_1E0F_31F7*/SubTerrainMov(int numObject) {
 
 /*loiter around (x, y): 1 chance in 8 to take a random straight step,
  biased toward (x, y) the farther the NPC is; otherwise just wait*/
-/*C_1E0F_33C4*/static LoiterNear(int objNum, int x, int y) {
-	int delta_x, delta_y, dir;
+/*C_1E0F_33C4*/static LoiterNear(int16 objNum, int16 x, int16 y) {
+	int16 delta_x, delta_y, dir;
 
 	if(OSI_rand(0, 7) == 0) {
 		delta_x = GetX(objNum) - x;
@@ -1705,9 +1705,9 @@ static /*C_1E0F_31F7*/SubTerrainMov(int numObject) {
 /*try a diagonal step combining h_dir (2/6) and v_dir (0/4); at least one of
  the two orthogonal squares must be free too (no corner cutting). Never
  for the silver serpent. Returns 1 if moved.*/
-static /*C_1E0F_3470*/__TryDiagMove(int objNum, int h_dir, int v_dir) {
-	int dir;
-	int sideFree, new_x, new_y;
+static /*C_1E0F_3470*/__TryDiagMove(int16 objNum, int16 h_dir, int16 v_dir) {
+	int16 dir;
+	int16 sideFree, new_x, new_y;
 
 	if(GetType(objNum) == OBJ_SILVER_SERPENT)
 		return 0;
@@ -1746,9 +1746,9 @@ static /*C_1E0F_3470*/__TryDiagMove(int objNum, int h_dir, int v_dir) {
  axis, and (1 chance in 2) straight back on the other axis. Party members
  don't walk through each other meanwhile (PassThroughParty = 0).
  Returns 1 if a step was made.*/
-/*C_1E0F_35A7*/TryMoveTo(int objNum, int new_x, int new_y) {
-	int delta_x, delta_y;
-	int h_dir, v_dir, moved, isVMove, avoidHazard;
+/*C_1E0F_35A7*/TryMoveTo(int16 objNum, int16 new_x, int16 new_y) {
+	int16 delta_x, delta_y;
+	int16 h_dir, v_dir, moved, isVMove, avoidHazard;
 
 	avoidHazard = !IgnoreHazards;
 	moved = 1;
@@ -1807,7 +1807,7 @@ static /*C_1E0F_3470*/__TryDiagMove(int objNum, int h_dir, int v_dir) {
 
 /*wander at random: a party member sometimes walks back to the leader,
  others take a random straight step 1 time in 8; otherwise wait*/
-/*C_1E0F_37DB*/WanderRandomly(int objNum) {
+/*C_1E0F_37DB*/WanderRandomly(int16 objNum) {
 	if(NPCMode[objNum] != AI_IMMOBILE) {
 		if(
 			IsPlrControl(objNum) &&
@@ -1831,9 +1831,9 @@ static /*C_1E0F_3470*/__TryDiagMove(int objNum, int h_dir, int v_dir) {
  within 1 square of (x, y) (its scheduled spot), else it searches again.
  When blocked it waits up to 3 turns (AI_ONPATH -> AI_PATH_BLOCKED1 -> AI_PATH_BLOCKED2 -> AI_PATH_FAILED),
  then gives up the path (AI_PATH_FAILED = to be searched again later).*/
-static /*C_1E0F_387D*/__DoOnPath(int objNum, int x, int y) {
-	int index;
-	int info;
+static /*C_1E0F_387D*/__DoOnPath(int16 objNum, int16 x, int16 y) {
+	int16 index;
+	int16 info;
 
 	index = Leader[objNum];
 	info = PathData->content[index][PathCounter[index]];
@@ -1869,9 +1869,9 @@ static /*C_1E0F_387D*/__DoOnPath(int objNum, int x, int y) {
 
 /*walk toward the nearest visible party member (or the party's center when
  none is visible). Returns that member if now adjacent, else -1.*/
-/*C_1E0F_39B3*/static ApproachNearestMember(int objNum) {
-	int nearest, member;
-	int partyIdx, x, y, x_dest, y_dest, dist, dist_min;
+/*C_1E0F_39B3*/static ApproachNearestMember(int16 objNum) {
+	int16 nearest, member;
+	int16 partyIdx, x, y, x_dest, y_dest, dist, dist_min;
 
 	nearest = -1;
 	x = GetX(objNum);
@@ -1908,9 +1908,9 @@ static /*C_1E0F_387D*/__DoOnPath(int objNum, int x, int y) {
  Yes: the party wakes up in the Britain jail at 8 o'clock, lockpicks are
  destroyed, the jail key (key quality 9) goes into the desk and the cell
  door gets locked. No: the guard and every other arresting NPC turn hostile.*/
-/*C_1E0F_3B60*/static GuardArrest(int guard) {
-	int obj, i;
-	int answer, item, nextItem;
+/*C_1E0F_3B60*/static GuardArrest(int16 guard) {
+	int16 obj, i;
+	int16 answer, item, nextItem;
 
 	if(!(TalkFlags[5] & 0x80)) {
 		NPCMode[guard] = AI_FINDPATH;
@@ -1971,7 +1971,7 @@ static /*C_1E0F_387D*/__DoOnPath(int objNum, int x, int y) {
  the victim's INT against the thief's DEX.
  note: never called in practice, see the AI_CONVERSE/AI_THIEF case of
  NPC_TakeTurn.*/
-/*C_1E0F_3D8D*/static StealGold(int thief, int victim) {
+/*C_1E0F_3D8D*/static StealGold(int16 thief, int16 victim) {
 	if(!TestObj(victim, OBJ_GOLD))
 		return;
 	TakeObj(victim, OBJ_GOLD, OSI_rand(10, 30));
@@ -1982,7 +1982,7 @@ static /*C_1E0F_387D*/__DoOnPath(int objNum, int x, int y) {
 /*AI_CONVERSE: the NPC starts a conversation with the party.
  note: TALK_talkTo() expects a party index as first parameter but gets
  the member's object number here*/
-/*C_1E0F_3E08*/static TalkToParty(int npc, int member) {
+/*C_1E0F_3E08*/static TalkToParty(int16 npc, int16 member) {
 	TALK_talkTo(member, npc, 0);
 	MUS_PlayAreaSong();
 	PromptFlag = 1;
@@ -1991,7 +1991,7 @@ static /*C_1E0F_387D*/__DoOnPath(int objNum, int x, int y) {
 /*find a free path slot (0..7), freeing the slots whose NPC is no longer
  following a path. Returns 8 if none.*/
 static /*C_1E0F_3E27*/__NewPathIndex() {
-	int slot, mode;
+	int16 slot, mode;
 
 	for(slot = 0; slot < 8; slot ++) {
 		if(PathObject[slot]) {
@@ -2009,9 +2009,9 @@ static /*C_1E0F_3E27*/__NewPathIndex() {
  strategies, schedule behaviours, path following...). Nothing happens
  during Time Stop (SpellFx[14]) or on another level. An actor that did
  not spend any movement point loses 10.*/
-/*C_1E0F_3E6A*/NPC_TakeTurn(int objNum) {
-	int other;
-	int dir, sched_x, sched_y, savedMovePts, startMovePts;
+/*C_1E0F_3E6A*/NPC_TakeTurn(int16 objNum) {
+	int16 other;
+	int16 dir, sched_x, sched_y, savedMovePts, startMovePts;
 	struct coord sched_xyz;
 
 	if(IsPlrControl(objNum) && !IsCharmed(objNum))
@@ -2139,8 +2139,8 @@ static /*C_1E0F_3E27*/__NewPathIndex() {
 /*add the terrain of an object tile to the path resistance of a cell:
  a non-impassable object on impassable water makes it passable (bridge),
  an impassable one blocks it, others add their movement cost (max 0xff)*/
-/*C_1E0F_4265*/static PTH_AddObjResist(int tile, int area_x, int area_y) {
-	int sum;
+/*C_1E0F_4265*/static PTH_AddObjResist(int16 tile, int16 area_x, int16 area_y) {
+	int16 sum;
 
 	if(_ScratchBuf->PTH_resist[area_y][area_x] == 0xff) {
 		if(IsTerrainWet(AreaTiles[area_y][area_x]) && !IsTerrainImpass(tile))
@@ -2160,10 +2160,10 @@ static /*C_1E0F_3E27*/__NewPathIndex() {
  more, locked doors block, doors also block the square beside them (the
  frame), other objects (all their tiles for multi-tile ones) go through
  PTH_AddObjResist*/
-static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
-	int area_y, area_x;
-	int row, col, objNum, tile;
-	int origin_x, origin_y, objTyp, tileFlags;
+static /*C_1E0F_436A*/__ComputeResistance(int16 unusedObj) {
+	int16 area_y, area_x;
+	int16 row, col, objNum, tile;
+	int16 origin_x, origin_y, objTyp, tileFlags;
 
 	origin_x = (MapX - 0x10) & 0x3f8;
 	origin_y = (MapY - 0x10) & 0x3f8;
@@ -2223,8 +2223,8 @@ static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
  remain. If no search was needed, the NPCs whose path failed (AI_PATH_FAILED) are
  put back to AI_FINDPATH for another try.*/
 /*C_1E0F_464A*/PTH_SearchPaths() {
-	int objNum, noneSearched;
-	int schedEntry;
+	int16 objNum, noneSearched;
+	int16 schedEntry;
 	struct coord xyz;
 
 	noneSearched = 1;
@@ -2270,9 +2270,9 @@ static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
    EnemyFlankNeg) and the first of them (EnemyFrontFirst). Used by the flank/front A.I.
  Without enemies the "enemy center" is the square ahead of the Avatar.*/
 /*C_1E0F_4746*/static ComputeCombatGeometry() {
-	int i, num;
-	int enemy_x, enemy_y, maxFwd, partyMaxSide, partyMinSide, foeMaxSide, foeMinSide, fwd, side;
-	long sum_x, sum_y;
+	int16 i, num;
+	int16 enemy_x, enemy_y, maxFwd, partyMaxSide, partyMinSide, foeMaxSide, foeMinSide, fwd, side;
+	int32 sum_x, sum_y;
 
 	/*compute party's gravity center?*/
 	sum_x =
@@ -2373,12 +2373,12 @@ static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
 }
 
 /*requiem: the 8 note frequencies played when the Avatar dies*/
-/*1862*/int RequiemNotes[] = {0x12C,0x119,0x12C,0x0FA,0x119,0x0DE,0x0FA,0x0FA};
+/*1862*/int16 RequiemNotes[] = {0x12C,0x119,0x12C,0x0FA,0x119,0x0DE,0x0FA,0x0FA};
 
 /*the Avatar died: requiem, "An unending darkness engulfs thee...",
  "KAL LOR" and the party is resurrected (PartyResurrect)*/
 /*C_1E0F_4AFA*/static PartyDeath() {
-	int i;
+	int16 i;
 
 	if(Active == 0x10)
 		return;
@@ -2402,7 +2402,7 @@ static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
    (in combat the former active member resumes its combat mode).
  LastActiveIdx receives the new active index (it is never read).*/
 /*C_1E0F_4B6A*/CheckActiveMember() {
-	int i;
+	int16 i;
 
 	if(Active > PartySize)
 		return;
@@ -2474,8 +2474,8 @@ static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
  AI_FOLLOW members move only with the leader (MoveFollowers); the Avatar
  can't act while a follower has no points left.*/
 /*C_1E0F_4E0A*/RunNPCTurns() {
-	int i, bestPts;
-	int area_x, area_y, actor, bestDex, cmp, coordMask;
+	int16 i, bestPts;
+	int16 area_x, area_y, actor, bestDex, cmp, coordMask;
 	
 	CheckActiveMember();
 	ComputeCombatGeometry();
@@ -2585,7 +2585,7 @@ static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
 /*initialization after a game is loaded/started: no actor with 0 dexterity,
  actor 0 (vehicle) not in a schedule mode, combat geometry computed*/
 /*C_1E0F_512A*/InitNPCTracker() {
-	int i;
+	int16 i;
 
 	for(i = 0; i < 0x100; i ++) {
 		if(DEXTE[i] == 0)
@@ -2605,8 +2605,8 @@ static /*C_1E0F_436A*/__ComputeResistance(int unusedObj) {
  entry relative to SchedPointer[n]. Entry time byte: bits 0-4 hour,
  bits 5-7 day of the week (0 = every day). Vigilantes calm down.*/
 /*C_1E0F_5165*/UpdateSchedules() {
-	int npc, entry;
-	int first, last, when;
+	int16 npc, entry;
+	int16 first, last, when;
 
 	for(npc = 2; npc < 0xe0; npc ++) {
 		if(NPCMode[npc] == AI_VIGILANTE)

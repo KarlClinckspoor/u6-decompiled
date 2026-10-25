@@ -39,36 +39,36 @@
 /*049A*/char SlotCursorRow = 0;/*slot cursor row (-1 container slot, 0~2 slots, 3 bottom buttons row)*/
 /*049B*/static unsigned char InGetString = 0;/*CON_gets() in progress*/
 /*049C*/unsigned char AnimateAtPrompt = 1;/*run animations while waiting at the prompt*/
-/*049D*/int LastNumberPlural = 1;/*last number printed was != 1 (plural, for '/' and '\\' escapes)*/
-/*049F*/int EndPagingAtPrompt = 0;/*clear the paginate attribute (0x10) at next prompt*/
-/*04A1*/int HelpOn = 1;/*help flag: highlight '@' keywords*/
-/*04A3*/int InHiddenSection = 0;/*inside a '&'...'&' section: hidden unless SpeakGargish (SpeakGarglish)*/
-/*04A5*/int TextOn = 1;
-/*04A7*/int LastAttackTarget = -1;/*last attack target object (or -1)*/
-/*04A9*/int SkipNewlines = 0;/*ignore '\n' in scrolling window until a printable char*/
-/*04AB*/static int KbdKeepLastOnly = 1;/*keyboard: keep only the last key in the BIOS buffer*/
-/*04AD*/int GetsAborted = 0;/*last CON_gets() was aborted with ESC*/
-/*04AF*/int CookedInput = 1;/*0 = return raw keys (used by "more" prompt), 1 = full command processing*/
-/*04B1*/int InputToUpper = 1;/*convert input keys to uppercase*/
-/*04B3*/int StatusMember = 0;/*party member # shown in portrait/equipment view*/
+/*049D*/int16 LastNumberPlural = 1;/*last number printed was != 1 (plural, for '/' and '\\' escapes)*/
+/*049F*/int16 EndPagingAtPrompt = 0;/*clear the paginate attribute (0x10) at next prompt*/
+/*04A1*/int16 HelpOn = 1;/*help flag: highlight '@' keywords*/
+/*04A3*/int16 InHiddenSection = 0;/*inside a '&'...'&' section: hidden unless SpeakGargish (SpeakGarglish)*/
+/*04A5*/int16 TextOn = 1;
+/*04A7*/int16 LastAttackTarget = -1;/*last attack target object (or -1)*/
+/*04A9*/int16 SkipNewlines = 0;/*ignore '\n' in scrolling window until a printable char*/
+/*04AB*/static int16 KbdKeepLastOnly = 1;/*keyboard: keep only the last key in the BIOS buffer*/
+/*04AD*/int16 GetsAborted = 0;/*last CON_gets() was aborted with ESC*/
+/*04AF*/int16 CookedInput = 1;/*0 = return raw keys (used by "more" prompt), 1 = full command processing*/
+/*04B1*/int16 InputToUpper = 1;/*convert input keys to uppercase*/
+/*04B3*/int16 StatusMember = 0;/*party member # shown in portrait/equipment view*/
 /*04B5*/unsigned char IncantLen = 0;/*number of syllables in the current incantation*/
-/*04B6*/unsigned long IncantMask = 0;/*incantation as a mask of syllable letters (bit n = 'A'+n)*/
-/*04BA*/int MousePress = 0;
-/*04BC*/int MouseTrigger = 0;
-/*04BE*/int MouseMode = 0;
-/*04C0*/int StatusDisplay = CMD_STAT_PARTY;
-/*04C2*/int PendingCommand = CMD_PASS;/*command currently being executed (waiting for a target)*/
-/*04C4*/int AllowMouseMov = 0;
-/*04C6*/int MouseMapX = -1;
-/*04C8*/int MouseMapY = -1;
+/*04B6*/uint32 IncantMask = 0;/*incantation as a mask of syllable letters (bit n = 'A'+n)*/
+/*04BA*/int16 MousePress = 0;
+/*04BC*/int16 MouseTrigger = 0;
+/*04BE*/int16 MouseMode = 0;
+/*04C0*/int16 StatusDisplay = CMD_STAT_PARTY;
+/*04C2*/int16 PendingCommand = CMD_PASS;/*command currently being executed (waiting for a target)*/
+/*04C4*/int16 AllowMouseMov = 0;
+/*04C6*/int16 MouseMapX = -1;
+/*04C8*/int16 MouseMapY = -1;
 /*screen pixel used as origin by MkDirection() (88,88: party leader in the map view)*/
 /*04CA*/unsigned char DirOriginX = 88;
 /*04CB*/unsigned char DirOriginY = 88;
-/*C_0C9C_0286*/void CON_DrawCharCb(int ch, int x, int y);/*"put char" callback*/
-/*C_0C9C_02F1*/void CON_ScrollUpCb(int x, int y, int w, int h);/*"scroll up" callback*/
-/*04CC*/void (*CON_PutCharFn)(int, int, int) = CON_DrawCharCb;/*"put char" callback pointer*/
-/*04D0*/void (*CON_ScrollUpFn)(int, int, int, int) = CON_ScrollUpCb;/*"scroll up" callback pointer*/
-/*04D4*/int PromptCh = 5;
+/*C_0C9C_0286*/void CON_DrawCharCb(int16 ch, int16 x, int16 y);/*"put char" callback*/
+/*C_0C9C_02F1*/void CON_ScrollUpCb(int16 x, int16 y, int16 w, int16 h);/*"scroll up" callback*/
+/*04CC*/void (*CON_PutCharFn)(int16, int16, int16) = CON_DrawCharCb;/*"put char" callback pointer*/
+/*04D0*/void (*CON_ScrollUpFn)(int16, int16, int16, int16) = CON_ScrollUpCb;/*"scroll up" callback pointer*/
+/*04D4*/int16 PromptCh = 5;
 /*initial text window: full 40x25 screen, white on black*/
 /*04D6*/struct tClipInfo BootClip = {
 	0, 0, 40, 25,
@@ -77,10 +77,10 @@
 	0
 };
 /*04DF,04D6*/struct tClipInfo *CurClip = &BootClip;/*current clip*/
-/*04E1*/int DefaultClipAttr = 1;/*_attr given to new clips by CON_createClip (word wrap)*/
+/*04E1*/int16 DefaultClipAttr = 1;/*_attr given to new clips by CON_createClip (word wrap)*/
 /*-- 3x5 font, used to print quantities over inventory tiles
   (5 rows of 3 bits, MSB first; the low bit is unused)*/
-/*04E3*/unsigned TinyFont[] = {
+/*04E3*/uint16 TinyFont[] = {
 	0xF6DE,/*'0'*/
 	0x4924,/*'1'*/
 	0xE7CE,/*'2'*/
@@ -117,10 +117,10 @@
 	{13,9,5,1} /*4 digit*/
 };
 /*map view tile last pointed at by the mouse (for continuous walking)*/
-/*0527*/int LastMouseTileX = -1;
-/*0529*/int LastMouseTileY = -1;
+/*0527*/int16 LastMouseTileX = -1;
+/*0529*/int16 LastMouseTileY = -1;
 /*mouse hit zones {left,top,right,bottom}, see mkMouseCommand()*/
-/*052B*/int MouseZones[][4] = {
+/*052B*/int16 MouseZones[][4] = {
 	{  8,  8,167,167},/*map view?*/
 	{  8,176,167,191},/*icons?*/
 	{168,  8,311,103},/*party/portrait/equip view?*/
@@ -128,7 +128,7 @@
 };
 /*equipment view "slots" screen x [column] & y [row][column]
 (columns 0~2: equipment, 3~6: inventory)*/
-/*054B*/int SlotScrX[] = {176,200,224,248,264,280,296};
+/*054B*/int16 SlotScrX[] = {176,200,224,248,264,280,296};
 /*0559*/unsigned char SlotScrY[][7] = {
 	{24,16,24,32,32,32,32},
 	{40,40,40,48,48,48,48},
@@ -136,8 +136,8 @@
 };
 /*tiles of the buttons row (x = 176 + 16 * i, y = 88) of the
   portrait/equipment views, used to erase the slot cursor (updated by DrawSlotCursor)*/
-/*056E*/int SlotButtonTiles[] = {TIL_BUTTON_NEXT_LEFT,TIL_BUTTON_PARTY,TIL_BUTTON_PORTRAIT,TIL_BUTTON_NEXT_RIGHT,TIL_BUTTON_COMBAT_MODE};
-/*0578*/int PendingSelect = 0;/*next CON_getch() returns CMD_TARGET at once (target already selected by right click)*/
+/*056E*/int16 SlotButtonTiles[] = {TIL_BUTTON_NEXT_LEFT,TIL_BUTTON_PARTY,TIL_BUTTON_PORTRAIT,TIL_BUTTON_NEXT_RIGHT,TIL_BUTTON_COMBAT_MODE};
+/*0578*/int16 PendingSelect = 0;/*next CON_getch() returns CMD_TARGET at once (target already selected by right click)*/
 /*057A*/unsigned char LineBufLen = 0;/*line buffer: length (= column of next char)*/
 /*057B*/unsigned char LineBufDrawn = 0;/*line buffer: chars before this column are already on screen*/
 /*057C*/unsigned char LineAcceptSpace = 1;/*0 = skip spaces (at the start of a word-wrapped line)*/
@@ -152,8 +152,8 @@
   returns 1 if it was hidden: pass the result to CON_mouseOn() afterwards.
   (the result is uninitialized when there is no mouse; harmless since
   CON_mouseOn() tests MouseOn too)*/
-/*C_0C9C_0007*/CON_mouseOffAt(int x0, int y0, int x1, int y1) {
-	int inArea;
+/*C_0C9C_0007*/CON_mouseOffAt(int16 x0, int16 y0, int16 x1, int16 y1) {
+	int16 inArea;
 
 	if(MouseOn) {
 		MouseArea.left = x0;
@@ -168,7 +168,7 @@
 }
 
 /*show the mouse pointer again if mustShow (result of CON_mouseOffAt)*/
-/*C_0C9C_0050*/CON_mouseOn(int mustShow) {
+/*C_0C9C_0050*/CON_mouseOn(int16 mustShow) {
 	if(MouseOn && mustShow)
 		MOUSE_SHOW();
 }
@@ -178,9 +178,9 @@
   Near the origin (48x48 box) the 16x16 cell decides (-1 for the center cell);
   farther, the slope decides: mostly horizontal/vertical (ratio >= 2) gives
   E/W/N/S, else a diagonal.*/
-/*C_0C9C_0069*/MkDirection(int x, int y) {
-	int dir;
-	int deltaX, deltaY;
+/*C_0C9C_0069*/MkDirection(int16 x, int16 y) {
+	int16 dir;
+	int16 deltaX, deltaY;
 
 	dir = -1;
 	deltaX = abs(x - DirOriginX);
@@ -237,7 +237,7 @@ update mouse pointer shape according to position.
 shapes: 0 arrow (outside the map view), 1 target/crosshair (MouseMode != 0,
 or center of the map), 2~9 direction arrows (2 + direction)*/
 /*C_0C9C_01FB*/CON_UpdateMousePointer() {
-	int dir;
+	int16 dir;
 
 	if(!MouseOn)
 		return;
@@ -260,8 +260,8 @@ or center of the map), 2~9 direction arrows (2 + direction)*/
 
 /*"put char" callback (CON_PutCharFn):
 draw character ch at text cell (x,y) with the current clip's colors*/
-/*C_0C9C_0286*/void CON_DrawCharCb(int ch, int x, int y) {
-	int mouseHidden;
+/*C_0C9C_0286*/void CON_DrawCharCb(int16 ch, int16 x, int16 y) {
+	int16 mouseHidden;
 
 	x <<= 3;
 	y <<= 3;
@@ -275,8 +275,8 @@ draw character ch at text cell (x,y) with the current clip's colors*/
 /*"scroll up" callback (CON_ScrollUpFn):
 scroll the text window at cell (x,y) of w x h cells up by one line (8 pixels)
 and clear its last line with the background color*/
-/*C_0C9C_02F1*/void CON_ScrollUpCb(int x, int y, int w, int h) {
-	int mouseHidden;
+/*C_0C9C_02F1*/void CON_ScrollUpCb(int16 x, int16 y, int16 w, int16 h) {
+	int16 mouseHidden;
 
 	x <<= 3;
 	y <<= 3;
@@ -292,7 +292,7 @@ and clear its last line with the background color*/
 /*Restore game: throw away the current state and reload the saved game
 (called from the main loop when DiskFullChoice == 'R')*/
 /*C_0C9C_0397*/GAME_Restore() {
-	int i;
+	int16 i;
 
 	IsArmageddon = 0;
 	MapAnimEnabled = 1;
@@ -324,14 +324,14 @@ and clear its last line with the background color*/
 "savegame\\objlist" (same layout as written by GAME_Save), then rebuild
 the map around the party and open the "chunks" file*/
 /*C_0C9C_042A*/GAME_Load() {
-	int fd, i;
+	int16 fd, i;
 
 	BuiltAreaX = BuiltAreaY = BuiltAreaZ = -1;
 
 	DISK_confirm(DISK_GAME);
 	fd = OSI_open(/*057E*/"schedule");
-	OSI_read(fd, 0, (0x100 + 1) * sizeof(int), SchedPointer);
-	OSI_read(fd, -1, (long)SchedPointer[0x100] * sizeof(struct tSchedule), Schedule);
+	OSI_read(fd, 0, (0x100 + 1) * sizeof(int16), SchedPointer);
+	OSI_read(fd, -1, (int32)SchedPointer[0x100] * sizeof(struct tSchedule), Schedule);
 	OSI_close(fd);
 
 	DISK_confirm(DISK_GAME);
@@ -360,12 +360,12 @@ the map around the party and open the "chunks" file*/
 	OSI_read(fd, -1, 0x100, NPCComMode);
 	OSI_read(fd, -1, 0x100, MAGIC);
 	OSI_read(fd, -1, 0x100, MovePts);
-	OSI_read(fd, -1, 0x100 * sizeof(int), OrigShapeType);
+	OSI_read(fd, -1, 0x100 * sizeof(int16), OrigShapeType);
 	OSI_read(fd, -1, 0x100, TalkFlags);
 	OSI_read(fd, -1, 0x100, Leader);
 	OSI_read(fd, -1, 0x100, NPCFlag);
 	OSI_read(fd, -1, 0x100, PathData);
-	OSI_read(fd, -1, (long)((char *)&GameStateEnd - (char *)&GameStateStart), &GameStateStart);
+	OSI_read(fd, -1, (int32)((char *)&GameStateEnd - (char *)&GameStateStart), &GameStateStart);
 	OSI_close(fd);
 
 	OBJ_RelinkNPCs();
@@ -405,7 +405,7 @@ the map around the party and open the "chunks" file*/
 /*Save game: write the state to "savegame\\objlist" (party members aboard
 a vehicle are put back on the map for the time of the save)*/
 /*C_0C9C_089F*/GAME_Save() {
-	int fd, i;
+	int16 fd, i;
 
 	DiskFullChoice = ' ';
 	BuiltAreaX = BuiltAreaY = BuiltAreaZ = -1;
@@ -438,12 +438,12 @@ a vehicle are put back on the map for the time of the save)*/
 	OSI_write(fd, -1, 0x100, NPCComMode);
 	OSI_write(fd, -1, 0x100, MAGIC);
 	OSI_write(fd, -1, 0x100, MovePts);
-	OSI_write(fd, -1, 0x100 * sizeof(int), OrigShapeType);
+	OSI_write(fd, -1, 0x100 * sizeof(int16), OrigShapeType);
 	OSI_write(fd, -1, 0x100, TalkFlags);
 	OSI_write(fd, -1, 0x100, Leader);
 	OSI_write(fd, -1, 0x100, NPCFlag);
 	OSI_write(fd, -1, 0x100, PathData);
-	OSI_write(fd, -1, (long)((char *)&GameStateEnd - (char *)&GameStateStart), &GameStateStart);
+	OSI_write(fd, -1, (int32)((char *)&GameStateEnd - (char *)&GameStateStart), &GameStateStart);
 	OSI_close(fd);
 
 	MAP_LoadAround();
@@ -456,7 +456,7 @@ a vehicle are put back on the map for the time of the save)*/
 
 /*draw tile ftile over background tile btile at screen (x,y)
 (composed in the backbuffer's top-left 16x16 corner, then copied)*/
-/*C_0C9C_0BCE*/DrawTileOnBg(int ftile, int btile, int x, int y) {
+/*C_0C9C_0BCE*/DrawTileOnBg(int16 ftile, int16 btile, int16 x, int16 y) {
 	GR_PUT_TILE(btile, 0, 0);
 	GR_PUT_TILE(ftile, 0, 0);
 	/*backbuffer {0,0} 15x15 -> screen {x,y}*/
@@ -466,9 +466,9 @@ a vehicle are put back on the map for the time of the save)*/
 /*draw a 3x5 character in the backbuffer's 16x16 work tile, at
 column xOfs, rows 11~15 (bottom of the tile), in text color.
 glyph: 0~9 = '0'-'9', 10~25 = 'A'-'P'*/
-/*C_0C9C_0C10*/DrawTinyGlyph(int glyph, int xOfs) {
-	int px, py;
-	unsigned bits;
+/*C_0C9C_0C10*/DrawTinyGlyph(int16 glyph, int16 xOfs) {
+	int16 px, py;
+	uint16 bits;
 
 	GrInfo->toBackBuffer = 1;
 	bits = TinyFont[glyph];
@@ -486,8 +486,8 @@ glyph: 0~9 = '0'-'9', 10~25 = 'A'-'P'*/
 
 /*draw tile ftile on an empty slot at screen (x,y) with the number val
 (0~9999, right aligned, 3x5 font) printed over its bottom*/
-/*C_0C9C_0C7D*/DrawTileWithNumber(int ftile, int val, int x, int y) {
-	int numDigits, digit;
+/*C_0C9C_0C7D*/DrawTileWithNumber(int16 ftile, int16 val, int16 x, int16 y) {
+	int16 numDigits, digit;
 
 	GR_PUT_TILE(TIL_SLOT_EMPTY, 0, 0);
 	GR_PUT_TILE(ftile, 0, 0);
@@ -511,8 +511,8 @@ glyph: 0~9 = '0'-'9', 10~25 = 'A'-'P'*/
 /*draw an inventory object in its slot at screen (x,y):
 keys show their quality as a letter ('A' = key #1), gold (QuanType 4)
 its amount, stackable objects (QuanType 2) their quantity*/
-/*C_0C9C_0D31*/DrawInvObject(int objNum, int x, int y) {
-	int quanType, ftile;
+/*C_0C9C_0D31*/DrawInvObject(int16 objNum, int16 x, int16 y) {
+	int16 quanType, ftile;
 
 	quanType = QuanType(ObjShapeType[objNum]);
 	ftile = TILE_FRAME(objNum);
@@ -533,7 +533,7 @@ its amount, stackable objects (QuanType 2) their quantity*/
 }
 
 /*same as DrawTileOnBg (entry point used by the status views)*/
-/*C_0C9C_0E57*/DrawSlotTile(int ftile, int btile, int x, int y) {
+/*C_0C9C_0E57*/DrawSlotTile(int16 ftile, int16 btile, int16 x, int16 y) {
 	DrawTileOnBg(ftile, btile, x, y);
 }
 
@@ -543,8 +543,8 @@ while no key is available, draw one frame of the animated cursor
 returns the key code (see KBD_GetKey: ASCII, or 0x100 + scan code for
 extended keys/keypad) or 0 if none*/
 /*C_0C9C_0E6E*/CON_prompt() {
-	int promptX, promptY;
-	int ch, savedFg;
+	int16 promptX, promptY;
+	int16 ch, savedFg;
 
 	/*backup/set new fg*/
 	savedFg = CurClip->fgColor;
@@ -584,8 +584,8 @@ extended keys/keypad) or 0 if none*/
 
 /*echo one typed character for CON_gets(), directly at the cursor
 (no line buffer); '\b' erases the previous char, also across lines*/
-/*C_0C9C_0F52*/CON_EchoChar(int ch) {
-	int scrX, scrY;
+/*C_0C9C_0F52*/CON_EchoChar(int16 ch) {
+	int16 scrX, scrY;
 
 	scrX = CurClip->curX + CurClip->originX;
 	scrY = CurClip->curY + CurClip->originY;
@@ -619,7 +619,7 @@ extended keys/keypad) or 0 if none*/
 
 /*uncalled?
 draw string str directly at text cell (x,y), no clipping*/
-/*__0C9C_102A*/CON_PutStrAt(unsigned char *str, int x, int y) {
+/*__0C9C_102A*/CON_PutStrAt(unsigned char *str, int16 x, int16 y) {
 	while(*str) {
 		(*CON_PutCharFn)(*str++, x++, y);
 	}
@@ -632,8 +632,8 @@ the walking code to slide around obstacles). The target is kept while the
 pointer stays on the same tile, unless the party is next to it on the same
 row/column or the button was just pressed.*/
 static /*C_0C9C_1054*/mkMouseDir() {
-	int tileX, tileY;
-	int dir;
+	int16 tileX, tileY;
+	int16 dir;
 
 	tileX = SCR2TIL(PointerX);
 	tileY = SCR2TIL(PointerY);
@@ -667,7 +667,7 @@ static /*C_0C9C_1054*/mkMouseDir() {
   slot (STAT_PickInvenSlot), CMD_HIT_EQUIP_SLOT for an equipment slot (STAT_PickEquipSlot).
 returns 0 when nothing selectable is pointed at*/
 static /*C_0C9C_1107*/mkMouseSelection() {
-	int tile;
+	int16 tile;
 
 	SelectionIsDark = 0;
 	if(PointerX < 168) {
@@ -702,7 +702,7 @@ Clicking the portrait column (x > 192) opens his portrait, the
 small icon column (176 < x <= 192) his equipment; the arrows scroll the list.
 Selection.obj = party index*/
 static /*C_0C9C_121F*/MouseInPartyView() {
-	int cmd;
+	int16 cmd;
 
 	cmd = 0;
 	if(PointerY > 24) {
@@ -732,7 +732,7 @@ static /*C_0C9C_121F*/MouseInPartyView() {
 mouse click in the portrait view: only the buttons row (y >= 88) reacts.
 returns the command (0 = none)*/
 static /*C_0C9C_12B7*/MouseInPortraitView() {
-	int cmd;
+	int16 cmd;
 
 	cmd = 0;
 	if(PointerY >= 88) {
@@ -757,8 +757,8 @@ the combat mode button (240,88; not for the Avatar) cycles the member's
 combat mode; clicking a locked chest prints "It's locked."; a trapped
 chest springs its trap before being opened*/
 static /*C_0C9C_131D*/MouseInEquipView() {
-	int cmd, objType;
-	int selKind;
+	int16 cmd, objType;
+	int16 selKind;
 
 	cmd = 0;
 	if(IsInConversation)
@@ -844,7 +844,7 @@ next circle -> CMD_SPELLBOOK_PREV_CIRCLE + 0~3. SpellPageNav[] (SpellPageNav[3] 
 is 0xff for a button not available.
 Clicking a spell line returns CMD_TARGET with Selection.obj = line # (0~7)*/
 static /*C_0C9C_15EB*/MouseInSpellbook() {
-	int cmd, button;
+	int16 cmd, button;
 
 	cmd = 0;
 	if(
@@ -869,8 +869,8 @@ static /*C_0C9C_15EB*/MouseInSpellbook() {
 /*set the default command (one of CMD_ATTACK~CMD_COMBAT, or 0xff = none),
 executed by a right click; it is shown by a line under its icon
 (icons are 16 pixels wide from x = 8, line at y = 192)*/
-static /*C_0C9C_166D*/setDefaultCommand(int cmd) {
-	int x;
+static /*C_0C9C_166D*/setDefaultCommand(int16 cmd) {
+	int16 x;
 
 	HideMouse
 	if(DefaultCommand != 0xff) {
@@ -896,8 +896,8 @@ pressed) at PointerX/Y into a command code (0 = none), by zone (MouseZones):
 - status panel: depends on StatusDisplay
 - elsewhere: pass*/
 static /*C_0C9C_1714*/mkMouseCommand() {
-	int mouseCmd, zone;
-	int mouseDir;
+	int16 mouseCmd, zone;
+	int16 mouseDir;
 
 	mouseCmd = 0;
 	
@@ -977,10 +977,10 @@ compared as letter sets, so the order does not matter) among the spells
 in the spellbook (SpellList). prints NotInBookMsg if none.
 returns the spell number or -1*/
 static /*C_0C9C_18D8*/IncantToSpell() {
-	int i;
+	int16 i;
 	unsigned char *syllable;
-	int spellNum;
-	long spellMask;
+	int16 spellNum;
+	int32 spellMask;
 
 	spellNum = -1;
 	for(i = 0; i < 8 * 0x10; i ++) {
@@ -1005,7 +1005,7 @@ static /*C_0C9C_18D8*/IncantToSpell() {
 
 /*make spellNum the selected spell (SelectedSpell); it is remembered in the
 quality of the spellbook(s) readied*/
-/*C_0C9C_1991*/static SPELL_SetSelected(int spellNum) {
+/*C_0C9C_1991*/static SPELL_SetSelected(int16 spellNum) {
 	SelectedSpell = spellNum;
 	if(Spellbook[0])
 		SetQual(Spellbook[0], spellNum);
@@ -1019,7 +1019,7 @@ up/down = move the selection arrow (char 0x1a) on the page,
 line i of the page being at text row i + 1 of the status clip.
 returns the command or 0*/
 /*C_0C9C_19D6*/static SpellbookKeyNav() {
-	int line, cmd;
+	int16 line, cmd;
 
 	if(AdvanceDir == 2 && SpellPageNav[2] != 0xff) {
 		cmd = CMD_SPELLBOOK_NEXT_PAGE;
@@ -1067,9 +1067,9 @@ at column SlotCursorCol / row SlotCursorRow:
  mode 2: move PointerX/Y on the slot (to validate it like a mouse click).
 In every mode PointerX/Y are first set inside the slot, so that
 mkMouseSelection()/MouseInEquipView() can hit-test it.*/
-/*C_0C9C_1AE5*/DrawSlotCursor(int mode) {
-	int x, y;
-	int selKind, objType, mouseHidden;
+/*C_0C9C_1AE5*/DrawSlotCursor(int16 mode) {
+	int16 x, y;
+	int16 selKind, objType, mouseHidden;
 
 	if(SelectMode != 2)
 		return;
@@ -1168,8 +1168,8 @@ mkMouseSelection()/MouseInEquipView() can hit-test it.*/
 CookedInput == 0 returns the raw key (used for "more" prompts).
 returns a key code, a CMD_xx code, never 0*/
 /*C_0C9C_1D59*/static CON_ReadCommand() {
-	int buttons, mouseX;
-	int ch, mouseY, newX, newY, i;
+	int16 buttons, mouseX;
+	int16 ch, mouseY, newX, newY, i;
 
 	if(CookedInput)
 		CON_putch0(-1);
@@ -1597,8 +1597,8 @@ CMD_DEFAULT_ACTION (default command on a right-clicked target) returns DefaultCo
 and, except for cast/rest/save which ask for more input, makes the next
 call return CMD_TARGET at once since Selection is already filled*/
 /*C_0C9C_2A59*/CON_getch() {
-	int circle, ch;
-	int endLoop, spellIdx, oldFirst;
+	int16 circle, ch;
+	int16 endLoop, spellIdx, oldFirst;
 
 	if(PendingSelect) {
 		PendingSelect = 0;
@@ -1767,9 +1767,9 @@ call return CMD_TARGET at once since Selection is already filled*/
 /*read a line of at most maxLen printable chars into buf, echoing it.
 <ENTER> validates, <ESC> erases it and aborts (GetsAborted = 1, buf = "").
 returns the length*/
-/*C_0C9C_2D3A*/CON_gets(char *buf, int maxLen) {
-	int len, done;
-	int ch;
+/*C_0C9C_2D3A*/CON_gets(char *buf, int16 maxLen) {
+	int16 len, done;
+	int16 ch;
 
 	InGetString = 1;
 	InputToUpper = 0;
@@ -1815,7 +1815,7 @@ returns the length*/
 
 /*initialize text window clip on the text cells (x0,y0)-(x1,y1)
 (inclusive) with default colors/attributes, and make it current*/
-/*C_0C9C_2E09*/CON_createClip(struct tClipInfo *clip, int x0, int y0, int x1, int y1) {
+/*C_0C9C_2E09*/CON_createClip(struct tClipInfo *clip, int16 x0, int16 y0, int16 x1, int16 y1) {
 	CurClip = clip;
 	clip->originX = x0;
 	clip->originY = y0;
@@ -1838,7 +1838,7 @@ is flushed first)*/
 }
 
 /*move the text cursor of the current clip to (x,y), clamped to it*/
-/*C_0C9C_2E8F*/CON_gotoxy(int x, int y)
+/*C_0C9C_2E8F*/CON_gotoxy(int16 x, int16 y)
 {
 	if(x < 0)
 		x = 0;
@@ -1864,9 +1864,9 @@ ch >= 0: the char is appended to the line buffer (LineBufChars/LineBufColors);
   prompt waits for a key when the window is full of new text (LinesBeforeMore).
 ch < 0 (-1): flush: draw the pending part of the line without ending it
   (done before moving the cursor, changing the clip, or reading input)*/
-/*C_0C9C_2EFA*/CON_putch0(int ch) {
-	int i, key;
-	int breakPos, unusedMidX, row;
+/*C_0C9C_2EFA*/CON_putch0(int16 ch) {
+	int16 i, key;
+	int16 breakPos, unusedMidX, row;
 
 	if(!TextOn)
 		return;
@@ -1977,8 +1977,8 @@ ch < 0 (-1): flush: draw the pending part of the line without ending it
 }
 
 /*output ch count times (no escapes)*/
-/*C_0C9C_32DE*/CON_PutRepeat(int count, int ch) {
-	int i;
+/*C_0C9C_32DE*/CON_PutRepeat(int16 count, int16 ch) {
+	int16 i;
 
 	for(i = 0; i < count; i ++)
 		CON_putch0(ch);
@@ -1995,10 +1995,10 @@ convert number to a string in str, in base |base| (2~36); a negative
 base means signed (number taken as a signed int, '-' counts in maxLen).
 at most maxLen digits are kept (the most significant ones are lost).
 returns the length*/
-/*C_0C9C_331A*/CON_itoa(unsigned number, char far *str, int maxLen, int base) {
-	int len;
+/*C_0C9C_331A*/CON_itoa(uint16 number, char far *str, int16 maxLen, int16 base) {
+	int16 len;
 	char digits[8];
-	int i, isNegative, digit;
+	int16 i, isNegative, digit;
 
 	isNegative = 0;
 	len = 0;
@@ -2043,8 +2043,8 @@ so by all game messages, books, signs and conversations):
   &    toggle a section hidden unless SpeakGargish (SpeakGarglish)
   < >  begin/end runic font
   `    capitalize the next char*/
-/*C_0C9C_33D3*/CON_putch(int ch) {
-	int varIdx;
+/*C_0C9C_33D3*/CON_putch(int16 ch) {
+	int16 varIdx;
 	char numBuf[8];
 
 	if(!TextOn)
@@ -2139,10 +2139,10 @@ the numbers set LastNumberPlural (plural flag); literal chars go through
 CON_putch() so escapes apply, but the converted values (%s too) also do*/
 cdecl /*C_0C9C_3643*/CON_printf(unsigned char far *format, ...) {
 	void **argp;
-	unsigned num;
+	uint16 num;
 	char numBuf[8];
-	int c, fmtCh;
-	int fieldWidth, len, padCh, leftAlign;
+	int16 c, fmtCh;
+	int16 fieldWidth, len, padCh, leftAlign;
 	char *str;
 
 	if(!TextOn)
@@ -2170,22 +2170,22 @@ cdecl /*C_0C9C_3643*/CON_printf(unsigned char far *format, ...) {
 			}
 			switch(tolower(fmtCh)) {
 				case 'd':
-					num = *(int *)argp++;
+					num = *(int16 *)argp++;
 					len = CON_itoa(num, numBuf, 6, -10);
 					LastNumberPlural = (num != 1);
 				break;
 				case 'o':
-					num = *(int *)argp++;
+					num = *(int16 *)argp++;
 					len = CON_itoa(num, numBuf, 6, 8);
 					LastNumberPlural = (num != 1);
 				break;
 				case 'x':
-					num = *(int *)argp++;
+					num = *(int16 *)argp++;
 					len = CON_itoa(num, numBuf, 4, 16);
 					LastNumberPlural = (num != 1);
 				break;
 				case 'u':
-					num = *(int *)argp++;
+					num = *(int16 *)argp++;
 					len = CON_itoa(num, numBuf, 5, 10);
 					LastNumberPlural = (num != 1);
 				break;

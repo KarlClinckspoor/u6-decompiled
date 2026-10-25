@@ -38,45 +38,45 @@
 #include "u6.h"
 
 /*musician was near the party at the previous ShowObjects()*/
-/*0654*/static int MusicianWasNear = 0;
+/*0654*/static int16 MusicianWasNear = 0;
 /*when set, NextInv/NextInvType skip equipped (EQUIP) items*/
-/*0656*/int InvSkipEquipped = 0;
+/*0656*/int16 InvSkipEquipped = 0;
 /*set by FindLoc/NextLoc: which part of a multi-tile object covers the
   searched tile (0 = the object's own tile, 1 = the tile left of/above it,
   2/3 = the upper/upper-left part of a 2x2 tile); callers use
   TILE_FRAME(obj) - LocPartOffset to get the tile actually covering the location*/
-/*0658*/int LocPartOffset = 0;
+/*0658*/int16 LocPartOffset = 0;
 /*set while the "Amulet of submission" may be moved (InsertObj refuses it otherwise)*/
-/*065A*/static int AllowSubmissionMove = 0;
+/*065A*/static int16 AllowSubmissionMove = 0;
 /*[0..63] outdoor areas, [64..68] dungeon levels 1..5: a ".tmp" objblk file
   newer than the saved one exists*/
-/*065C*/int ObjBlkTmpPending[8*8 + 5] = {0};
+/*065C*/int16 ObjBlkTmpPending[8*8 + 5] = {0};
 /*when set, MoveObj applies terrain effects (ApplyTerrainEffects) to moved NPCs;
   cleared while teleporting the party etc.*/
-/*06E6*/int MoveAppliesTerrain = 0;
+/*06E6*/int16 MoveAppliesTerrain = 0;
 /*ids (yyyxxx) of the up to 4 outdoor areas currently loaded, -1 = free slot*/
-/*06E8*/int LoadedAreas[4] = {-1, -1, -1, -1};
+/*06E8*/int16 LoadedAreas[4] = {-1, -1, -1, -1};
 /*id (yyyxxx) of the top-left area of the loaded 2x2 window, -1 = none*/
-/*06F0*/int LoadedWindowArea = -1;
+/*06F0*/int16 LoadedWindowArea = -1;
 /*z level currently loaded (0 = surface), -1 = none*/
-/*06F2*/int LoadedZ = -1;
+/*06F2*/int16 LoadedZ = -1;
 /*FindLoc/NextLoc state: current list position, "already jumped to the
   next row" flag and the searched location*/
-/*06F4*/static int LocCursor = -1;
-/*06F6*/static int LocOnNextRow = 0;
+/*06F4*/static int16 LocCursor = -1;
+/*06F6*/static int16 LocOnNextRow = 0;
 /*06F8*/static struct coord LocTarget = {0, 0, 0};
 /*FindInv/NextInv/FindInvType/NextInvType state: current list position,
   owner, type and quality (-1 = any)*/
-/*06FB*/int InvCursor = -1;
-/*06FD*/int InvOwner = -1;
-/*06FF*/int InvType = -1;
-/*0701*/int InvQuality = -1;/*Quality*/
+/*06FB*/int16 InvCursor = -1;
+/*06FD*/int16 InvOwner = -1;
+/*06FF*/int16 InvType = -1;
+/*0701*/int16 InvQuality = -1;/*Quality*/
 /*SearchArea/NextArea state: current list position and end position*/
-/*0703*/int AreaCursor = -1;
-/*0705*/int AreaEnd = -1;
+/*0703*/int16 AreaCursor = -1;
+/*0705*/int16 AreaEnd = -1;
 /*last content object moved out by DeleteObj (-1 if none); lets a caller
   that is walking Link[] continue from there*/
-/*0707*/int LastSpilledObj = -1;
+/*0707*/int16 LastSpilledObj = -1;
 
 /*objblk file names; characters [15] and [16] are patched with the area letters*/
 /*0709*/static char __Sav_file[] = "savegame\\objblkaa";
@@ -96,9 +96,9 @@
 /*uncalled?*/
 /*is location (x, y, z) currently loaded in the object list?
   (dungeon: z is the current level; surface: its area is one of LoadedAreas[])*/
-/*__1184_000E*/OBJ_IsLocLoaded(int x, int y, int z) {
-	int isLoaded, i;
-	int mapId;
+/*__1184_000E*/OBJ_IsLocLoaded(int16 x, int16 y, int16 z) {
+	int16 isLoaded, i;
+	int16 mapId;
 
 	isLoaded = 0;
 	if(z) {
@@ -117,7 +117,7 @@
 /*frame number of a creature of type objTyp facing direction dir (0=N 2=E
   4=S 6=W), i.e. dir times the number of frames per direction, plus the
   "standing" frame for the walking animations*/
-/*C_1184_0073*/OBJ_MakeDirFrame(int objTyp, int dir) {
+/*C_1184_0073*/OBJ_MakeDirFrame(int16 objTyp, int16 dir) {
 	if(
 		objTyp == OBJ_CHAIR || objTyp == OBJ_CANNON ||
 		objTyp == OBJ_MOUSE || objTyp == OBJ_RABBIT ||
@@ -152,10 +152,10 @@
   to (its TerrainType connection flag gives the side; the other part must
   carry the opposite flag); for a silver serpent body segment (>= 0x100)
   return the head (stored in its quantity). Returns objNum otherwise.*/
-/*C_1184_0153*/OBJ_getHead(int objNum) {
-	int i;
-	int x, y, connFlag, backFlag;
-	int objTyp, ret;
+/*C_1184_0153*/OBJ_getHead(int16 objNum) {
+	int16 i;
+	int16 x, y, connFlag, backFlag;
+	int16 objTyp, ret;
 
 	if(objNum < 0)
 		return -1;
@@ -197,7 +197,7 @@
 }
 
 /*returns the next free object slot if at least num slots are free, else -1*/
-/*C_1184_02E3*/static GetFreeObjSlot(int num) {
+/*C_1184_02E3*/static GetFreeObjSlot(int16 num) {
 	if(FreeObjCount >= num)
 		return FreeObjHead;
 	return -1;
@@ -210,11 +210,11 @@
   wantPrev != 0: returns the node after which an object at (x, y) must be
                  inserted (0x100 = list head), i.e. new objects go in front
                  of the objects already on that tile.*/
-/*C_1184_02FA*/static OBJ_FindListPos(int x, int y, int wantPrev) {
-	int i, j;
+/*C_1184_02FA*/static OBJ_FindListPos(int16 x, int16 y, int16 wantPrev) {
+	int16 i, j;
 	struct coord xyz;
-	int cur, prev, next, objY;
-	int relX, relY;
+	int16 cur, prev, next, objY;
+	int16 relX, relY;
 
 	relX = (x - AreaX) & 0x3ff;
 	relY = (y - AreaY) & 0x3ff;
@@ -222,16 +222,16 @@
 		j = AREA_W * relY + relX;
 		if(wantPrev) {
 			/*first non null object before j*/
-			for(i = j - 1; i >= 0 && ((int *)MapObjPtr)[i] == -1; i --);
+			for(i = j - 1; i >= 0 && ((int16 *)MapObjPtr)[i] == -1; i --);
 			/*first non null object after j*/
-			for(; j < 0x63f && ((int *)MapObjPtr)[j] == -1; j ++);
+			for(; j < 0x63f && ((int16 *)MapObjPtr)[j] == -1; j ++);
 
 			if(i >= 0)
-				i = ((int *)MapObjPtr)[i];
+				i = ((int16 *)MapObjPtr)[i];
 			else
 				i = 0x100;
 
-			for(j = ((int *)MapObjPtr)[j]; (next = Link[i]) >= 0 && next != j; i = next) {
+			for(j = ((int16 *)MapObjPtr)[j]; (next = Link[i]) >= 0 && next != j; i = next) {
 				if(GetCoordUse(next) == LOCXYZ) {
 					objY = GetY(next);
 					if(
@@ -241,10 +241,10 @@
 				}
 			}
 		} else {
-			i = ((int *)MapObjPtr)[j];
+			i = ((int16 *)MapObjPtr)[j];
 			if(i < 0) {
-				for(; j < 0x63f && ((int *)MapObjPtr)[j] == -1; j ++);
-				i = ((int *)MapObjPtr)[j];
+				for(; j < 0x63f && ((int16 *)MapObjPtr)[j] == -1; j ++);
+				i = ((int16 *)MapObjPtr)[j];
 			}
 		}
 	} else {
@@ -253,11 +253,11 @@
 			((AreaY + (AREA_H-1)) & 0x3ff) < y || (
 			((AreaY + (AREA_W-1)) & 0x3ff) == y/*AREA_W for AREA_H: same value*/ && ((AreaX + (AREA_W-1)) & 0x3ff) < x
 		)) {
-			for(i = 0x63f; i >= 0 && ((int *)MapObjPtr)[i] == -1; i --);
+			for(i = 0x63f; i >= 0 && ((int16 *)MapObjPtr)[i] == -1; i --);
 			if(i < 0)
 				prev = 0x100;
 			else
-				prev = ((int *)MapObjPtr)[i];
+				prev = ((int16 *)MapObjPtr)[i];
 		} else {
 			prev = 0x100;
 		}
@@ -290,9 +290,9 @@
   Returns -1 at the end.*/
 /*C_1184_053F*/NextLoc() {
 	struct coord *pos;
-	int found;
+	int16 found;
 	struct coord locDown, locRight, locDownRight;
-	int tileNum, locX, locY, locZ;
+	int16 tileNum, locX, locY, locZ;
 	
 	found = -1;
 	locX = GetCoordX(LocTarget);
@@ -360,7 +360,7 @@
 }
 
 /*start iterating over the objects at (x, y, z); returns the first one or -1*/
-/*C_1184_075A*/FindLoc(int x, int y, int z) {
+/*C_1184_075A*/FindLoc(int16 x, int16 y, int16 z) {
 	if(z) {
 		x &= 0xff;
 		y &= 0xff;
@@ -374,8 +374,8 @@
 
 /*find an object of type objTyp exactly at (x, y, MapZ) (multi-tile
   parts are not considered); -1 if none*/
-/*C_1184_07A7*/OBJ_FindTypeAt(int objTyp, int x, int y) {
-	int obj, found;
+/*C_1184_07A7*/OBJ_FindTypeAt(int16 objTyp, int16 x, int16 y) {
+	int16 obj, found;
 
 	found = -1;
 	for(
@@ -398,8 +398,8 @@
 /*start iterating over the direct contents of objNum (objects whose
   GetAssoc() is objNum); they directly follow it in the chain. Returns
   the first one or -1.*/
-/*C_1184_0840*/FindInv(int objNum) {
-	int first, ret;
+/*C_1184_0840*/FindInv(int16 objNum) {
+	int16 first, ret;
 
 	ret = -1;
 	first = Link[objNum];
@@ -416,7 +416,7 @@
 /*next direct content of the object given to FindInv (skips the contents
   of sub-containers; skips equipped items if InvSkipEquipped is set); -1 at the end*/
 /*C_1184_0899*/NextInv() {
-	int ret;
+	int16 ret;
 
 	for(ret = -1; InvCursor >= 0 && ret < 0; InvCursor = Link[InvCursor]) {
 		if(GetCoordUse(InvCursor) == LOCXYZ) {
@@ -433,8 +433,8 @@
 
 /*next map object inside the rectangle given to SearchArea; -1 at the end*/
 /*C_1184_090D*/NextArea() {
-	int ret, x;
-	int y, z;
+	int16 ret, x;
+	int16 y, z;
 
 	ret = -1;
 	if(AreaCursor >= 0) {
@@ -458,7 +458,7 @@
 
 /*start iterating over the map objects inside the rectangle
   (x1, y1)-(x2, y2) at level MapZ; returns the first one or -1*/
-/*C_1184_09DE*/SearchArea(int x1, int y1, int x2, int y2) {
+/*C_1184_09DE*/SearchArea(int16 x1, int16 y1, int16 x2, int16 y2) {
 	if(x1 < 0)
 		x1 = 0;
 	if(y1 < 0)
@@ -476,7 +476,7 @@
 /*next direct content of the FindInvType owner with the wanted type
   (and quality, unless -1); -1 at the end*/
 /*C_1184_0A37*/NextInvType() {
-	int ret;
+	int16 ret;
 
 	for(ret = -1; InvCursor >= 0 && ret < 0; InvCursor = Link[InvCursor]) {
 		if(GetCoordUse(InvCursor) == LOCXYZ) {
@@ -496,8 +496,8 @@
 
 /*first direct content of objNum of type objType and the given quality
   (-1 = any quality); -1 if none*/
-/*C_1184_0AE2*/FindInvType(int objNum, int objType, int quality) {
-	int first, ret;
+/*C_1184_0AE2*/FindInvType(int16 objNum, int16 objType, int16 quality) {
+	int16 first, ret;
 
 	if(objNum < 0)
 		return -1;
@@ -516,8 +516,8 @@
 
 /*find a living NPC/monster (slot startNum..0xFF, at least 1) standing at
   (x, y, MapZ); -1 if none*/
-/*C_1184_0B3D*/OBJ_FindNPCAt(int startNum, int x, int y) {
-	int i, ret;
+/*C_1184_0B3D*/OBJ_FindNPCAt(int16 startNum, int16 x, int16 y) {
+	int16 i, ret;
 
 	ret = -1;
 	if(startNum < 1)
@@ -540,8 +540,8 @@
 /*refresh the frame of every slime (temporary monster slots): bit mask
   of the neighbouring slimes, 1=N 2=E 4=S 8=W, so that they merge visually*/
 /*C_1184_0BC1*/OBJ_UpdateSlimeFrames() {
-	int slime, other;
-	int dir, x, y, newX, newY, neighbours, dirBit;
+	int16 slime, other;
+	int16 dir, x, y, newX, newY, neighbours, dirBit;
 
 	for(slime = 0xe0; slime < 0x100; slime ++) {
 		if(GetType(slime) == OBJ_SLIME && !IsDead(slime)) {
@@ -576,12 +576,12 @@
                    (oldX, oldY): renumber the segments, then move the tail
                    segment into the vacated tile (snake trick);
   deleteBody != 0: delete all the segments.*/
-/*C_1184_0CBE*/static OBJ_MoveSerpentBody(int objNum, int oldX, int oldY, int deleteBody) {
-	int part;
-	int partX, partY, headX, headY, headZ;
-	int partIndex;
-	int tail, beforeTail, vacatedConn, backDir, headFrame;
-	int partConn, partFrame;
+/*C_1184_0CBE*/static OBJ_MoveSerpentBody(int16 objNum, int16 oldX, int16 oldY, int16 deleteBody) {
+	int16 part;
+	int16 partX, partY, headX, headY, headZ;
+	int16 partIndex;
+	int16 tail, beforeTail, vacatedConn, backDir, headFrame;
+	int16 partConn, partFrame;
 
 	beforeTail = tail = objNum;
 	partX = oldX;
@@ -679,9 +679,9 @@
 
 /*find the dragon part next to (x, y) in direction dir whose frame
   matches a dragon facing (headFrame & 6) (table DragonPartFrames); -1 if none*/
-/*C_1184_10F1*/OBJ_FindDragonPart(int x, int y, int z, int dir, int headFrame) {
-	int part;
-	int partFrame;
+/*C_1184_10F1*/OBJ_FindDragonPart(int16 x, int16 y, int16 z, int16 dir, int16 headFrame) {
+	int16 part;
+	int16 partFrame;
 
 	partFrame = DragonPartFrames[(dir >> 1) + ((headFrame & 6) << 1)];
 	for(
@@ -700,9 +700,9 @@
   along, or delete them if deleteParts is set. The parts are found around
   the old position in every direction (hydra) or in the directions given
   by the TerrainType connection flags.*/
-/*C_1184_116D*/OBJ_MoveCreatureParts(int objNum, int oldX, int oldY, int deleteParts) {
-	int dir, part;
-	int newX, newY, z, partType, connFlags, partConn, facing;
+/*C_1184_116D*/OBJ_MoveCreatureParts(int16 objNum, int16 oldX, int16 oldY, int16 deleteParts) {
+	int16 dir, part;
+	int16 newX, newY, z, partType, connFlags, partConn, facing;
 
 	newX = GetX(objNum);
 	newY = GetY(objNum);
@@ -747,7 +747,7 @@
 
 /*create an object from a status and a struct coord (map location or
   container depending on the status); does not return the new object*/
-/*C_1184_134C*/AddObj(int status, struct coord location, int shapeType, int shapeNum, int amount) {
+/*C_1184_134C*/AddObj(int16 status, struct coord location, int16 shapeType, int16 shapeNum, int16 amount) {
 	if((status & 0x18) == LOCXYZ)
 		AddMapObj(shapeType | (shapeNum << 10), status, amount, GetCoordX(location), GetCoordY(location), GetCoordZ(location));
 	else
@@ -756,9 +756,9 @@
 
 /*create an object on the map at (x, y, z) (in front of the objects
   already there); returns the new object or -1 if no slot is free*/
-/*C_1184_13A7*/AddMapObj(int shapeType, int status, int amount, int x, int y, int z) {
-	int objNum;
-	int prev, posMask;
+/*C_1184_13A7*/AddMapObj(int16 shapeType, int16 status, int16 amount, int16 x, int16 y, int16 z) {
+	int16 objNum;
+	int16 prev, posMask;
 	
 	posMask = z?0xff:0x3ff;
 	x &= posMask;
@@ -784,8 +784,8 @@
 
 /*create an object inside owner (an NPC or a container); returns the new
   object or -1 if no slot is free*/
-/*C_1184_14A8*/AddInvObj(int shapeType, int status, int amount, int owner) {
-	int objNum;
+/*C_1184_14A8*/AddInvObj(int16 shapeType, int16 status, int16 amount, int16 owner) {
+	int16 objNum;
 
 	if(StatusDisplay == CMD_STAT_EQUIP && Party[StatusMember] == owner)
 		StatusDirty = 1;
@@ -807,9 +807,9 @@
 
 /*create a temporary monster of type objType at (x, y, z) in one of the
   slots 0xE0-0xFF; returns it or -1 if none is free*/
-/*C_1184_1540*/AddMonster(int objType, int x, int y, int z) {
-	int objNum;
-	int prev, posMask;
+/*C_1184_1540*/AddMonster(int16 objType, int16 x, int16 y, int16 z) {
+	int16 objNum;
+	int16 prev, posMask;
 
 	posMask = z?0xff:0x3ff;
 	x &= posMask;
@@ -841,8 +841,8 @@
 }
 
 /*the node preceding objNum in the Link[] chain (-1 if not found)*/
-/*C_1184_1665*/static OBJ_FindPrevLink(int objNum) {
-	int prev;
+/*C_1184_1665*/static OBJ_FindPrevLink(int16 objNum) {
+	int16 prev;
 
 	if(GetCoordUse(objNum) == LOCXYZ)
 		prev = OBJ_FindListPos(GetX(objNum), GetY(objNum), 1);
@@ -856,9 +856,9 @@
 /*objNum (at x, y, z) is being unlinked and nextObj now follows its
   predecessor: fix the MapObjPtr[] entry of the tile if it pointed to
   objNum (nextObj, or -1 if nextObj is on another tile)*/
-/*C_1184_16D5*/static OBJ_FixMapObjPtr(int x, int y, int z, int objNum, int nextObj) {
-	int relX, relY;
-	int posMask;
+/*C_1184_16D5*/static OBJ_FixMapObjPtr(int16 x, int16 y, int16 z, int16 objNum, int16 nextObj) {
+	int16 relX, relY;
+	int16 posMask;
 
 	if(GetCoordUse(objNum) == LOCXYZ) {
 		posMask = z?0xff:0x3ff;
@@ -876,9 +876,9 @@
 /*delete an object: its contents are dropped where it was (or put in its
   owner), extra parts of big creatures are deleted too, and the slot goes
   back to the monster or object free list. Ships can't be deleted.*/
-/*C_1184_17A5*/DeleteObj(int objNum) {
-	int objTyp;
-	int content, prev;
+/*C_1184_17A5*/DeleteObj(int16 objNum) {
+	int16 objTyp;
+	int16 content, prev;
 
 	if(objNum < 0)
 		return;
@@ -924,9 +924,9 @@
 /*the loaded area is now centered on (x, y, z): delete the temporary
   (LOCAL) monsters and objects farther than 20 tiles away, and let the
   eggs there hatch again*/
-/*C_1184_19AA*/OBJ_PurgeFarLocals(int x, int y, int z) {
-	int obj;
-	int objTyp, next, objX, objY, objZ;
+/*C_1184_19AA*/OBJ_PurgeFarLocals(int16 x, int16 y, int16 z) {
+	int16 obj;
+	int16 objTyp, next, objX, objY, objZ;
 
 	x &= MapCoordMask;
 	y &= MapCoordMask;
@@ -974,9 +974,9 @@
 /*an NPC/monster dies: create its dead body (same shape, quality = the
   NPC number) at its location, put its inventory into the body, keep any
   blood on top and send the NPC to the limbo level 15. Returns the body.*/
-/*C_1184_1B3A*/OBJ_MakeDeadBody(int objNum) {
-	int body;
-	int content, firstAtLoc, x, y, z;
+/*C_1184_1B3A*/OBJ_MakeDeadBody(int16 objNum) {
+	int16 body;
+	int16 content, firstAtLoc, x, y, z;
 
 	body = -1;
 	if(objNum < 0)
@@ -1010,9 +1010,9 @@
   quality): put the NPC where the body (or whoever carries it) is, give it
   back the body's contents (Amulet of submission re-equipped) and delete
   the body. Returns the NPC.*/
-/*C_1184_1C52*/OBJ_ReviveFromBody(int body) {
-	int root, content;
-	int npc;
+/*C_1184_1C52*/OBJ_ReviveFromBody(int16 body) {
+	int16 root, content;
+	int16 npc;
 
 	if(body < 0)
 		return -1;
@@ -1034,8 +1034,8 @@
 }
 
 /*is objNum (directly or not) inside container?*/
-/*C_1184_1D2E*/OBJ_IsInside(int objNum, int container) {
-	int ret;
+/*C_1184_1D2E*/OBJ_IsInside(int16 objNum, int16 container) {
+	int16 ret;
 
 	ret = 0;
 	while(GetCoordUse(objNum) != LOCXYZ) {
@@ -1049,8 +1049,8 @@
 }
 
 /*last node of objNum's subtree (its contents, recursively), objNum if empty*/
-/*C_1184_1D60*/static OBJ_LastOfSubtree(int objNum) {
-	int i, last;
+/*C_1184_1D60*/static OBJ_LastOfSubtree(int16 objNum) {
+	int16 i, last;
 
 	if(objNum < 0)
 		return -1;
@@ -1067,9 +1067,9 @@
   flags a redraw when the view is concerned and applies terrain effects
   to NPCs (if MoveAppliesTerrain). Returns objNum, or -1 if the move is refused
   (Amulet of submission, impossible silver serpent move).*/
-/*C_1184_1DAF*/MoveObj(int objNum, int toX, int toY, int toZ) {
-	int oldX;
-	int insertAfter, prev, last, oldY, frame, objTyp, posMask;
+/*C_1184_1DAF*/MoveObj(int16 objNum, int16 toX, int16 toY, int16 toZ) {
+	int16 oldX;
+	int16 insertAfter, prev, last, oldY, frame, objTyp, posMask;
 
 	if(objNum < 0)
 		return -1;
@@ -1143,8 +1143,8 @@
 
 /*put an object (and its contents) inside destNum with coord use objLoc
   (INVEN, EQUIP or CONTAINED); returns objNum or -1 if refused*/
-/*C_1184_20DD*/InsertObj(int objNum, int destNum, int objLoc) {
-	int prev, last, objTyp;
+/*C_1184_20DD*/InsertObj(int16 objNum, int16 destNum, int16 objLoc) {
+	int16 prev, last, objTyp;
 
 	if(objNum < 0 || destNum < 0)
 		return -1;
@@ -1169,7 +1169,7 @@
 }
 
 /*object types counted by the quantity byte of Amount[]*/
-/*0765*/int StackableTypes[] = {
+/*0765*/int16 StackableTypes[] = {
 	OBJ_TORCH,OBJ_LOCKPICK,OBJ_GEM,OBJ_ARROW,OBJ_BOLT,OBJ_BLACK_PEARL,OBJ_BLOOD_MOSS,
 	OBJ_GARLIC,OBJ_GINSENG,OBJ_MANDRAKE,OBJ_NIGHTSHADE,OBJ_SPIDERSILK,OBJ_ASH,OBJ_EFFECT,
 	OBJ_LOAF_OF_BREAD,OBJ_PORTION_OF_MEAT,OBJ_FLASK_OF_OIL,OBJ_EGG,OBJ_GOLD_NUGGET,OBJ_ZU_YLEM,OBJ_SILVER_SNAKE_VENOM
@@ -1177,8 +1177,8 @@
 
 /*how an object type counts: 4 = whole Amount[] word (gold),
   2 = quantity byte (stackable, see StackableTypes), 0 = one per object*/
-/*C_1184_21C7*/QuanType(int objTyp) {
-	int i, ret;
+/*C_1184_21C7*/QuanType(int16 objTyp) {
+	int16 i, ret;
 
 	ret = 0;
 	if(objTyp == OBJ_GOLD) {
@@ -1194,8 +1194,8 @@
 }
 
 /*number of items an object stands for (gold amount, stack quantity or 1)*/
-/*C_1184_21FD*/static OBJ_GetCount(int objNum) {
-	int quanType;
+/*C_1184_21FD*/static OBJ_GetCount(int16 objNum) {
+	int16 quanType;
 
 	quanType = QuanType(ObjShapeType[objNum]);
 	if(quanType == 4)
@@ -1208,9 +1208,9 @@
 /*give owner (NPC or container) amount (quantity | quality << 8) items of
   objType; stacks are limited to 0x90 items. Returns the last object
   created/updated (or -1).*/
-/*C_1184_2241*/GiveObj(int owner, int objType, int amount) {
-	int obj;
-	int i, quality, quantity, quanType, coordUse, slot;
+/*C_1184_2241*/GiveObj(int16 owner, int16 objType, int16 amount) {
+	int16 obj;
+	int16 i, quality, quantity, quanType, coordUse, slot;
 
 	if(owner < 0)
 		return -1;
@@ -1270,9 +1270,9 @@
 
 /*remove amount (quantity | quality << 8, quality 0 = any) items of
   objType from owner's possessions (recursively)*/
-/*C_1184_23F8*/TakeObj(int owner, int objType, int amount) {
-	int obj, quanType;
-	int count, next, quality, quantity, changed;
+/*C_1184_23F8*/TakeObj(int16 owner, int16 objType, int16 amount) {
+	int16 obj, quanType;
+	int16 count, next, quality, quantity, changed;
 
 	changed = 0;
 	if(owner < 0)
@@ -1314,8 +1314,8 @@
 }
 
 /*count the items of objType that objNum possesses (recursively)*/
-/*C_1184_252D*/TestObj(int objNum, int objType) {
-	int obj, total;
+/*C_1184_252D*/TestObj(int16 objNum, int16 objType) {
+	int16 obj, total;
 
 	total = 0;
 	obj = FindInv(objNum);
@@ -1328,7 +1328,7 @@
 }
 
 /*uncalled?*/
-/*C_1184_257D*/TransferObj(int oldOwner, int newOwner, int objType, int amount) {
+/*C_1184_257D*/TransferObj(int16 oldOwner, int16 newOwner, int16 objType, int16 amount) {
 	if(TakeObj(oldOwner, objType, amount) >= 0)
 		GiveObj(newOwner, objType, amount);
 }
@@ -1337,12 +1337,12 @@
   (ObjShapeType = 0). ScratchBuf->_6000[] maps buffer entries back to
   object numbers so that a CONTAINED object can store its container as a
   buffer index; NPC-held items keep the NPC number.*/
-/*C_1184_25A2*/static __ObjSerialize(int objNum, int index) {
+/*C_1184_25A2*/static __ObjSerialize(int16 objNum, int16 index) {
 	struct coord containerPos;
-	int containerIdx;
+	int16 containerIdx;
 
 	if(GetCoordUse(objNum) != LOCXYZ) {
-		if((int)GetAssoc(objNum) < 0x100) {
+		if((int16)GetAssoc(objNum) < 0x100) {
 			if(GetCoordUse(objNum) == CONTAINED)
 				SetCoordUse(objNum, INVEN);
 		} else {
@@ -1369,7 +1369,7 @@
 
 /*DeleteTempFiles: delete every "objblkXY.tmp" file flagged in ObjBlkTmpPending*/
 /*C_1184_26E2*/OBJ_DeleteTmpBlocks() {
-	int areaId;
+	int16 areaId;
 
 	DISK_confirm(DISK_PLAYER);
 	for(areaId = 0; areaId < (8*8 + 5); areaId ++) {
@@ -1387,8 +1387,8 @@
   more is written; on 'S' (save) every pending .tmp file is renamed over
   the real file, this block is written directly to __Sav_file and a save
   game is requested (DiskFullChoice = 'G').*/
-/*C_1184_2722*/static OBJ_WriteBlockFile(int numObj, int areaId) {
-	int i, fd;
+/*C_1184_2722*/static OBJ_WriteBlockFile(int16 numObj, int16 areaId) {
+	int16 i, fd;
 	char tmpLetters[2],savLetters[2];
 
 	ObjBlkTmpPending[areaId] = 1;
@@ -1396,7 +1396,7 @@
 	fd = OSI_create(__Tmp_file);
 	OSI_write(fd, 0, 2, &numObj);
 	if(DiskFullChoice != 'S' && DiskFullChoice != 'R')
-		OSI_write(fd, -1, (long)numObj << 3, ScratchBuf);
+		OSI_write(fd, -1, (int32)numObj << 3, ScratchBuf);
 	if(DiskFullChoice == 'S') {
 		tmpLetters[0] = __Tmp_file[15];
 		tmpLetters[1] = __Tmp_file[16];
@@ -1417,7 +1417,7 @@
 		__Tmp_file[16] = __Sav_file[16] = tmpLetters[1];
 		fd = OSI_create(__Sav_file);
 		OSI_write(fd, 0, 2, &numObj);
-		OSI_write(fd, -1, (long)numObj << 3, ScratchBuf);
+		OSI_write(fd, -1, (int32)numObj << 3, ScratchBuf);
 		__Sav_file[15] = savLetters[0];
 		__Sav_file[16] = savLetters[1];
 		DiskFullChoice = 'G';
@@ -1430,9 +1430,9 @@
   object there and its contents, including the inventories of the NPCs
   standing there (the NPCs themselves stay), is serialized, removed from
   the chain and freed, then written to the area's .tmp file*/
-/*C_1184_2888*/static OBJ_UnloadArea(int areaId) {
-	int obj, numObj;
-	int prev, last, baseX, baseY;
+/*C_1184_2888*/static OBJ_UnloadArea(int16 areaId) {
+	int16 obj, numObj;
+	int16 prev, last, baseX, baseY;
 
 	if(areaId < 0 || DiskFullChoice == 'R')
 		return;
@@ -1481,9 +1481,9 @@
   before a map object (OBJ_RelinkHeldItems moves it behind its owner later);
   otherwise objects are compared by the location of their outermost
   container/owner: y, then x, then higher z first.*/
-/*C_1184_29C4*/static OBJ_CompareOrder(int obj0, int obj1) {
-	int root0, root1;
-	int dist;
+/*C_1184_29C4*/static OBJ_CompareOrder(int16 obj0, int16 obj1) {
+	int16 root0, root1;
+	int16 dist;
 
 	if(obj0 == -1)
 		return 1;
@@ -1519,8 +1519,8 @@
 /*after loading blocks: move every NPC-held (INVEN/EQUIP) object that is
   not inside its owner's subtree (with its own contents) behind its owner*/
 /*C_1184_2B27*/static OBJ_RelinkHeldItems() {
-	int obj, walk;
-	int prev, last, owner;
+	int16 obj, walk;
+	int16 prev, last, owner;
 
 	prev = 0x100;
 	while(Link[prev] >= 0) {
@@ -1548,9 +1548,9 @@
 /*allocate numObj objects from the objblk buffer (as long as slots are
   free), translate the CONTAINED buffer indexes back to object numbers,
   then merge the new (sorted) chain into the main list*/
-/*C_1184_2BD8*/static __ObjectsDeserialize(int numObj) {
-	int cur, incoming;
-	int i, tmp, restart;
+/*C_1184_2BD8*/static __ObjectsDeserialize(int16 numObj) {
+	int16 cur, incoming;
+	int16 i, tmp, restart;
 
 	for(i = 0; i < numObj; i ++) {
 		if(FreeObjCount == 0) {
@@ -1608,9 +1608,9 @@
 }
 
 /*load the outdoor area areaId from its objblk file (the .tmp one if any)*/
-/*C_1184_2DEF*/static OBJ_LoadArea(int areaId) {
-	int fd;
-	int numObj;
+/*C_1184_2DEF*/static OBJ_LoadArea(int16 areaId) {
+	int16 fd;
+	int16 numObj;
 
 	if(areaId < 0 || DiskFullChoice == 'R')
 		return;
@@ -1629,7 +1629,7 @@
 	if(numObj > 0xc00)
 		numObj = 0xc00;
 	if(numObj)
-		OSI_read(fd, -1, (long)numObj << 3, ScratchBuf);
+		OSI_read(fd, -1, (int32)numObj << 3, ScratchBuf);
 	OSI_close(fd);
 	if(numObj)
 		__ObjectsDeserialize(numObj);
@@ -1638,9 +1638,9 @@
 /*rebuild the MapObjPtr[][] cache: first chained object of every tile of
   the 40x40 area*/
 /*C_1184_2ECC*/OBJ_RebuildMapObjPtr() {
-	int obj;
-	int relX, relY;
-	int unusedMask;
+	int16 obj;
+	int16 relX, relY;
+	int16 unusedMask;
 
 	for(relY = 0; relY < AREA_H; relY ++) {
 		for(relX = 0; relX < AREA_W; relX ++)
@@ -1659,9 +1659,9 @@
 
 /*unload dungeon level z (1..5) like OBJ_UnloadArea does for an outdoor
   area; its file is "objblk<'A'+z-1>i", flag ObjBlkTmpPending[64 + z - 1]*/
-/*C_1184_2FB3*/static OBJ_UnloadDungeon(int z) {
-	int obj, numObj;
-	int prev, last;
+/*C_1184_2FB3*/static OBJ_UnloadDungeon(int16 z) {
+	int16 obj, numObj;
+	int16 prev, last;
 
 	if(z < 0 || z > 5 || DiskFullChoice == 'R')
 		return;
@@ -1706,9 +1706,9 @@
 }
 
 /*load dungeon level z (1..5) from its objblk file (the .tmp one if any)*/
-/*C_1184_30A6*/static OBJ_LoadDungeon(int z) {
-	int fd;
-	int numObj;
+/*C_1184_30A6*/static OBJ_LoadDungeon(int16 z) {
+	int16 fd;
+	int16 numObj;
 
 	if(z < 0 || z > 5 || DiskFullChoice == 'R')
 		return;
@@ -1726,7 +1726,7 @@
 	if(numObj > 0xc00)
 		numObj = 0xc00;
 	if(numObj)
-		OSI_read(fd, -1, (long)numObj << 3, ScratchBuf);
+		OSI_read(fd, -1, (int32)numObj << 3, ScratchBuf);
 	OSI_close(fd);
 	if(numObj)
 		__ObjectsDeserialize(numObj);
@@ -1736,10 +1736,10 @@
   2x2 window of areas is kept; it is only shifted when (x, y) comes
   within 5 tiles of its border. Areas leaving the window (or the level
   left) are unloaded, new ones loaded, then NPC inventories relinked.*/
-/*C_1184_3176*/LoadNewRegions(int x, int y, int z) {
-	int i, j;
-	int shiftX, shiftY, relX, relY, numUnloaded, numLoaded;
-	int mapIds[4];
+/*C_1184_3176*/LoadNewRegions(int16 x, int16 y, int16 z) {
+	int16 i, j;
+	int16 shiftX, shiftY, relX, relY, numUnloaded, numLoaded;
+	int16 mapIds[4];
 
 	numUnloaded =
 	numLoaded = 0;
@@ -1817,7 +1817,7 @@
 /*"commit" obj files (save game): write the loaded blocks, rename every
   .tmp file over its objblk file, then reload the blocks*/
 /*C_1184_33CA*/OBJ_CommitBlocks() {
-	int i;
+	int16 i;
 
 	if(MapZ) {
 		OBJ_UnloadDungeon(MapZ);
@@ -1854,10 +1854,10 @@
               non-warm tile.
   Nothing is shown on hidden cells nor, except warm tiles under
   infravision, on dark ones; egg objects are never shown.*/
-/*C_1184_347C*/ShowObject(int tileFrame, int x, int y, int mode) {
+/*C_1184_347C*/ShowObject(int16 tileFrame, int16 x, int16 y, int16 mode) {
 	unsigned char *slot;
-	int tile;
-	int mapTile, onTop, node;
+	int16 tile;
+	int16 mapTile, onTop, node;
 	unsigned char *insertAt;
 
 	tile = tileFrame & 0x7ff;
@@ -1907,8 +1907,8 @@
 
 /*show tile + frame at view cell (x, y) together with the left/upper parts
   of double-width/double-height tiles (x, y may be 11 for those)*/
-/*C_1184_35EA*/static OBJ_ShowMultiTile(int tile, int frame, int x, int y) {
-	int flags;
+/*C_1184_35EA*/static OBJ_ShowMultiTile(int16 tile, int16 frame, int16 x, int16 y) {
+	int16 flags;
 
 	if(x < 11 && y < 11)
 		ShowObject(tile + frame, x, y, 0);
@@ -1932,10 +1932,10 @@
   (MapX, MapY); also triggers the ambient sounds, the bard music and
   volcano eruptions, and draws the darkness of the badly lit cells*/
 /*C_1184_36C2*/ShowObjects() {
-	int objNum;
-	int i, j;
-	int tile, objX, objY, light;
-	int newFrame, objTyp, stack, node, hasMusic;
+	int16 objNum;
+	int16 i, j;
+	int16 tile, objX, objY, light;
+	int16 newFrame, objTyp, stack, node, hasMusic;
 
 	MUS_ClearAmbient();
 	hasMusic = 0;
@@ -2062,7 +2062,7 @@
 /*Initialization: empty object list, all slots free (monsters 0xE0-0xFF,
   objects 0x101-0xBFF), no area loaded*/
 /*C_1184_3B1D*/OBJ_InitLists() {
-	int i;
+	int16 i;
 
 	for(i = 0; i < 0xbff; i ++)
 		Link[i] = i + 1;
@@ -2082,8 +2082,8 @@
   sorted object list and remove the used temporary monster slots from
   their free list (if slot 0xFF is used, its predecessor gets 0x100: bug?)*/
 /*C_1184_3B7D*/OBJ_RelinkNPCs() {
-	int npc, prev;
-	int lastFree;
+	int16 npc, prev;
+	int16 lastFree;
 
 	lastFree = 0x100;
 	for(npc = 0; npc < 0x100; npc ++) {
@@ -2108,10 +2108,10 @@
 /*load tile description from "look.lzd": entries are (word first tile,
   zero-terminated string) sorted by tile; the entry for numTile is the
   first one whose first tile is >= numTile. Returns "nothing" if empty.*/
-/*C_1184_3C1B*/GetTileString(int numTile) {
-	int tileNum;
+/*C_1184_3C1B*/GetTileString(int16 numTile) {
+	int16 tileNum;
 	char *dst;
-	int far *src;
+	int16 far *src;
 
 	DISK_confirm(DISK_MAP);
 	IsZFile = 1;
@@ -2130,9 +2130,9 @@
 
 /*name of an object: the party member's name, the original shape's name for
   a dead or sleeping NPC, otherwise its tile description*/
-/*C_1184_3C9C*/GetObjectString(int objNum) {
+/*C_1184_3C9C*/GetObjectString(int16 objNum) {
 	char *str;
-	int i;
+	int16 i;
 
 	if(objNum < 0) {
 		str = /*07C3*/"Nothing";

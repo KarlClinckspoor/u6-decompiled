@@ -6,7 +6,9 @@
 #ifndef __SEG_3522_H__
 #define __SEG_3522_H__
 
-/*3522:0000*/extern int far MonsterTypes[];/*object type of each monster class, 0-terminated*/
+#include "portable.h"
+
+/*3522:0000*/extern int16 far MonsterTypes[];/*object type of each monster class, 0-terminated*/
 
 /*3522:0082*/extern unsigned char far MonsterStr[];/*base strength per class*/
 /*3522:00C2*/extern unsigned char far MonsterDex[];/*base dexterity per class*/
@@ -17,7 +19,7 @@
 
 /*3522:0202*/extern unsigned char far MonsterAlignment[];/*initial NPCStatus (alignment) per class*/
 
-/*3522:0242*/extern int far MonsterFlags[];/*MONSTER_xxx ability flags per class*/
+/*3522:0242*/extern int16 far MonsterFlags[];/*MONSTER_xxx ability flags per class*/
 
 /*0x0001 immune to sleep (spell, sleep field)*/
 #define MONSTER_IMMUNE_SLEEP 0x0001
@@ -101,7 +103,7 @@
 #define IsMonsterWingedGargoyle(cls) (cls == 0x13)
 
 
-/*3522:02C2*/extern int far MonsterInvIndex[];/*offset in MonsterInvLists of the class's starting inventory*/
+/*3522:02C2*/extern int16 far MonsterInvIndex[];/*offset in MonsterInvLists of the class's starting inventory*/
 
 /*3522:0342*/extern unsigned char far MonsterInvLists[];/*packed 0-terminated spell/weapon/armor/treasure lists*/
 

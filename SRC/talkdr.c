@@ -158,9 +158,9 @@ unsigned char Unused_0989 = 0;/*in this module?(unreferenced)*/
 /*keyword match: returns 1 if the first <len> chars of <pattern> match
 (case insensitive, '?' is a wildcard) the start of any space separated
 word of <input>*/
-/*C_1703_0006*/static str_i_compare(unsigned char *pattern, unsigned char *input, int len) {
+/*C_1703_0006*/static str_i_compare(unsigned char *pattern, unsigned char *input, int16 len) {
 	unsigned char *word;
-	int i;
+	int16 i;
 	unsigned char buf[100];
 
 	strcpy(buf, input);
@@ -176,7 +176,7 @@ word of <input>*/
 }
 
 /*translate the OP_NPC pseudo-number into the current npc's number*/
-/*C_1703_008A*/static mk_npcnum(int npc) {
+/*C_1703_008A*/static mk_npcnum(int16 npc) {
 	if(npc == OP_NPC)
 		return TalkNpcs[0];
 	return npc;
@@ -185,8 +185,8 @@ word of <input>*/
 /*get NPC name: loads the npc's script into ScratchBuf and copies the
 name (which follows OP_SCRIPT_MARK and the npc num, and ends with the first
 opcode byte) into TalkNpcName; returns TalkNpcName*/
-/*C_1703_00A0*/static char *TALK_GetNpcName(int objNum) {
-	int i;
+/*C_1703_00A0*/static char *TALK_GetNpcName(int16 objNum) {
+	int16 i;
 
 	if(LoadConversation(objNum, ScratchBuf)) {
 		for(i = 0; i < 50; i ++)
@@ -207,8 +207,8 @@ opcode byte) into TalkNpcName; returns TalkNpcName*/
 
 /*name of a character: party members use the party name table (Names[]),
 other npcs the name from their conversation script*/
-/*C_1703_0116*/char *TALK_GetCharName(int objNum) {
-	int i;
+/*C_1703_0116*/char *TALK_GetCharName(int16 objNum) {
+	int16 i;
 
 	if(IsPlrControl(objNum)) {
 		for(i = 0; i < 8; i ++)
@@ -224,8 +224,8 @@ other npcs the name from their conversation script*/
 /*is object onscreen? (within the visible 9x9 part of the 11x11 view
 and not on a hidden/dark tile); party members are always "onscreen"
 while in a vehicle*/
-/*C_1703_0153*/IsNpcOnScreen(int objNum) {
-	int x, y, tile;
+/*C_1703_0153*/IsNpcOnScreen(int16 objNum) {
+	int16 x, y, tile;
 
 	if(IN_VEHICLE && IsPlrControl(objNum))
 		return 1;
@@ -246,7 +246,7 @@ while in a vehicle*/
 
 /*set #N -- number of nearby party members (not counting the speaker)*/
 /*C_1703_028B*/static TALK_SetNearbyPartyVar() {
-	int i, num;
+	int16 i, num;
 
 	num = 0;
 	for(i = 0; i < PartySize; i ++) {
@@ -258,9 +258,9 @@ while in a vehicle*/
 
 /*add npc to the party
 returns 0:ok, 1:party is in a vehicle, 2:party is full*/
-/*C_1703_02B6*/JoinParty(int objNum) {
+/*C_1703_02B6*/JoinParty(int16 objNum) {
 	unsigned char *name;
-	int nameLen;
+	int16 nameLen;
 
 	if(IN_VEHICLE)
 		return 1;
@@ -287,9 +287,9 @@ returns 0:ok, 1:party is in a vehicle, 2:party is full*/
 
 /*remove npc from the party; he drops his whole inventory at his feet
 returns 0:ok, 1:party is in a vehicle, 2:not in party*/
-/*C_1703_0398*/static LeaveParty(int objNum) {
-	int i;
-	int slot, invObj;
+/*C_1703_0398*/static LeaveParty(int16 objNum) {
+	int16 i;
+	int16 slot, invObj;
 
 	if(IN_VEHICLE)
 		return 1;
@@ -318,8 +318,8 @@ returns 0:ok, 1:party is in a vehicle, 2:not in party*/
 /*is object owned by party onscreen?
 returns the first onscreen party member carrying an object of type
 <objType> (and quality <objQual>, 0 = any), or -1*/
-/*C_1703_04C6*/FindPartyMemberWithObj(int objType, int objQual) {
-	int i;
+/*C_1703_04C6*/FindPartyMemberWithObj(int16 objType, int16 objQual) {
+	int16 i;
 
 	for(i = 0; i < PartySize; i ++) {
 		if(IsNpcOnScreen(Party[i]) && OBJ_FindInContainer(Party[i], objType, objQual) != -1)
@@ -331,27 +331,27 @@ returns the first onscreen party member carrying an object of type
 /*this macro creates an "offset" into the current
 conversation file. though, TalkBase is always 0
 (initialized during the startup)*/
-#define TALK_OFFSET(i) (int)(i) - TalkBase
+#define TALK_OFFSET(i) (int16)(i) - TalkBase
 
 #define PARSE_U8 (TalkBuf[Talk_PC ++])
-#define READ_U16 (*(unsigned far *)(TalkBuf + Talk_PC))
-#define READ_S16 (*(int far *)(TalkBuf + Talk_PC))
-#define READ_U32 (*(unsigned long far *)(TalkBuf + Talk_PC))
+#define READ_U16 (*(uint16 far *)(TalkBuf + Talk_PC))
+#define READ_S16 (*(int16 far *)(TalkBuf + Talk_PC))
+#define READ_U32 (*(uint32 far *)(TalkBuf + Talk_PC))
 
 /*evaluate a postfix expression starting at Talk_PC, up to (and
 including) OP_END_OF_FACTOR/OP_LET_VALUE; returns its value.
 Constants are pushed; an operator pops its operands from the top of
 lstack and leaves its result in the lowest operand's slot.*/
 /*C_1703_050E*/static parse_factor() {
-	int sidx;/*stack index*/
-	long lstack[10];/*local "stack"*/
-	long arrayAddr;
-	int i, j, opcode, cmpLen;
+	int16 sidx;/*stack index*/
+	int32 lstack[10];/*local "stack"*/
+	int32 arrayAddr;
+	int16 i, j, opcode, cmpLen;
 	unsigned char cparam0, cparam1, varIdx;
-	int isOperator, isString;
-	int iparam0, iparam1, iparam2;
+	int16 isOperator, isString;
+	int16 iparam0, iparam1, iparam2;
 	unsigned char scratch[80];
-	int inputStr;
+	int16 inputStr;
 
 	sidx = 0;
 	i = 0;
@@ -446,7 +446,7 @@ lstack and leaves its result in the lowest operand's slot.*/
 						lstack[sidx] = 0x8001;
 				break;
 				case OP_OWNER:/*(object): its owner (assoc field)*/
-					lstack[sidx - 1] = (int)GetAssoc(lstack[sidx - 1]);
+					lstack[sidx - 1] = (int16)GetAssoc(lstack[sidx - 1]);
 					/*patches the next operand of the script in place*/
 					TalkBuf[Talk_PC + 1] = mk_npcnum(TalkBuf[Talk_PC + 1]);
 					sidx --;
@@ -591,12 +591,12 @@ lstack and leaves its result in the lowest operand's slot.*/
 				break;
 				case OP_VARINT:/*# var*/
 					varIdx = lstack[sidx - 1];
-					lstack[sidx - 1] = (unsigned)VarInt[varIdx];
+					lstack[sidx - 1] = (uint16)VarInt[varIdx];
 					sidx --;
 				break;
 				case OP_VARSTR:/*$ string: pushes a pointer*/
 					varIdx = lstack[sidx - 1];
-					lstack[sidx - 1] = (int)VarStr[varIdx];
+					lstack[sidx - 1] = (int16)VarStr[varIdx];
 					/*from now on, OP_EQU compares strings*/
 					isString = 1;
 					sidx --;
@@ -615,7 +615,7 @@ lstack and leaves its result in the lowest operand's slot.*/
 				break;
 				case OP_DIV:
 					if(lstack[sidx - 1])
-						lstack[sidx - 2] = (unsigned long)lstack[sidx - 2] / (unsigned long)lstack[sidx - 1];
+						lstack[sidx - 2] = (uint32)lstack[sidx - 2] / (uint32)lstack[sidx - 1];
 					else
 						CON_printf(/*09AB*/"\nDivide error from talkdr.\n");
 					sidx -= 2;
@@ -650,28 +650,28 @@ lstack and leaves its result in the lowest operand's slot.*/
 				break;
 				/*relational operators compare unsigned*/
 				case OP_SUP:
-					if((unsigned long)lstack[sidx - 2] > (unsigned long)lstack[sidx - 1])
+					if((uint32)lstack[sidx - 2] > (uint32)lstack[sidx - 1])
 						lstack[sidx - 2] = 1;
 					else
 						lstack[sidx - 2] = 0;
 					sidx -= 2;
 				break;
 				case OP_SUPE:
-					if((unsigned long)lstack[sidx - 2] >= (unsigned long)lstack[sidx - 1])
+					if((uint32)lstack[sidx - 2] >= (uint32)lstack[sidx - 1])
 						lstack[sidx - 2] = 1;
 					else
 						lstack[sidx - 2] = 0;
 					sidx -= 2;
 				break;
 				case OP_INF:
-					if((unsigned long)lstack[sidx - 2] < (unsigned long)lstack[sidx - 1])
+					if((uint32)lstack[sidx - 2] < (uint32)lstack[sidx - 1])
 						lstack[sidx - 2] = 1;
 					else
 						lstack[sidx - 2] = 0;
 					sidx -= 2;
 				break;
 				case OP_INFE:
-					if((unsigned long)lstack[sidx - 2] <= (unsigned long)lstack[sidx - 1])
+					if((uint32)lstack[sidx - 2] <= (uint32)lstack[sidx - 1])
 						lstack[sidx - 2] = 1;
 					else
 						lstack[sidx - 2] = 0;
@@ -752,9 +752,9 @@ array (isStringArray: skip <index> NUL-terminated strings; else skip
 Leaves Talk_PC on the data and returns the PC where the caller must
 resume afterwards (for word arrays, back on the OP_LET_VALUE that
 parse_factor consumed)*/
-/*C_1703_1494*/static unsigned long TALK_ResolveAddress(int isStringArray) {
-	int index;
-	unsigned long resumePC, address;
+/*C_1703_1494*/static uint32 TALK_ResolveAddress(int16 isStringArray) {
+	int16 index;
+	uint32 resumePC, address;
 
 	address = READ_U32;
 	Talk_PC += 4;
@@ -781,13 +781,13 @@ parse_factor consumed)*/
 /*execute one opcode (already read) of a statement;
 objNum is the npc being talked to.
 returns 0:ok, 1:syntax error, -1:unknown opcode*/
-/*C_1703_153B*/static execute_op(unsigned char opcode, int objNum) {
-	int tmp, varIdx;
-	unsigned long gotoAddr;
-	int ch, varType;
-	int *pVarInt;
-	int arg0, arg1, arg2, arg3, count;
-	int far *pArrayElem;
+/*C_1703_153B*/static execute_op(unsigned char opcode, int16 objNum) {
+	int16 tmp, varIdx;
+	uint32 gotoAddr;
+	int16 ch, varType;
+	int16 *pVarInt;
+	int16 arg0, arg1, arg2, arg3, count;
+	int16 far *pArrayElem;
 	char *pStr;
 
 	switch(opcode) {
@@ -817,7 +817,7 @@ returns 0:ok, 1:syntax error, -1:unknown opcode*/
 			varIdx = PARSE_U8;
 			if(varIdx == OP_ADDRESS) {
 				TalkSavedPC = TALK_ResolveAddress(0);
-				pArrayElem = (int far *)(TalkBuf + Talk_PC);
+				pArrayElem = (int16 far *)(TalkBuf + Talk_PC);
 				Talk_PC = TalkSavedPC;
 				varType = 0;
 			} else {
@@ -1023,7 +1023,7 @@ returns 0:ok, 1:syntax error, -1:unknown opcode*/
 
 /*execute statements (printing text bytes) until an input/section
 opcode, 0, OP_ENDRES or OP_LEAVE; Talk_PC is left on the stop opcode*/
-static /*C_1703_1C45*/parse_statement(int objNum) {
+static /*C_1703_1C45*/parse_statement(int16 objNum) {
 	unsigned char opcode;
 
 	opcode = PARSE_U8;
@@ -1062,9 +1062,9 @@ static /*C_1703_1C45*/parse_statement(int objNum) {
 keyword (TalkKeyword) with the player's input (TalkInput; "*" matches anything);
 on a match, runs the answer after OP_RES (and sets TalkAnswered), otherwise
 skips to the next OP_KEY/OP_ENDRES/OP_SCRIPT_MARK*/
-/*C_1703_1D01*/static TALK_MatchKeywords(int objNum) {
-	int op, len;
-	int moreKeys;
+/*C_1703_1D01*/static TALK_MatchKeywords(int16 objNum) {
+	int16 op, len;
+	int16 moreKeys;
 
 	moreKeys = 1;
 	if(TalkInput[0] == 0)
@@ -1103,9 +1103,9 @@ skips to the next OP_KEY/OP_ENDRES/OP_SCRIPT_MARK*/
 Checks whether the npc can answer, loads its script, prints the
 description, runs the main section, then loops reading the player's
 input and running the matching keyword answers until OP_LEAVE/OP_SCRIPT_MARK*/
-/*C_1703_1E23*/TalkDriver(int speaker, int npcObj) {
-	int idx, number;
-	int opcode, dir, savedStatus, savedMember, objTyp;
+/*C_1703_1E23*/TalkDriver(int16 speaker, int16 npcObj) {
+	int16 idx, number;
+	int16 opcode, dir, savedStatus, savedMember, objTyp;
 
 	TalkNpcs[1] = speaker;
 	TalkNpcs[0] = npcObj;

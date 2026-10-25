@@ -31,9 +31,9 @@
 	/*2EFA*/"Populace B",
 	/*2F05*/"Player"
 };
-/*2E9A*/int CurrentDisk = 0;/*current disk (DISK_x)*/
-/*2E9C*/int CurrentDrive = 1;/*current drive (1 = A:)*/
-/*2E9E*/int DiskFullChoice = ' ';/*"disk full" answer: 'S'ave/'R'estore, 'G' once saved, ' ' none*/
+/*2E9A*/int16 CurrentDisk = 0;/*current disk (DISK_x)*/
+/*2E9C*/int16 CurrentDrive = 1;/*current drive (1 = A:)*/
+/*2E9E*/int16 DiskFullChoice = ' ';/*"disk full" answer: 'S'ave/'R'estore, 'G' once saved, ' ' none*/
 /*2EA0*/unsigned char DiskDrive[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};/*drive of each disk (1 = A:, 0 = unknown)*/
 /*2EA9*/unsigned char DriveType[26] = {0};/*drive types A:..Z: 0 none, 1 fixed, 2 removable*/
 /*2EC3*/char DiskIdFile[] = "u6.1";/*disk identification file, [3] = disk number*/
@@ -46,8 +46,8 @@
 
 /*is disk "diskNum" in the current drive? (does "U6.<diskNum>" exist)
   The file errors are silenced while probing*/
-/*DISK_0008*/static DISK_IsInDrive(int diskNum) {
-	int fileHandle;
+/*DISK_0008*/static DISK_IsInDrive(int16 diskNum) {
+	int16 fileHandle;
 
 	OSI_ErrorHandler.f = OSI_callback;
 	DiskIdFile[3] = diskNum + '0';
@@ -60,9 +60,9 @@
 
 /*select the drive of disk "diskNum" and register this drive for every
   other disk whose identification file is also there*/
-/*DISK_0053*/static DISK_ScanDrive(int diskNum) {
-	int disk;
-	int drive;
+/*DISK_0053*/static DISK_ScanDrive(int16 diskNum) {
+	int16 disk;
+	int16 drive;
 
 	CurrentDrive =
 	drive = DiskDrive[diskNum];
@@ -74,9 +74,9 @@
 
 /*make sure disk "diskNum" is available and its drive selected; prompts
   the player to insert it when its drive is not known*/
-/*DISK_0097*/DISK_confirm(int diskNum/*bp06*/) {
-	int keyOrIndex;
-	int foundDrive;
+/*DISK_0097*/DISK_confirm(int16 diskNum/*bp06*/) {
+	int16 keyOrIndex;
+	int16 foundDrive;
 	struct tClipInfo *savedClip;
 
 	if(CurrentDisk == diskNum)
@@ -155,7 +155,7 @@
 /*"disk full" while writing: ask whether to save the game (S) or restore
   the last saved game (R); the answer is stored in DiskFullChoice*/
 /*DISK_0211*/DISK_full() {
-	int answer;
+	int16 answer;
 
 	MapAnimEnabled = 0;
 	CON_printf("Disk full.  Do you want to Save the game and continue, ");
@@ -173,7 +173,7 @@
 /*find the drives and their types, assume the current drive holds the
   Game disk (DISK_GAME)*/
 /*DISK_0266*/DISK_init() {
-	int drive;
+	int16 drive;
 	union REGS regs;
 
 	DriveErrorCallback = DISK_NullCallback;

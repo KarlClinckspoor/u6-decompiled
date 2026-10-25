@@ -31,20 +31,20 @@
 #undef abs
 #include <math.h>
 
-/*0338*/int AnimFrameCounter = 0;/*animation frame counter (also paces the clock tic-tac in music.c)*/
+/*0338*/int16 AnimFrameCounter = 0;/*animation frame counter (also paces the clock tic-tac in music.c)*/
 /*033A*/unsigned char StatusDirty = 1;/*status area must be redrawn (may be incremented)*/
 /*033B*/unsigned char PromptFlag = 0;/*a "<name>:\n>" prompt must be printed again*/
 /*033C*/unsigned char CyclopsFlag = 0;/*pending screen shake (cyclops stomp), = intensity*/
 /*033D*/unsigned char IsArmageddon = 0;
-/*033E*/int IdleAnimTick = 0;/*set by the idle keyboard loop: allows one round of NPC idle animations*/
-/*0340*/int MapAnimEnabled = 1;/*map animation/redraw enabled (cleared by DISK_full)*/
-/*0342*/int Erupting = 0;/*volcano/fumarole: 1 = eruption pending, >1 = erupting object*/
+/*033E*/int16 IdleAnimTick = 0;/*set by the idle keyboard loop: allows one round of NPC idle animations*/
+/*0340*/int16 MapAnimEnabled = 1;/*map animation/redraw enabled (cleared by DISK_full)*/
+/*0342*/int16 Erupting = 0;/*volcano/fumarole: 1 = eruption pending, >1 = erupting object*/
 /*same as DirConnFlag, but unused?*/
 /*wall flag per direction: N,NE,E,SE,S,SW,W*/
 unsigned char DirWallFlags[] = {TERRAIN_WALL_N,0,TERRAIN_WALL_E,0,TERRAIN_WALL_S,0,TERRAIN_WALL_W};
 
 /*decrease karma by "amount", clamped at 0*/
-/*C_0A33_0008*/SubKarma(int amount) {
+/*C_0A33_0008*/SubKarma(int16 amount) {
 	if(KARMA > amount)
 		KARMA -= amount;
 	else
@@ -65,8 +65,8 @@ param mode:
 	0 = stop
 	1 = normal
 	2 = reverse*/
-/*C_0A33_0049*/SetTileAnimation(int tileNum, int mode) {
-	int i;
+/*C_0A33_0049*/SetTileAnimation(int16 tileNum, int16 mode) {
+	int16 i;
 
 	for(i = 0; i < NumAnimData; i ++) {
 		if(AnimTile[i] == tileNum) {
@@ -79,8 +79,8 @@ param mode:
 /*animate tiles and the idle animations of the NPCs/monsters near the party
 (frozen during Time Stop)*/
 /*C_0A33_0073*/static AnimateTilesAndActors() {
-	int frm, i;
-	int dir, obj_x, obj_y, frameBase, mustRefresh, objTyp, partObj;
+	int16 frm, i;
+	int16 dir, obj_x, obj_y, frameBase, mustRefresh, objTyp, partObj;
 
 	if(SpellFx[14])/*time stop*/
 		return;
@@ -383,8 +383,8 @@ param mode:
 
 /*draw the hands of a clock tile located at screen (x,y) of the map window
 (pixels, with the 8 direction increments as hand vectors)*/
-/*C_0A33_0931*/static DrawClockHands(int x, int y) {
-	int dirIdx;
+/*C_0A33_0931*/static DrawClockHands(int16 x, int16 y) {
+	int16 dirIdx;
 
 	x += 4;
 	y += 14;
@@ -404,9 +404,9 @@ param mode:
 /*draw the 11x11 map window into the back buffer (tiles + objects).
 If showOnScreen: also draw the target cursor, the window frame, the mouse
 pointer, and copy (or fade in) the window to the screen.*/
-/*C_0A33_09CE*/DrawMapWindow(int showOnScreen/*0:offScreen,1:onScreen*/) {
-	int i, j;
-	int cellObj, scr_x, scr_y, tile, mouseInMap;
+/*C_0A33_09CE*/DrawMapWindow(int16 showOnScreen/*0:offScreen,1:onScreen*/) {
+	int16 i, j;
+	int16 cellObj, scr_x, scr_y, tile, mouseInMap;
 
 	GR_SET_COLOR(ColorMagenta);
 	for(j = 0; j < 11; j++) {
@@ -494,7 +494,7 @@ pointer, and copy (or fade in) the window to the screen.*/
 tiles/NPCs, redraw the map window, music tick, cyclops screen shake.
 Called from every waiting loop of the game.*/
 /*C_0A33_0CBC*/DisplayTick() {
-	int shake;
+	int16 shake;
 
 	if(VisibilityDirty) {
 		VIS_UpdateView();
@@ -524,9 +524,9 @@ Called from every waiting loop of the game.*/
 }
 
 /*apply the effect of harmful tile "tileNum" to the creature objNum*/
-/*C_0A33_0D1D*/TerrainDamage(int objNum, int tileNum) {
-	int isImune;
-	int bootsObj, objCls, dmg;
+/*C_0A33_0D1D*/TerrainDamage(int16 objNum, int16 tileNum) {
+	int16 isImune;
+	int16 bootsObj, objCls, dmg;
 
 	isImune = 0;
 	SetHurtThisTurn(objNum);/*terrain handled for this turn*/
@@ -626,9 +626,9 @@ check whether creature objNum stands on a damaging tile (map tile or object
 in the same cell) and apply it. Vehicles, flying monsters, creatures already
 handled this turn (SkipSomeTest flag), on another level or outside the
 loaded 40x40 area are skipped.*/
-/*C_0A33_0FEB*/ApplyTerrainEffects(int objNum) {
-	int otherObj;
-	int tileNum, x, y, area_x, area_y, wrapMask, objTyp, objCls;
+/*C_0A33_0FEB*/ApplyTerrainEffects(int16 objNum) {
+	int16 otherObj;
+	int16 tileNum, x, y, area_x, area_y, wrapMask, objTyp, objCls;
 
 	objTyp = GetType(objNum);
 	objCls = GetMonsterClass(objTyp);
@@ -678,7 +678,7 @@ Erupting is set to 1 at random by PassTime, then to the first volcano or
 fumarole found when the area objects are listed (object.c).
 Volcano: screen shake; fumarole: shake or explosion.*/
 /*C_0A33_117A*/static ProcessEruption() {
-	int objTyp, objNum;
+	int16 objTyp, objNum;
 
 	if(Erupting <= 1)
 		return;
@@ -701,7 +701,7 @@ for each of the 8 moonstone locations inside the loaded area, show a
 moongate while at least one moon is above the horizon (position < 15),
 remove it otherwise.*/
 /*C_0A33_121A*/UpdateMoongates() {
-	int i, x, y, z, objNum, changed;
+	int16 i, x, y, z, objNum, changed;
 
 	changed = 0;
 	for(i = 0; i < 8; i ++) {
@@ -735,7 +735,7 @@ remove it otherwise.*/
 
 /*wind update: no wind (-1) in dungeons (z 1..4); outdoors (z 0 or 5),
 unless noChange, 1 chance in 64 to pick a new random wind (-1..7)*/
-/*C_0A33_12F6*/UpdateWind(int noChange) {
+/*C_0A33_12F6*/UpdateWind(int16 noChange) {
 	if(MapZ > 0 && MapZ < 5 && WindDir >= 0) {
 		WindDir = -1;
 		noChange = 1;
@@ -798,10 +798,10 @@ unless noChange, 1 chance in 64 to pick a new random wind (-1..7)*/
 
 /*world clock: advance the game time by "minutes" (0 = just refresh the
 time-dependent state) and process everything that depends on it*/
-/*C_0A33_1355*/PassTime(int minutes) {
-	int i, invObj;
-	int minute, newMinutes, sunTileOrLight, isEclipse;
-	int torchLit, objTyp, wearsInvisRing, itemVanished, wearsStormCloak;
+/*C_0A33_1355*/PassTime(int16 minutes) {
+	int16 i, invObj;
+	int16 minute, newMinutes, sunTileOrLight, isEclipse;
+	int16 torchLit, objTyp, wearsInvisRing, itemVanished, wearsStormCloak;
 	char *vanishedName;
 
 	/*time stop counter (nothing else happens while time is stopped)*/
@@ -1054,7 +1054,7 @@ forced to the solo character*/
 
 /*make party member #partyIdx the controlled character and centre the map
 on him (partyIdx == PartySize: the vehicle)*/
-/*C_0A33_1B36*/SetActive(int partyIdx) {
+/*C_0A33_1B36*/SetActive(int16 partyIdx) {
 	if(Active == partyIdx)
 		return;
 	Active = partyIdx;
@@ -1069,7 +1069,7 @@ on him (partyIdx == PartySize: the vehicle)*/
 /*back to party mode: restore the AI mode saved for the solo character,
 the leader (Party[0]) is commanded, the others follow*/
 /*C_0A33_1BB2*/SetPartyMode() {
-	int i, objNum;
+	int16 i, objNum;
 
 	if(SoloMember < 0)
 		NPCMode[Party[0]] = SavedNPCMode;
@@ -1090,8 +1090,8 @@ the leader (Party[0]) is commanded, the others follow*/
 
 /*read an hexadecimal number of up to "len" (max 4) digits from the
 keyboard (debug commands); no validation of the digits*/
-static /*C_0A33_1C4C*/ReadHexNumber(int len) {
-	int i, value;
+static /*C_0A33_1C4C*/ReadHexNumber(int16 len) {
+	int16 i, value;
 
 	if(len > 4)
 		len = 4;
@@ -1129,8 +1129,8 @@ generated CMD_xxx codes and runs the animations while waiting), translate
 letter keys to commands, execute, then do the end of turn processing.
 Exits on <ALT+X>/<CTRL+Q>/<CTRL+E> confirmed (ch == 0x12D).*/
 /*C_0A33_1CB4*/GameLoop() {
-	int ch, key;
-	int goto_x, goto_y, goto_z, member;
+	int16 ch, key;
+	int16 goto_x, goto_y, goto_z, member;
 
 	CON_printf(/*040E*/"%s:\n%>", Names[Active]);
 	do {

@@ -28,10 +28,10 @@
 /*28BB*/unsigned char MUS_Song = 0;/*musician's melody (0/1)*/
 /*28BC*/unsigned char MUS_Clock = 0;/*clocks ring counter*/
 /*28BD*/unsigned char MUS_Bell = 0;/*bells ring counter*/
-/*28BE*/int MUS_MaxAmbient = 1;/*max ambient sounds played per tick*/
-/*28C0*/int MUS_MIndex = 0;/*song currently playing (1-based, 0:none)*/
+/*28BE*/int16 MUS_MaxAmbient = 1;/*max ambient sounds played per tick*/
+/*28C0*/int16 MUS_MIndex = 0;/*song currently playing (1-based, 0:none)*/
 /*scale frequencies (one octave, 12 notes)*/
-/*28C2*/int MUS_NoteFreq[] = {0xC2C,0xDA9,0xF56,0x103F,0x1136,0x123C,0x1478,0x16FA,0x1857,0x19CA,0x1B53,0x1EAB};
+/*28C2*/int16 MUS_NoteFreq[] = {0xC2C,0xDA9,0xF56,0x103F,0x1136,0x123C,0x1478,0x16FA,0x1857,0x19CA,0x1B53,0x1EAB};
 /*musician's melodies: 1..12 = note index+1 in MUS_NoteFreq, 0 = rest, 0xFF = end*/
 /*melody I*/
 /*28DA*/unsigned char MUS_Melody1[] = {
@@ -51,9 +51,9 @@
 
 /*frequency sweep from <freqStart> to <freqEnd> during <duration>
 ticks, changing every <step> ticks*/
-/*MUS_0008*/static MUS_Sweep(int freqStart, int freqEnd, int step, int duration) {
-	int freqIncr, t;
-	int freq, stepTmp;
+/*MUS_0008*/static MUS_Sweep(int16 freqStart, int16 freqEnd, int16 step, int16 duration) {
+	int16 freqIncr, t;
+	int16 freq, stepTmp;
 
 	if(duration > 0) {
 		stepTmp = step;
@@ -76,9 +76,9 @@ distance/intensity depending on the effect:
 	14:spell success 15:breaking glass 16:missile, variant(param)
 	17:melee swing 18:lute 19:panpipes 20:xylophone 21:awakening in jail
 	22:squeak; default: note(param)*/
-/*MUS_0065*/MUS_PlaySfx(int sfx, int param/*bp06*/) {
-	int i;
-	int freq;
+/*MUS_0065*/MUS_PlaySfx(int16 sfx, int16 param/*bp06*/) {
+	int16 i;
+	int16 freq;
 
 	if(!SoundFlag)
 		return;
@@ -184,9 +184,9 @@ distance/intensity depending on the effect:
 
 /*register an ambient sound source at <distance> from the party:
 keeps the 4 nearest sound emitting objects, sorted by distance*/
-/*MUS_043B*/MUS_AddAmbientSource(int typeObject, int distance) {
-	int pos;
-	int i;
+/*MUS_043B*/MUS_AddAmbientSource(int16 typeObject, int16 distance) {
+	int16 pos;
+	int16 i;
 
 	pos = 0;
 	if(
@@ -233,8 +233,8 @@ keeps the 4 nearest sound emitting objects, sorted by distance*/
 (nearest first, at most MUS_MaxAmbient of them; nothing while time is stopped),
 then update the clock/bell ringing counters*/
 /*MUS_0525*/MUS_PlayAmbient() {
-	int numSounds, dist;
-	int i, j;
+	int16 numSounds, dist;
+	int16 i, j;
 
 	numSounds = 0;
 	if(SpellFx[14] == 0) {/*not in "time stop"*/
@@ -320,7 +320,7 @@ then update the clock/bell ringing counters*/
 /*MIDI.DAT parser (data in TalkBuf at MUS_MidiDatPos): returns the next
 decimal number, or -1 when the closing ')' is reached first*/
 /*MUS_07F6*/static MUS_ParseMidiNumber() {
-	int ch, value;
+	int16 ch, value;
 
 	while(1) {
 		ch = TalkBuf[MUS_MidiDatPos];
@@ -346,9 +346,9 @@ decimal number, or -1 when the closing ')' is reached first*/
 MIDI.DAT holds one "( a b a b ...)" group per song, each pair (a, b)
 being sent to driver entry 0x0c for channels 0, 1, ...;
 without MIDI.DAT, all 16 channels get (2, 0)*/
-/*MUS_0851*/static MUS_SetupMidiChannels(int songIdx) {
-	int fd, ch;
-	int parenCount, channel, val1, val2;
+/*MUS_0851*/static MUS_SetupMidiChannels(int16 songIdx) {
+	int16 fd, ch;
+	int16 parenCount, channel, val1, val2;
 
 	DISK_confirm(DISK_INTRO);
 	fd = OSI_open(/*2979*/"midi.dat");
@@ -393,7 +393,7 @@ without MIDI.DAT, all 16 channels get (2, 0)*/
 /*play a song: <song> is 1-based in MUS_SongFiles, 0 stops the music.
 Does nothing without a music card, or if the song is already playing.
 The song is loaded into TalkBuf.*/
-/*MUS_091A*/MUS_PlaySong(int song/*bp06*/) {
+/*MUS_091A*/MUS_PlaySong(int16 song/*bp06*/) {
 	if(MusicAdapter == 0)
 		return;
 	if(song == MUS_MIndex)
@@ -420,7 +420,7 @@ The song is loaded into TalkBuf.*/
 gargoyle land, random overland song, dungeon; hornpipe at sea;
 engage in combat*/
 /*MUS_09A8*/MUS_PlayAreaSong() {
-	int song, objType;
+	int16 song, objType;
 
 	if(!SoundFlag)
 		return;
@@ -456,7 +456,7 @@ engage in combat*/
 
 /*init music: load the driver for adapter <adapter> (MusicAdapter, 0:none)
 and call its init entry with the i/o <port>*/
-/*MUS_0A3A*/MUS_InitDriver(int adapter, int port) {
+/*MUS_0A3A*/MUS_InitDriver(int16 adapter, int16 port) {
 	if(adapter == 0)
 		return;
 	/*-- load music driver*/

@@ -32,9 +32,9 @@
 
 /*display party info: up to 5 members starting with party index
   "first" (picture, hit points, name), with scroll arrows*/
-/*C_155D_000C*/STAT_ShowParty(int first) {
-	int i;
-	int mouseState, tile, objTyp, objNum;
+/*C_155D_000C*/STAT_ShowParty(int16 first) {
+	int16 i;
+	int16 mouseState, tile, objTyp, objNum;
 
 	mouseState = CON_mouseOffAt(176, 6, 311, 103);
 	GR_SET_COLOR(ColorPaper);
@@ -76,8 +76,8 @@
 /*character combat mode: (re)print the combat mode of the displayed
   party member (StatusMember) at the bottom right of the panel*/
 /*C_155D_01BC*/STAT_refreshComMode() {
-	int objNum, len;
-	int mouseState;
+	int16 objNum, len;
+	int16 mouseState;
 	struct tClipInfo *savedClip;
 
 	mouseState = CON_mouseOffAt(176, 6, 311, 103);
@@ -95,8 +95,8 @@
 
 /*character status view: portrait, attributes, magic, health,
   level/experience of party member #partyIdx, and the panel buttons*/
-/*C_155D_028A*/STAT_ShowPortrait(int partyIdx/*bp06*/) {
-	int objNum,mouseState;
+/*C_155D_028A*/STAT_ShowPortrait(int16 partyIdx/*bp06*/) {
+	int16 objNum,mouseState;
 
 	mouseState = CON_mouseOffAt(176, 6, 311, 103);
 	GR_SET_COLOR(ColorPaper);
@@ -133,7 +133,7 @@
 }
 
 /*tiles of the objects readied in one hand (SLOT_RHND)*/
-/*07DD*/int OneHandedTiles[] = {
+/*07DD*/int16 OneHandedTiles[] = {
 	TIL_SLING,TIL_CLUB,TIL_SPEAR,TIL_THROWING_AXE,TIL_DAGGER,TIL_MACE,TIL_MORNING_STAR,TIL_SWORD,
 	TIL_GLASS_SWORD,TIL_BOOMERANG,TIL_SPELLBOOK,TIL_STAFF,TIL_FIRE_WAND,TIL_LIGHTNING_WAND,TIL_FLASK_OF_OIL,TIL_TORCH,
 	TIL_TORCH_LIT,TIL_ZU_YLEM,TIL_SCYTHE,TIL_PITCHFORK,TIL_RAKE,TIL_PICK,TIL_SHOVEL,TIL_HOE,
@@ -144,8 +144,8 @@
 /*equipment slot an object goes to (by its tile): SLOT_xxx,
   SLOT_2HND for two-handed weapons, SLOT_RING for rings (either hand),
   or -1 if it can't be readied*/
-/*C_155D_0516*/STAT_GetEquipSlot(int objNum) {
-	int tile, i;
+/*C_155D_0516*/STAT_GetEquipSlot(int16 objNum) {
+	int16 tile, i;
 
 	tile = TILE_FRAME(objNum);
 	if(tile == TIL_LEATHER_BOOTS || tile == TIL_SWAMP_BOOTS)
@@ -171,11 +171,11 @@
 }
 
 /*types whose TypeWeight is for 10 units (gold coins, reagents)*/
-/*081F*/int WeightPer10Types[] = {OBJ_GOLD,OBJ_BLACK_PEARL,OBJ_BLOOD_MOSS,OBJ_GARLIC,OBJ_GINSENG,OBJ_MANDRAKE,OBJ_NIGHTSHADE,OBJ_SPIDERSILK,OBJ_ASH};
+/*081F*/int16 WeightPer10Types[] = {OBJ_GOLD,OBJ_BLACK_PEARL,OBJ_BLOOD_MOSS,OBJ_GARLIC,OBJ_GINSENG,OBJ_MANDRAKE,OBJ_NIGHTSHADE,OBJ_SPIDERSILK,OBJ_ASH};
 
 /*is objType one of WeightPer10Types (weight counted per 10 units)?*/
-/*C_155D_063A*/IsWeightPer10Type(int objType) {
-	int i;
+/*C_155D_063A*/IsWeightPer10Type(int16 objType) {
+	int16 i;
 
 	for(i = 0; i < 9; i ++) {
 		if(WeightPer10Types[i] == objType)
@@ -186,8 +186,8 @@
 
 /*weight of an object (not of its content), in tenths of stones;
   a weight of 255 means "immovable" (10000)*/
-/*C_155D_0661*/GetWeight(int objNum) {
-	int objTyp, qty, weight, quanType;
+/*C_155D_0661*/GetWeight(int16 objNum) {
+	int16 objTyp, qty, weight, quanType;
 
 	objTyp = GetType(objNum);
 	quanType = QuanType(objTyp);
@@ -210,8 +210,8 @@
 
 /*total weight of the objects contained (at any depth) in objNum:
   they follow it in the Link list*/
-/*C_155D_0707*/Encumbrance(int objNum) {
-	int item, weight;
+/*C_155D_0707*/Encumbrance(int16 objNum) {
+	int16 item, weight;
 
 	weight = 0;
 	for(
@@ -224,9 +224,9 @@
 
 /*compute InvenSize, WeightInven and (for an NPC) WeightEquip of
   objNum's inventory, without touching Equipment[]*/
-/*C_155D_0748*/STAT_ComputeWeights(int objNum) {
-	int item, partyIdx;
-	int objTyp;
+/*C_155D_0748*/STAT_ComputeWeights(int16 objNum) {
+	int16 item, partyIdx;
+	int16 objTyp;
 
 	InvenSize = 0;
 	WeightInven = 0;
@@ -249,9 +249,9 @@
 
 /*same as STAT_ComputeWeights, and also put each equipped object of objNum
   in its Equipment[] slot (Equipment[] must have been cleared)*/
-/*C_155D_07E0*/STAT_ComputeEquipment(int objNum) {
-	int slot, item;
-	int objTyp, partyIdx;
+/*C_155D_07E0*/STAT_ComputeEquipment(int16 objNum) {
+	int16 slot, item;
+	int16 objTyp, partyIdx;
 
 	InvenSize = 0;
 	WeightInven = 0;
@@ -295,8 +295,8 @@
 /*draw equipment: the 8 slots of Equipment[] (empty slot frame if
   nothing; left hand "taken" if a two-handed weapon is readied),
   shifted by (x, y)*/
-/*C_155D_08F4*/STAT_DrawEquipment(register int x, register int y) {
-	int slot, objNum;
+/*C_155D_08F4*/STAT_DrawEquipment(register int16 x, register int16 y) {
+	int16 slot, objNum;
 
 	for(slot = 0; slot < 8; slot ++) {
 		objNum = Equipment[slot];
@@ -338,8 +338,8 @@
 
 /*tenths of stones -> displayed stones: rounded to nearest,
   but anything below 1 stone shows as 1*/
-/*C_155D_0CB6*/static WeightToStones(int tenths) {
-	int stones, rest;
+/*C_155D_0CB6*/static WeightToStones(int16 tenths) {
+	int16 stones, rest;
 
 	stones = tenths / 10;
 	rest = tenths % 10;
@@ -353,8 +353,8 @@
   scroll position InvenScroll, recorded in InvenSlotObj), the scroll arrows,
   the owner's picture and the equipped/total weights vs capacity*/
 /*C_155D_0CF5*/STAT_DrawInventory() {
-	int slot, item;
-	int mouseState, objTyp, tile, owner;
+	int16 slot, item;
+	int16 mouseState, objTyp, tile, owner;
 	struct tClipInfo *savedClip;
 
 	if(StatusDisplay == CMD_STAT_PARTY && PickpocketActive == 0)
@@ -436,8 +436,8 @@
 
 /*recompute Equipment[] and weights of objNum and redraw the
   inventory panel*/
-/*C_155D_1022*/STAT_RefreshInventory(int objNum) {
-	int i, unused;
+/*C_155D_1022*/STAT_RefreshInventory(int16 objNum) {
+	int16 i, unused;
 
 	for(i = 0; i < 12; i ++)
 		InvenSlotObj[i] = 0;
@@ -451,8 +451,8 @@
 
 /*character equipment view: of party member StatusMember, or of NPC
   ShowNPCInven if not 0 (the parameter is ignored)*/
-/*C_155D_1065*/STAT_ShowInventory(int unusedArg) {
-	int mouseState;
+/*C_155D_1065*/STAT_ShowInventory(int16 unusedArg) {
+	int16 mouseState;
 
 	InvenScroll = 0;
 	mouseState = CON_mouseOffAt(176, 6, 311, 103);
@@ -488,7 +488,7 @@
 }
 
 /*scroll the inventory down one row*/
-/*C_155D_120A*/STAT_InvenScrollDown(int unusedArg) {
+/*C_155D_120A*/STAT_InvenScrollDown(int16 unusedArg) {
 	CON_setClip(&TextWindows[1]);
 	if(InvenScroll + 4 < InvenSize) {
 		InvenScroll += 4;
@@ -498,7 +498,7 @@
 }
 
 /*scroll the inventory up one row*/
-/*C_155D_123E*/STAT_InvenScrollUp(int unusedArg) {
+/*C_155D_123E*/STAT_InvenScrollUp(int16 unusedArg) {
 	CON_setClip(&TextWindows[1]);
 	if(InvenScroll >= 4) {
 		InvenScroll -= 4;
@@ -511,7 +511,7 @@
   sets Selection (obj: object or -1, x: grid slot + 1 / 0 for a
   contained owner / map position for an NPC owner); returns 1 if hit*/
 /*C_155D_1267*/STAT_PickInvenSlot() {
-	int slot;
+	int16 slot;
 	if(
 		PointerX >= 248 && PointerX < 312 &&
 		PointerY >= 32 && PointerY < 80
@@ -566,8 +566,8 @@
 }
 
 /*slot where objNum is equipped, or -1*/
-/*C_155D_13F4*/STAT_FindEquipSlot(int objNum) {
-	int i;
+/*C_155D_13F4*/STAT_FindEquipSlot(int16 objNum) {
+	int16 i;
 
 	for(i = 0; i < 8; i++) {
 		if(Equipment[i] == objNum)
@@ -579,8 +579,8 @@
 
 /*uncalled?*/
 /*slot where an object of type objTyp is equipped, or -1*/
-/*__155D_141B*/STAT_FindEquipSlotByType(int objTyp) {
-	int i;
+/*__155D_141B*/STAT_FindEquipSlotByType(int16 objTyp) {
+	int16 i;
 
 	for(i = 0; i < 8; i++) {
 		if(GetType(Equipment[i]) == objTyp)
@@ -593,8 +593,8 @@
 /*"Ready": equip Selection.obj on the displayed party member
   (equipment weight limit: strength, in stones)*/
 /*C_155D_144B*/STAT_Ready() {
-	int slot, owner;
-	int objTyp, strength, npcNum;
+	int16 slot, owner;
+	int16 objTyp, strength, npcNum;
 
 	npcNum = Party[StatusMember];
 	objTyp = GetType(Selection.obj);
@@ -662,8 +662,8 @@
 /*can equipped objNum be removed? returns 1 if not (amulet of
   submission), 2 if it was a lit torch (now burnt out and deleted),
   0 otherwise (npcNum is ignored)*/
-/*C_155D_1666*/STAT_CheckUnready(int objNum/*bp08*/, int npcNum) {
-	int objTyp;
+/*C_155D_1666*/STAT_CheckUnready(int16 objNum/*bp08*/, int16 npcNum) {
+	int16 objTyp;
 
 	if(GetCoordUse(objNum) == EQUIP) {
 		objTyp = GetType(objNum);
@@ -683,8 +683,8 @@
 
 /*stop equiped ring/cloak effect of objNum worn by npcNum*/
 /*(the return value is not used)*/
-/*C_155D_16E7*/STAT_StopEquipEffect(int objNum, int npcNum/*bp06*/) {
-	int objTyp;
+/*C_155D_16E7*/STAT_StopEquipEffect(int16 objNum, int16 npcNum/*bp06*/) {
+	int16 objTyp;
 
 	if(GetCoordUse(objNum) == EQUIP) {
 		objTyp = GetType(objNum);
@@ -705,8 +705,8 @@
 /*"Unready": put equipped Selection.obj of the displayed party
   member back in the inventory*/
 /*C_155D_1738*/STAT_Unready() {
-	int npcNum, result;
-	int objTyp;
+	int16 npcNum, result;
+	int16 objTyp;
 
 	result = 0;
 	if(Selection.obj == 1)

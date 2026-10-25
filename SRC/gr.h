@@ -27,7 +27,7 @@ struct tGr {
 };
 
 struct tPixmap/*size:6*/ {
-	int width,height;/*_00,_02*/
+	int16 width,height;/*_00,_02*/
 	unsigned char data[0x1000];/*_04*/
 };
 
