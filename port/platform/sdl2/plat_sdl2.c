@@ -38,6 +38,11 @@ static uint16_t shift_flags;
 /* mouse */
 static int16_t mouse_x = 160, mouse_y = 100;
 static uint16_t mouse_buttons;
+/* a press shows for at least MIN_PRESS_MS, as a hand on a mouse holds it: a quick tap
+ * (a touchpad) would otherwise come and go between two of the game's looks */
+#define MIN_PRESS_MS 80
+static uint16_t mouse_latched;
+static uint32_t latched_until[3];
 
 /* speaker */
 static SDL_AudioDeviceID audio_dev;
@@ -398,7 +403,12 @@ void plat_mouse_state(int16_t *x, int16_t *y, uint16_t *buttons)
 {
 	*x = mouse_x;
 	*y = mouse_y;
-	*buttons = mouse_buttons;
+	uint32_t now = SDL_GetTicks();
+	int i;
+	for (i = 1; i <= 2; i++)
+		if ((mouse_latched & i) && (int32_t)(now - latched_until[i]) >= 0)
+			mouse_latched &= (uint16_t)~i;
+	*buttons = mouse_buttons | mouse_latched;
 }
 
 static void set_mouse_from_window(int wx, int wy)
@@ -466,9 +476,13 @@ void plat_pump(void)
 		case SDL_MOUSEBUTTONUP: {
 			uint16_t bit = e.button.button == SDL_BUTTON_LEFT ? 1 : e.button.button == SDL_BUTTON_RIGHT ? 2 : 0;
 			set_mouse_from_window(e.button.x, e.button.y);
-			if (e.type == SDL_MOUSEBUTTONDOWN)
+			if (e.type == SDL_MOUSEBUTTONDOWN) {
 				mouse_buttons |= bit;
-			else
+				if (bit) {
+					mouse_latched |= bit;
+					latched_until[bit] = SDL_GetTicks() + MIN_PRESS_MS;
+				}
+			} else
 				mouse_buttons &= (uint16_t)~bit;
 			break;
 		}
