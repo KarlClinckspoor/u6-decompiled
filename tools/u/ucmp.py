@@ -201,6 +201,11 @@ def main():
                         problems.append((where, 'far ptr to own code +%x: original %04x:%04x' % (f.disp, sg, off)))
                 else:
                     problems.append((where, 'far ptr to %s %s: unchecked (original %04x:%04x)' % (f.tkind, f.target, sg, off)))
+            elif f.loc in (1, 5) and f.mode == 0 and f.tkind == 'seg' and f.target == cs.name:
+                # self-relative (MASM's near jumps): target minus the end of the field
+                v = ds_word(addr)
+                if v != (f.disp - (f.offset + 2)) & 0xFFFF:
+                    problems.append((where, 'relative to own code +%x: original %04x' % (f.disp, v)))
             elif f.loc in (1, 5):  # 16-bit offset
                 v = ds_word(addr)
                 if f.tkind in ('seg', 'grp') and f.target in ('_DATA', '_BSS', 'DGROUP', '_CVTSEG', '_SCNSEG'):

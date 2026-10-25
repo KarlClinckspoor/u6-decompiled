@@ -93,7 +93,8 @@ def compile_files(files, flags=DEFAULT_FLAGS, out=None, tools=None, includes=(),
                 dst = os.path.join(od, os.path.splitext(os.path.basename(f))[0] + '.OBJ')
                 shutil.copy(obj, dst)
             msgs = [l for l in log.splitlines()
-                    if l.startswith(('Error', 'Warning', 'Fatal', '***')) or ('error' in l.lower() and masm)]
+                    if (not masm and l.startswith(('Error', 'Warning', 'Fatal', '***'))) or
+                    (masm and (': error' in l.lower() or ': warning' in l.lower()))]
             if os.environ.get('TCC_LOG'):
                 print(log)
             msgs = [m.replace(base + '.C', os.path.basename(f)) for m in msgs]
