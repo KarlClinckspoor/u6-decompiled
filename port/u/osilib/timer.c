@@ -7,8 +7,9 @@
  * Port: there are no interrupts. The ticks come from port/sys/timer.c's clock
  * (osi_ticks_live: tick n starts at n * 65536 / 1193182 s), and uosi_poll, called at every
  * poll point and wait of the library (MOUSE_SERVE, kbhit, getch, the retrace waits,
- * TIM_delay, the dissolves' and PAL_load's waits), runs the handler once for each tick
- * that has come since the last poll: the callback, then timerTicks++. After a long stall
+ * TIM_delay, the dissolves' and PAL_load's waits), runs the handler for the next tick
+ * that has come since the last poll (one a poll, so that the count goes up one at a time
+ * as U's exact waits need): the callback, then timerTicks++. After a long stall
  * (the window moved, a breakpoint) at most UOSI_MAX_CATCHUP ticks are run.
  *
  * TIM_calibrate counted the iterations of a busy loop during one tick (loopsPerTick); U
@@ -64,8 +65,10 @@ void uosi_poll(void)
 	t = osi_ticks_live();
 	if ((uint32_t)(t - polled) > UOSI_MAX_CATCHUP)
 		polled = t - UOSI_MAX_CATCHUP;
+	/* one tick a poll: U waits for exact counts (TIM_calibrate: until timerTicks == 2),
+	 * which in DOS go up one at a time; ticks that came together run at the next polls */
 	in_poll = 1;
-	while (polled != t && timerInstalled) {
+	if (polled != t) {
 		polled++;
 		TIM_handler();
 	}
@@ -122,13 +125,18 @@ void uosi_wait_tick(void)
 		uosi_wait_hook(UOSI_WAIT_TICK, 0);
 		return;
 	}
+	uint32_t p0 = polled;
+	int inst = timerInstalled && !in_poll;
+
 	t = osi_ticks_live();
 	due = tick_start_ms(t + 1);
 	uosi_present();
 	for (;;) {
 		plat_pump();
 		uosi_poll();
-		if (osi_ticks_live() != t)
+		/* installed: until the handler has run once more (exactly once: U waits for
+		 * exact counts); else until the clock's next tick */
+		if (inst ? polled != p0 : osi_ticks_live() != t)
 			break;
 		now = plat_ms();
 		if ((int32_t)(due - now) > 1)
