@@ -50,29 +50,119 @@ extern int D_5A60;/*experience*/
 extern int D_5A62;/*level*/
 extern int D_5A64;/*hit points*/
 extern char D_5A6A;
-extern char D_0692;/*+3 for virtue 7: goes to objlist 0x1bf9*/
 
 extern char far *D_5AD2;/*montage image*/
 extern char far *D_5AD6;/*vellum image*/
 extern char far *D_5ADC;/*woods / gypsy image*/
 
-/*the gypsy's table*/
-extern int D_0693;/*the vial pours this step*/
-extern int D_0695[];/*x of each vial*/
-extern int D_06A5;/*y of the table*/
-extern int D_06A7[];/*color of each virtue*/
-extern int D_06B7[8][8];/*question for each pair of virtues*/
-extern int D_0737[], D_076F[];/*virtue chosen by answer A, B*/
-extern int D_07A7[], D_07B7[], D_07C7[];/*strength, dexterity, intelligence gained per virtue*/
-extern int D_07D7, D_07D9, D_07DB;
-extern int D_07DD[4][3][8];
-extern int D_089D[4][3][8];
-extern int D_095D[4][3];
-extern int D_0975[], D_0985[], D_0995[], D_09A5[], D_09B5[], D_09C5[], D_09D5[], D_09E5[];
-extern int D_09F5[], D_0A05[], D_0A15[], D_0A25[];
-extern int D_0A35[], D_0A45[], D_0A55[], D_0A65[], D_0A75[], D_0A85[], D_0A95[];
-extern int D_0AA5[], D_0AB5[], D_0AC5[];
-extern int D_0AD5[][8], D_0B05[][8], D_0B35[];
+/*the gypsy's table: this module's initialised data*/
+/*0692*/char D_0692 = 75;/*karma (75; +3 when Humility is chosen): objlist 0x1bf9*/
+/*0693*/int D_0693 = 0;/*the vial being poured gives its color this step*/
+/*0695*/int D_0695[8] = {10, 10, 10, 10, -13, -13, -13, -13};/*x offset of each vial (left side +10, right side -13)*/
+/*06A5*/int D_06A5 = -20;/*y offset of the gypsy scene*/
+/*06A7*/int D_06A7[8] = {239, 14, 231, 103, 228, 5, 15, 219};/*pattern color of each virtue (MCGA; set per video mode by CreateCharacter)*/
+/*06B7*/int D_06B7[8][8] = {
+	{-1, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f},
+	{0x69, -1, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75},
+	{0x6a, 0x70, -1, 0x76, 0x77, 0x78, 0x79, 0x7a},
+	{0x6b, 0x71, 0x76, -1, 0x7b, 0x7c, 0x7d, 0x7e},
+	{0x6c, 0x72, 0x77, 0x7b, -1, 0x7f, 0x80, 0x81},
+	{0x6d, 0x73, 0x78, 0x7c, 0x7f, -1, 0x82, 0x83},
+	{0x6e, 0x74, 0x79, 0x7d, 0x80, 0x82, -1, 0x84},
+	{0x6f, 0x75, 0x7a, 0x7e, 0x81, 0x83, 0x84, -1}
+};/*the question (its text number) for each pair of virtues (0 Honesty, 1 Compassion, 2 Valor, 3 Justice, 4 Sacrifice, 5 Honor, 6 Spirituality, 7 Humility)*/
+/*0737*/int D_0737[28] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6};/*virtue chosen by answer A, by question - 0x69*/
+/*076F*/int D_076F[28] = {1, 2, 3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 4, 5, 6, 7, 5, 6, 7, 6, 7, 7};/*virtue chosen by answer B, by question - 0x69*/
+/*07A7*/int D_07A7[8] = {0, 0, 2, 0, 1, 1, 1, 0};/*strength gained per virtue*/
+/*07B7*/int D_07B7[8] = {0, 2, 0, 1, 1, 0, 1, 0};/*dexterity gained per virtue*/
+/*07C7*/int D_07C7[8] = {2, 0, 0, 1, 0, 1, 1, 0};/*intelligence gained per virtue*/
+/*07D7*/int D_07D7 = 1;/*shape base: the arm, the A/B buttons*/
+/*07D9*/int D_07D9 = 9;/*shape base: hand and vials (streams of vials 6, 7)*/
+/*07DB*/int D_07DB = 66;/*shape base: streams, level marks*/
+/*07DD*/int D_07DD[4][3][8] = {
+	{
+		{58, 79, 100, 124, 40, 126, 32, 52},
+		{54, 75, 96, 118, 38, 120, 28, 48},
+		{54, 75, 96, 118, 38, 120, 28, 48}
+	},
+	{
+		{60, 81, 102, 127, 20, 95, 34, 54},
+		{56, 77, 98, 121, 39, 123, 30, 50},
+		{56, 77, 98, 121, 39, 123, 30, 50}
+	},
+	{
+		{64, 83, 104, 129, 41, 131, 36, 56},
+		{64, 83, 104, 129, 41, 131, 36, 56},
+		{64, 83, 104, 129, 41, 131, 36, 56}
+	},
+	{
+		{0, 3, 6, 9, 22, 25, 28, 31},
+		{1, 4, 7, 10, 23, 26, 29, 32},
+		{2, 5, 8, 11, 24, 27, 30, 33}
+	}
+};/*shape of the stream: [kind][level][vial]*/
+/*089D*/int D_089D[4][3][8] = {
+	{
+		{4, 4, 4, 4, 20, 20, 20, 20},
+		{4, 4, 4, 4, 19, 19, 19, 19},
+		{4, 4, 4, 4, 19, 19, 19, 19}
+	},
+	{
+		{4, 4, 4, 4, 23, 23, 23, 23},
+		{3, 3, 3, 3, 23, 23, 23, 23},
+		{3, 3, 3, 3, 23, 23, 23, 23}
+	},
+	{
+		{3, 3, 3, 3, 27, 27, 27, 27},
+		{3, 3, 3, 3, 27, 27, 27, 27},
+		{3, 3, 3, 3, 27, 27, 27, 27}
+	},
+	{
+		{3, 3, 3, 3, 3, 3, 3, 3},
+		{3, 3, 3, 3, 3, 3, 3, 3},
+		{3, 3, 3, 3, 3, 3, 3, 3}
+	}
+};/*x of the stream: [kind][level][vial]*/
+/*095D*/int D_095D[4][3] = {
+	{27, 19, 19},
+	{22, 14, 14},
+	{14, 14, 14},
+	{11, 11, 11}
+};/*y of the stream: [kind][level]*/
+/*0975*/int D_0975[8] = {2, 5, 8, 11, 24, 27, 30, 33};/*per vial: level marks: shape*/
+/*0985*/int D_0985[8] = {93, 93, 93, 93, 172, 172, 172, 172};/*per vial: arm x (steps 4-12)*/
+/*0995*/int D_0995[8] = {41, 62, 83, 104, 200, 221, 242, 263};/*per vial: vial x*/
+/*09A5*/int D_09A5[8] = {29, 50, 71, 92, 202, 223, 244, 264};/*per vial: hand x, steps 3/13*/
+/*09B5*/int D_09B5[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 4/12*/
+/*09C5*/int D_09C5[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 5/11*/
+/*09D5*/int D_09D5[8] = {109, 109, 109, 109, 168, 168, 168, 168};/*per vial: hand x, steps 6/10*/
+/*09E5*/int D_09E5[8] = {112, 112, 112, 112, 165, 165, 165, 165};/*per vial: hand x, steps 7-9*/
+/*09F5*/int D_09F5[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 4/12*/
+/*0A05*/int D_0A05[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 5/11*/
+/*0A15*/int D_0A15[8] = {41, 41, 41, 41, 41, 41, 41, 41};/*per vial: hand y, steps 6/10*/
+/*0A25*/int D_0A25[8] = {33, 33, 33, 33, 33, 33, 33, 33};/*per vial: hand y, steps 7-9*/
+/*0A35*/int D_0A35[8] = {11, 11, 11, 11, 14, 14, 14, 14};/*per vial: vial shape, standing*/
+/*0A45*/int D_0A45[8] = {12, 12, 12, 12, 13, 13, 13, 13};/*per vial: vial shape, steps 1-2/14-15*/
+/*0A55*/int D_0A55[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 3/13*/
+/*0A65*/int D_0A65[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 4/12*/
+/*0A75*/int D_0A75[8] = {10, 10, 10, 10, 18, 18, 18, 18};/*per vial: vial shape, steps 5/11*/
+/*0A85*/int D_0A85[8] = {16, 16, 16, 16, 46, 46, 46, 46};/*per vial: vial shape, steps 6/10*/
+/*0A95*/int D_0A95[8] = {15, 15, 15, 15, 37, 37, 37, 37};/*per vial: vial shape, steps 7-9*/
+/*0AA5*/int D_0AA5[8] = {0, 0, 0, 0, 5, 5, 5, 5};/*per vial: arm shape, steps 1/15*/
+/*0AB5*/int D_0AB5[8] = {1, 1, 1, 1, 4, 4, 4, 4};/*per vial: arm shape, steps 2-3/13-14*/
+/*0AC5*/int D_0AC5[8] = {2, 2, 2, 2, 3, 3, 3, 3};/*per vial: arm shape, steps 4-12*/
+/*0AD5*/int D_0AD5[3][8] = {
+	{43, 67, 86, 107, 36, 116, 25, 44},
+	{44, 68, 87, 108, 35, 115, 24, 43},
+	{45, 69, 88, 109, 34, 114, 23, 42}
+};/*shape of the liquid in the bowl: [3 - level][vial]*/
+/*0B05*/int D_0B05[3][8] = {
+	{146, 146, 146, 146, 169, 169, 169, 169},
+	{145, 145, 145, 145, 169, 169, 169, 169},
+	{148, 148, 148, 148, 170, 170, 170, 170}
+};/*x of the liquid in the bowl: [3 - level][vial]*/
+/*0B35*/int D_0B35[3] = {50, 55, 64};/*y of the liquid in the bowl: [3 - level]*/
+
 extern int D_5B16;
 extern int D_5B18[];/*level of each vial*/
 extern int D_5B28;/*number of colors in the pattern*/
