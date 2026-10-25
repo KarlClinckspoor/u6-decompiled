@@ -255,7 +255,7 @@ def main():
                 v = ds_word(addr)
                 want = DGROUP if f.target in ('DGROUP', '_DATA', '_BSS') else (segp if f.target == cs.name else None)
                 if f.tkind == 'ext':
-                    want = syms.get(f.target, (None,))[0]
+                    want = DGROUP if dsyms.get(f.target) is not None else syms.get(f.target, (None,))[0]
                 if want is None or v != want:
                     problems.append((where, 'segment of %s %s: original %04x, expected %s' % (
                         f.tkind, f.target, v, '%04x' % want if want is not None else '?')))

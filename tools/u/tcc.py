@@ -7,11 +7,20 @@ Each FILE.c is compiled on its own (in one DOSBox session); FILE.OBJ goes to --o
 (default: next to the source) and the compiler's messages are printed. Used by the
 U.EXE decompilation (tools/u/ucmp.py) to check one module at a time.
 """
-import argparse, os, shutil, subprocess, sys, tempfile
+import argparse, os, re, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 DEFAULT_FLAGS = '-mm -c'
+
+
+def has_inline_asm(path):
+    """a C file with asm statements (or #pragma inline) goes through the assembler"""
+    if not path.lower().endswith('.c'):
+        return False
+    t = open(path, encoding='latin-1').read()
+    t = re.sub(r'/\*.*?\*/', '', t, flags=re.S)
+    return bool(re.search(r'^\s*(asm\b|#\s*pragma\s+inline)', t, re.M))
 
 
 def dosbox():
@@ -54,6 +63,16 @@ def compile_files(files, flags=DEFAULT_FLAGS, out=None, tools=None, includes=(),
             incs.append('\\I%d' % k)
         lines = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S']
         names = []
+        need_masm = masm or any(has_inline_asm(f) for f in files)
+        if need_masm and not masm:
+            mdir = os.path.join(tools, 'masm300')
+            exe = [n for n in os.listdir(mdir) if n.upper() == 'MASM.EXE']
+            if exe:
+                shutil.copy(os.path.join(mdir, exe[0]), os.path.join(c, 'TOOLS', 'MASM.EXE'))
+            else:
+                img = [n for n in os.listdir(mdir) if n.lower().endswith('.img')][0]
+                subprocess.run(['mcopy', '-o', '-i', os.path.join(mdir, img), '::MASM.EXE',
+                                os.path.join(c, 'TOOLS', 'MASM.EXE')], check=True)
         for k, f in enumerate(files):
             base = 'F%03d' % k
             src = open(f, 'rb').read().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
@@ -70,7 +89,13 @@ def compile_files(files, flags=DEFAULT_FLAGS, out=None, tools=None, includes=(),
                 continue
             open(os.path.join(c, 'S', base + '.C'), 'wb').write(src)
             inc = ';'.join(['\\TOOLS\\TURBOC20\\INCLUDE'] + incs)
-            lines.append('TCC -I%s %s %s.C > %s.LOG' % (inc, flags, base, base))
+            if has_inline_asm(f):
+                # Turbo C compiles a module with inline asm through the assembler (it ran
+                # TASM; MASM 3.0 gives the same object): -S, then MASM
+                lines.append('TCC -I%s %s -S %s.C > %s.LOG' % (inc, flags.replace('-c', '').replace('  ', ' '), base, base))
+                lines.append('\\TOOLS\\MASM /Mx %s.ASM; >> %s.LOG' % (base, base))
+            else:
+                lines.append('TCC -I%s %s %s.C > %s.LOG' % (inc, flags, base, base))
         open(os.path.join(c, 'RUN.BAT'), 'w', newline='').write('\r\n'.join(lines) + '\r\n')
         conf = os.path.join(tmp, 'dosbox.conf')
         open(conf, 'w').write('[sdl]\noutput=surface\n[dosbox]\nmemsize=16\n[cpu]\ncycles=max\n'
@@ -92,9 +117,8 @@ def compile_files(files, flags=DEFAULT_FLAGS, out=None, tools=None, includes=(),
                 os.makedirs(od, exist_ok=True)
                 dst = os.path.join(od, os.path.splitext(os.path.basename(f))[0] + '.OBJ')
                 shutil.copy(obj, dst)
-            msgs = [l for l in log.splitlines()
-                    if (not masm and l.startswith(('Error', 'Warning', 'Fatal', '***'))) or
-                    (masm and (': error' in l.lower() or ': warning' in l.lower()))]
+            msgs = [l for l in log.splitlines() if not l.startswith(('Warning Severe', 'Errors')) and (not masm and l.startswith(('Error', 'Warning', 'Fatal', '***'))) or
+                    ((masm or has_inline_asm(f)) and (': error' in l.lower() or ': warning' in l.lower()))]
             if os.environ.get('TCC_LOG'):
                 print(log)
             msgs = [m.replace(base + '.C', os.path.basename(f)) for m in msgs]

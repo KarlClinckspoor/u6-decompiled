@@ -126,3 +126,4 @@ __wherexy 1273:0000
 _wherex 1273:000E
 _wherey 1273:0020
 _bdos 1276:0006
+__ctype 41BA

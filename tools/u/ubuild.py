@@ -73,7 +73,10 @@ def main():
         lines.append('cd \\S')
         for o in objs:
             base = o.upper()
-            if os.path.exists(os.path.join(SRC, o + '.c')):
+            if os.path.exists(os.path.join(SRC, o + '.c')) and tcc.has_inline_asm(os.path.join(SRC, o + '.c')):
+                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s -S %s.C >> \\BUILD.LOG' % (FLAGS.replace('-c ', ''), base))
+                lines.append('\\TOOLS\\MASM /Mx %s.ASM; >> \\BUILD.LOG' % base)
+            elif os.path.exists(os.path.join(SRC, o + '.c')):
                 lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s %s.C >> \\BUILD.LOG' % (FLAGS, base))
             else:
                 lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % base)
