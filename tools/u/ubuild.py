@@ -22,6 +22,7 @@ from ucmp import find_uexe  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(HERE))
 SRC = os.path.join(ROOT, 'SRC_U')
 FLAGS = '-mm -c -O -G'
+LIBFLAGS = '-mm -c -G'   # the library's C was compiled without -O
 
 
 def crlf(path, dst):
@@ -66,7 +67,7 @@ def main():
         for m in libmods:
             base = m.upper()
             if os.path.exists(os.path.join(SRC, 'OSILIB', m + '.c')) or os.path.exists(os.path.join(SRC, 'OSILIB', m + '.C')):
-                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s %s.C >> \\BUILD.LOG' % (FLAGS, base))
+                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s %s.C >> \\BUILD.LOG' % (LIBFLAGS, base))
             else:
                 lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % base)
         lines.append('TLIB OSILIB.LIB %s >> \\BUILD.LOG' % ' '.join('+' + m.upper() for m in libmods))

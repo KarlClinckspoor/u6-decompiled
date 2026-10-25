@@ -16,13 +16,13 @@ CSegStart	LOADNEAR_TEXT
 ;load a whole file (smaller than 64K) into memory it mallocs: LOAD_near(char *name),
 ;returns the buffer (NULL on error)
 ProcStart	LOAD_near	;145A:0006
-	MOV	AX,3D00h
+	MOV	AX,3D00h	;open file (read)
 	MOV	DX,[BP+06]
 	INT	21h
 	JB	C_008A
 	MOV	nearHandle,AX
 	MOV	BX,AX
-	MOV	AX,4202h
+	MOV	AX,4202h	;move file pointer (to the end: the size)
 	MOV	CX,0
 	MOV	DX,0
 	INT	21h
@@ -30,7 +30,7 @@ ProcStart	LOAD_near	;145A:0006
 	OR	DX,DX
 	JNZ	C_0082
 	MOV	nearSize,AX
-	MOV	AX,4200h
+	MOV	AX,4200h	;move file pointer (back to the start)
 	MOV	BX,nearHandle
 	MOV	CX,0
 	MOV	DX,0
@@ -45,12 +45,12 @@ ProcStart	LOAD_near	;145A:0006
 	MOV	DX,AX
 	MOV	CX,nearSize
 	MOV	BX,nearHandle
-	MOV	AH,3Fh
+	MOV	AH,3Fh	;read file
 	INT	21h
 	JB	C_0076
 	CMP	AX,nearSize
 	JNZ	C_0076
-	MOV	AH,3Eh
+	MOV	AH,3Eh	;close file
 	MOV	BX,nearHandle
 	INT	21h
 	MOV	AX,nearBuf
@@ -60,7 +60,7 @@ C_0076:
 	CALL	_free
 	ADD	SP,2
 C_0082:
-	MOV	AH,3Eh
+	MOV	AH,3Eh	;close file
 	MOV	BX,nearHandle
 	INT	21h
 C_008A:

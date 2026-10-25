@@ -186,7 +186,7 @@ KeyPressed();
 }
 
 /*waits n ticks, or until a key is pressed*/
-/*C_0C17_03CA*/Delay(int n) {
+/*C_0C17_03CA*/WaitTicks(int n) {
 	int i;
 
 	for(i = n; i; i--) {
@@ -316,7 +316,7 @@ KeyPressed();
 	C_1482_0055();
 	C_1482_000F(Twinkle);
 	C_09A0_000B(0xc8);
-	Delay(10);
+	WaitTicks(10);
 	if(D_5044 == 0xd)
 		D_5710.segment ^= 0x200;
 	C_09A0_21C5();

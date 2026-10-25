@@ -47,7 +47,7 @@ C_000A	dw DGROUP
 ;feedback shift register), 1 byte a pixel (MCGA):
 ;DIS_dissolve(struct tSurface *from, struct tSurface *to, int speed)
 ProcStart	DIS_dissolve	;13F2:000C
-	MOV	AX,[BP+0Ah]
+	MOV	AX,[BP+0Ah]	;-- a wait every (pixels / (7 * speed + 1)) pixels
 	MOV	CL,3
 	SHL	AX,CL
 	SUB	AX,[BP+0Ah]
@@ -64,7 +64,7 @@ ProcStart	DIS_dissolve	;13F2:000C
 	MOV	winHeight,DX
 	SHL	srcTop,1
 	SHL	dstTop,1
-	MOV	lfsr,3
+	MOV	lfsr,3	;-- the register: as many bits as x and y need (at least 2)
 	MOV	lfsr+2,0
 	MOV	xMask,1
 	MOV	yShift,1
@@ -105,7 +105,7 @@ C_0089:
 	MOV	taps,AX
 	MOV	AX,tapTable+2[BX]
 	MOV	taps+2,AX
-C_00B6:
+C_00B6:	;-- the next value of the register: a pixel, when in the window
 	MOV	DX,lfsr+2
 	MOV	AX,lfsr
 	SHR	DX,1
@@ -151,7 +151,7 @@ C_012A:
 	DEC	count
 	JZ	C_0132
 	JMP	SHORT C_00B6
-C_0132:
+C_0132:	;-- (0,0), which the register never gives
 	MOV	BX,srcTop
 	ADD	BX,OFFSET DGROUP:srcLines
 	MOV	BX,[BX]
