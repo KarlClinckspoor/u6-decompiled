@@ -7,7 +7,7 @@
 #include "urun.h"
 #include "../sys/dosfs.h"
 #include "../sys/dosmem.h"
-#include "../sys/osi.h"
+
 #include "../platform/plat.h"
 #include "../gfx/mcga.h"
 #include "../gfx/vgadac.h"
@@ -17,6 +17,7 @@
 #include <string.h>
 
 int U_main(int argc, char **argv);
+int decompress(int16_t fd, uint32_t offset, void *dest, uint16_t workSeg);	/* port/sys/lzw.c */
 
 /* ---- lzw.asm ---- */
 

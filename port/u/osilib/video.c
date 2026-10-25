@@ -2,7 +2,8 @@
  * DAC), and the port's presentation and waits (docs/port/U_OSILIB.md).
  *
  * The screen: A000:0000 in the DOS arena (what ugfx.c draws on), shown with the DAC of
- * port/gfx/vgadac.h. ugfx.c does not tell the platform when it draws, so every poll point
+ * port/gfx/vgadac.h (port/u/urun.c makes them the platform's video source when U sets mode
+ * 13h). ugfx.c does not tell the platform when it draws, so every poll point
  * and wait of the library marks the screen changed (plat_video_dirty) and pumps: the
  * platform presents at most once per host frame.
  *
@@ -33,9 +34,10 @@ void (*uosi_wait_hook)(int kind, uint64_t arg);
 
 /* ---- presenting ---- */
 
+/* the platform's video source (A000:0000 and vga_palette) is set by port/u/urun.c's mode
+ * hook when U sets mode 13h (DRV(0)) */
 void uosi_present(void)
 {
-	plat_video_source(u_pix(0xA000, 0), vga_palette);
 	plat_video_dirty();
 }
 

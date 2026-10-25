@@ -157,7 +157,8 @@ void uosi_poll(void);
 /* A poll point: the screen (A000:0000 with the DAC) is presented, the platform pumped,
  * the timer polled. */
 void uosi_pump(void);
-/* The screen is A000:0000 in the DOS arena, with the DAC of port/gfx/vgadac.h. */
+/* The screen changed: presented at the next pump (plat_video_dirty). The video source,
+ * A000:0000 with the DAC of port/gfx/vgadac.h, is set by port/u/urun.c. */
 void uosi_present(void);
 /* The BIOS video mode the library sees (0040:0049): 13h until VID_setMode changes it. */
 extern int16 uosi_bios_mode;

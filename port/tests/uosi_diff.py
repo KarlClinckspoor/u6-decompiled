@@ -71,7 +71,6 @@ DGROUP = 0x1499        # its data segment, relative
 DRVSEG = 0x0600        # MCGADRV.BIN
 STUBSEG = 0x0700       # callback stubs (onMove, ...)
 STOP = 0x00500         # a HLT: the far return address of every call
-STACK_SEG = 0xE000
 TRAP = 0xF0            # INT F0h: the heap/conio stand-ins
 
 # DS offsets of the test's own data in DGROUP (above U's _BSS, which ends at 683Eh)
@@ -82,7 +81,7 @@ DS_MOUSE = 0x7340
 DS_STR = 0x7400        # strings (1 KB)
 DS_BUF = 0x7800        # the text window's buffer (1 KB)
 DS_VEC = 0x7C00        # FADE_step's vectors
-NEAR_HEAP = (0x8000, 0xF000)
+NEAR_HEAP = (0x8000, 0xF000)   # the stack is above, at the top of DGROUP
 
 # linear addresses of the shared far memory (same contents on both sides)
 FONT_LIN = 0x60000
@@ -143,6 +142,13 @@ def symbols():
     return code
 
 
+# TXTSCRL.ASM's line copy (C_1317_00F7) is called near (PUSH AX; CALL) but returns with a
+# RETF, which takes the pushed line number for CS: in DOS the first line a scroll copies
+# crashes U.EXE. The port scrolls as intended; the test turns that RETF into a RET so that
+# the scrolling can be compared.
+SCROLL_RETF = (0x1317, 0x0145)
+
+
 def load_image():
     d = open(UEXE, 'rb').read()
     h = struct.unpack_from('<14H', d)
@@ -154,6 +160,10 @@ def load_image():
         p = seg * 16 + off
         v = struct.unpack_from('<H', image, p)[0]
         struct.pack_into('<H', image, p, w16(v + LOAD))
+    p = SCROLL_RETF[0] * 16 + SCROLL_RETF[1]
+    if image[p - 1:p + 1] != b'\x5a\xcb':
+        raise RuntimeError('U.EXE: the RETF of TXTSCRL.ASM\'s line copy is not where expected')
+    image[p] = 0xC3
     return image
 
 
@@ -512,10 +522,11 @@ class Machine:
                 words.append(w16(a))
         uc = self.uc
         sp = 0xFFF0 - 2 * len(words) - 4
-        self.write(STACK_SEG * 16 + sp, struct.pack('<HH', STOP & 0xF, STOP >> 4))
+        ss = self.ds   # Turbo C's near data: SS = DGROUP (va_arg and &local are DS offsets)
+        self.write(ss * 16 + sp, struct.pack('<HH', STOP & 0xF, STOP >> 4))
         if words:
-            self.write(STACK_SEG * 16 + sp + 4, struct.pack('<%dH' % len(words), *words))
-        uc.reg_write(UC_X86_REG_SS, STACK_SEG)
+            self.write(ss * 16 + sp + 4, struct.pack('<%dH' % len(words), *words))
+        uc.reg_write(UC_X86_REG_SS, ss)
         uc.reg_write(UC_X86_REG_SP, sp)
         uc.reg_write(UC_X86_REG_DS, self.ds)
         uc.reg_write(UC_X86_REG_ES, self.ds)
@@ -699,7 +710,9 @@ def test_text(m, c, rep, rnd):
             if k < 0.3:
                 s = rand_text(rnd, rnd.randrange(1, 250))
                 if rnd.random() < 0.3:
-                    s = rand_text(rnd, 8) + ' ' * rnd.randrange(1, 4) + rand_text(rnd, 60)
+                    # (no space after a 10: a fully justified line that starts with spaces
+                    # prints its first word up to a space, past the string's end if need be)
+                    s = rand_text(rnd, 8).rstrip(' \n\r') + ' ' * rnd.randrange(1, 4) + rand_text(rnd, 60)
                 op = ('puts', s)
                 m.dswrite(DS_STR, s.encode() + b'\0')
                 c_str.value = s.encode()
@@ -850,9 +863,9 @@ def test_draw(m, c, rep, rnd):
         if r % 4 == 0:
             right, left, top, bottom = 319, 0, 0, 199
         else:
-            left, top = rnd.randrange(-20, 200), rnd.randrange(-20, 150)
-            right, bottom = rnd.randrange(left, 340), rnd.randrange(top, 220)
-            right, bottom = min(right, 319), min(bottom, 199)
+            # inside the screen: a row outside it would read past the scanline table
+            left, top = rnd.randrange(0, 200), rnd.randrange(0, 150)
+            right, bottom = rnd.randrange(left, 320), rnd.randrange(top, 200)
         world.m_surface(DS_SURF, False, right, left, top, bottom)
         cs = world.c_surface(False, right, left, top, bottom)
         for _ in range(40):
@@ -950,18 +963,48 @@ def test_mouse(m, c, rep, rnd):
     bad = None
     nops = 0
     hits = 0
-    for r in range(10 if QUICK else 50):
+    rounds = 10 if QUICK else 50
+    hdrs = []
+    for i in range(nshapes):
+        off = struct.unpack_from('<I', shapes, 4 + 4 * i)[0]
+        hdrs.append(struct.unpack_from('<4h', shapes, off))
+
+    def sweep():
+        # MOUSE_IN_AREA's and SHAPE_IN_RECT's four compares, one pixel either side
+        ops = [('INIT',), ('SHOW',)]
+        for _ in range(40 if QUICK else 200):
+            idx = rnd.randrange(nshapes)
+            x, y = rnd.randrange(320), rnd.randrange(200)
+            ops += [('SERVE', x, y, 0), ('POINTER', idx)]
+            rt, lf, up, dn = hdrs[idx]
+            for d in (-1, 0, 1):
+                ops.append(('IN_AREA', x - lf + d - 50, y - 50, x - lf + d, y + 50, 0, 0, 0))
+                ops.append(('IN_AREA', x + rt + d, y - 50, x + rt + d + 50, y + 50, 0, 0, 0))
+                ops.append(('IN_AREA', x - 50, y - up + d - 50, x + 50, y - up + d, 0, 0, 0))
+                ops.append(('IN_AREA', x - 50, y + dn + d, x + 50, y + dn + d + 50, 0, 0, 0))
+                ops.append(('SHAPE', x - lf + d, y - up - 5, x + rt + 5, y + dn + 5, idx, x, y))
+                ops.append(('SHAPE', x - lf - 5, y - up - 5, x + rt + d, y + dn + 5, idx, x, y))
+                ops.append(('SHAPE', x - lf - 5, y - up + d, x + rt + 5, y + dn + 5, idx, x, y))
+                ops.append(('SHAPE', x - lf - 5, y - up - 5, x + rt + 5, y + dn + d, idx, x, y))
+                ops.append(('IN_RECT', x + d, y, x + 10, y + 10, 0, 0, 0))
+                ops.append(('IN_RECT', x - 10, y - 10, x + d, y + d, 0, 0, 0))
+        return ops
+    for r in range(rounds + 1):
         m.dsw(D_MOUSESEM, 0)
         sem.value = 0
-        present = 0 if r % 7 == 6 else 1
+        present = 0 if r % 7 == 6 and r < rounds else 1
         m.mouse.update(present=present, x=rnd.randrange(320), y=rnd.randrange(200), b=0)
         lib.stub_mouse_set(present, m.mouse['x'], m.mouse['y'], 0)
-        ops = [('NOINIT' if r % 11 == 10 else 'INIT',)]
-        for _ in range(80):
+        ops = sweep() if r == rounds else [('NOINIT' if r % 11 == 10 else 'INIT',)]
+        gx, gy = m.mouse['x'], m.mouse['y']
+        for _ in range(80 if r < rounds else 0):
             k = rnd.random()
             if k < 0.3:
-                ops.append(('SERVE', rnd.randrange(320) if rnd.random() < 0.6 else None,
-                            rnd.randrange(200), rnd.randrange(4) if rnd.random() < 0.3 else None))
+                if rnd.random() < 0.6:
+                    gx, gy = rnd.randrange(320), rnd.randrange(200)
+                    ops.append(('SERVE', gx, gy, rnd.randrange(4) if rnd.random() < 0.3 else None))
+                else:
+                    ops.append(('SERVE', None, None, rnd.randrange(4) if rnd.random() < 0.3 else None))
             elif k < 0.42:
                 ops.append(('SHOW',))
             elif k < 0.52:
@@ -971,15 +1014,21 @@ def test_mouse(m, c, rep, rnd):
             elif k < 0.64:
                 ops.append((rnd.choice(['DRAW', 'SAVE_BG']),))
             else:
-                x0, y0 = rnd.randrange(-30, 340), rnd.randrange(-30, 220)
-                ops.append((rnd.choice(['IN_AREA', 'IN_RECT', 'SHAPE']), x0, y0,
-                            x0 + rnd.randrange(-5, 120), y0 + rnd.randrange(-5, 120),
-                            rnd.randrange(nshapes), rnd.randrange(-20, 340), rnd.randrange(-20, 220)))
+                if rnd.random() < 0.6:   # around the pointer, or the shape: near the edges
+                    x0, y0 = gx - rnd.randrange(-3, 30), gy - rnd.randrange(-3, 30)
+                else:
+                    x0, y0 = rnd.randrange(-30, 340), rnd.randrange(-30, 220)
+                x1, y1 = x0 + rnd.randrange(-5, 60), y0 + rnd.randrange(-5, 60)
+                sx, sy = rnd.randrange(x0 - 10, x1 + 11), rnd.randrange(y0 - 10, y1 + 11)
+                ops.append((rnd.choice(['IN_AREA', 'IN_RECT', 'SHAPE']), x0, y0, x1, y1,
+                            rnd.randrange(nshapes), sx, sy))
         for op in ops:
             moves['m'] = moves['c'] = 0
             kind = op[0]
             if kind in ('INIT', 'NOINIT'):
                 a, b = init(kind == 'NOINIT')
+                if kind == 'NOINIT':
+                    a = b   # (MOUSE_NOINIT leaves AX as it was: no result)
             elif kind == 'SERVE':
                 if op[1] is not None:
                     m.mouse['x'], m.mouse['y'] = op[1], op[2]
@@ -1218,9 +1267,10 @@ def test_load(m, c, rep, rnd):
     libc = ctypes.CDLL(None)
     libc.free.argtypes = [ctypes.c_void_p]
     names = sorted(os.listdir(GAMEDATA))
-    files = [n for n in names if os.path.isfile(os.path.join(GAMEDATA, n))]
+    files = [n for n in names if os.path.isfile(os.path.join(GAMEDATA, n))
+             and re.fullmatch(r'[A-Za-z0-9_$~!#-]{1,8}(\.[A-Za-z0-9_$~!#-]{1,3})?', n)]
     rnd.shuffle(files)
-    small = [n for n in files if os.path.getsize(os.path.join(GAMEDATA, n)) < 0x6000][:30]
+    small = [n for n in files if os.path.getsize(os.path.join(GAMEDATA, n)) < 0x6000][:30]   # the near heap: 7000h bytes
     big = [n for n in files if os.path.getsize(os.path.join(GAMEDATA, n)) >= 0x6000
            and os.path.getsize(os.path.join(GAMEDATA, n)) < 0x40000][:10]
     bad = None
@@ -1228,10 +1278,10 @@ def test_load(m, c, rep, rnd):
     for name in small + big + ['NOFILE.XYZ']:
         fsize = os.path.getsize(gamefile(name)) if gamefile(name) else 0
         m.dswrite(DS_STR, name.encode() + b'\0')
-        # LOAD_near
-        p = lib.U_LOAD_near(name.encode())
+        # LOAD_near (the small files: the emulated near heap has 7000h bytes)
+        p = lib.U_LOAD_near(name.encode()) if fsize < 0x6000 else None
         m.near_log[:] = []
-        ax, _ = m.call('LOAD_near', [DS_STR])
+        ax = m.call('LOAD_near', [DS_STR])[0] if fsize < 0x6000 else 0
         if bool(p) != bool(ax):
             bad = 'LOAD_near(%s) (%d bytes): asm %04X C %s' % (name, fsize, ax, p)
             break
@@ -1257,7 +1307,9 @@ def test_load(m, c, rep, rnd):
             break
         if p:
             k = fsize & 0xFFFF
-            if m.read(lin, k) != c.read(lin, k) or m.far_log != [('farmalloc', fsize)]:
+            hdr = struct.unpack('<I', c.read(lin - 8, 4))[0]
+            if (m.read(lin, k) != c.read(lin, k) or m.far_log != [('farmalloc', fsize)]
+                    or hdr != ((fsize + 8 + 15) & ~15) | 1):
                 bad = 'LOAD_far(%s): contents or farmalloc %s' % (name, m.far_log)
                 break
             lib.dos_farfree(p)
@@ -1383,13 +1435,11 @@ def test_vsync(c, rep):
     if abs(total - 140 * 1000 / 70.086) > 1.5 or not steps <= {14, 15}:
         errs.append('140 retraces in %d ms, steps %s' % (total, sorted(steps)))
     # VID_inRetrace right after: no wait; once only
-    lib.stub_set_pump_advance(0)
     lib.U_VID_waitRetrace()
     t1 = clk.ms()
     lib.U_VID_inRetrace()
     if clk.ms() != t1:
         errs.append('VID_inRetrace right after VID_waitRetrace waited %d ms' % (clk.ms() - t1))
-    lib.stub_set_pump_advance(1)
     t1 = clk.ms()
     lib.U_VID_inRetrace()
     if not 13 <= clk.ms() - t1 <= 15:
