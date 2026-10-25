@@ -14,27 +14,27 @@ EOF        EQU 257	;code: end of the data
 FIRST_FREE EQU 258
 
 _DATA	SEGMENT PUBLIC WORD 'DATA'
-PUBLIC	D_4110,D_4118,D_411A,D_411C,D_411E,D_4120,D_4122,D_4124,D_4126,D_4128
-PUBLIC	D_412A,D_412C,D_412E,D_412F,D_4130,D_4132,D_4136,D_4138,D_413C
-D_4110	dw 1FFh,3FFh,7FFh,0FFFh	;4110: masks: a code of 9..12 bits
-D_4118	dw 0	;4118: input_handle
-D_411A	dw 0	;411A: hash_seg: the string table (3 bytes a code)
-D_411C	dw 0	;411C: output_offset
-D_411E	dw 0	;411E: bit_offset: in the input buffer
-D_4120	dw 0	;4120: cur_code
-D_4122	dw 0	;4122: old_code
-D_4124	dw 0	;4124: in_code
-D_4126	dw 0	;4126: free_code
-D_4128	dw 0	;4128: stack_count
-D_412A	dw 0	;412A: max_code
-D_412C	dw 0	;412C: nbits: the size of a code
-D_412E	db 0	;412E: fin_char
-D_412F	db 0	;412F: k
-D_4130	dw 0	;4130: segment_0: a 3010h bytes buffer (the string table)
-D_4132	dd 0	;4132: lDestSz: the decompressed size, from the file header
-D_4136	dw 0	;4136: output_segment
-D_4138	dw 0,0	;4138: lpDest: segment, offset of the result
-D_413C	dw 0	;413C: input_segment: a 1010h bytes buffer (1 KB of input)
+PUBLIC	lzwMasks,lzwInput,lzwHashSeg,lzwOutOfs,lzwBitOfs,lzwCurCode,lzwOldCode,lzwInCode,lzwFreeCode,lzwStackCount
+PUBLIC	lzwMaxCode,lzwNBits,lzwFinChar,lzwK,lzwTableSeg,lzwDestSize,lzwOutSeg,lzwDest,lzwInSeg
+lzwMasks	dw 1FFh,3FFh,7FFh,0FFFh	; D_4110 masks: a code of 9..12 bits
+lzwInput	dw 0	; D_4118 input_handle
+lzwHashSeg	dw 0	; D_411A hash_seg: the string table (3 bytes a code)
+lzwOutOfs	dw 0	; D_411C output_offset
+lzwBitOfs	dw 0	; D_411E bit_offset: in the input buffer
+lzwCurCode	dw 0	; D_4120 cur_code
+lzwOldCode	dw 0	; D_4122 old_code
+lzwInCode	dw 0	; D_4124 in_code
+lzwFreeCode	dw 0	; D_4126 free_code
+lzwStackCount	dw 0	; D_4128 stack_count
+lzwMaxCode	dw 0	; D_412A max_code
+lzwNBits	dw 0	; D_412C nbits: the size of a code
+lzwFinChar	db 0	; D_412E fin_char
+lzwK	db 0	; D_412F k
+lzwTableSeg	dw 0	; D_4130 segment_0: a 3010h bytes buffer (the string table)
+lzwDestSize	dd 0	; D_4132 lDestSz: the decompressed size, from the file header
+lzwOutSeg	dw 0	; D_4136 output_segment
+lzwDest	dw 0,0	; D_4138 lpDest: segment, offset of the result
+lzwInSeg	dw 0	; D_413C input_segment: a 1010h bytes buffer (1 KB of input)
 _DATA	ENDS
 
 DGROUP	GROUP	_DATA
@@ -51,9 +51,9 @@ read_code	MACRO
 	LOCAL rd0,rd1,rd2
 	PUSH	BP
 
-	MOV	AX,D_411E	;bit offset
-	ADD	AX,D_412C	;adjusted by the code size
-	XCHG	AX,D_411E
+	MOV	AX,lzwBitOfs	;bit offset
+	ADD	AX,lzwNBits	;adjusted by the code size
+	XCHG	AX,lzwBitOfs
 	MOV	CX,8
 	XOR	DX,DX
 	DIV	CX
@@ -61,15 +61,15 @@ read_code	MACRO
 	JL	rd0	;no
 
 	PUSH	DX	;offset in the byte
-	ADD	DX,D_412C	;new bit offset
-	MOV	D_411E,DX
+	ADD	DX,lzwNBits	;new bit offset
+	MOV	lzwBitOfs,DX
 	MOV	CX,1024	;1 KB buffer
 	MOV	BP,AX	;byte offset
 	SUB	CX,AX	;bytes left
 	;-- move them to the start and read the rest
 	PUSH	DS
-	MOV	BX,D_4118
-	MOV	DS,D_413C
+	MOV	BX,lzwInput
+	MOV	DS,lzwInSeg
 	PUSH	DS
 	POP	ES
 	XOR	SI,SI
@@ -86,7 +86,7 @@ read_code	MACRO
 	POP	DX
 rd0:
 	PUSH	DS
-	MOV	DS,D_413C
+	MOV	DS,lzwInSeg
 	MOV	SI,AX
 	LODSW	;a word
 	MOV	BX,AX
@@ -99,18 +99,18 @@ rd1:	SHR	AL,1	;the code in the low (code size) bits of bx
 rd2:
 	POP	DS
 	MOV	AX,BX
-	MOV	BX,D_412C	;mask off the unwanted bits
+	MOV	BX,lzwNBits	;mask off the unwanted bits
 	SUB	BX,9
 	SHL	BX,1
-	AND	AX,D_4110[BX]
+	AND	AX,lzwMasks[BX]
 
 	POP	BP
 ENDM
 
 init_tab	MACRO
-	MOV	D_412C,9
-	MOV	D_412A,512
-	MOV	D_4126,FIRST_FREE
+	MOV	lzwNBits,9
+	MOV	lzwMaxCode,512
+	MOV	lzwFreeCode,FIRST_FREE
 ENDM
 
 ;-- one byte (al) of output, normalising the far pointer every 16 bytes
@@ -118,15 +118,15 @@ write_char	MACRO
 	LOCAL wc1
 
 	PUSH	ES
-	MOV	ES,D_4136
-	MOV	DI,D_411C
+	MOV	ES,lzwOutSeg
+	MOV	DI,lzwOutOfs
 	STOSB
 	POP	ES
-	INC	D_411C
+	INC	lzwOutOfs
 	CMP	DI,10h
 	JNZ	wc1
-	INC	D_4136
-	MOV	D_411C,0
+	INC	lzwOutSeg
+	MOV	lzwOutOfs,0
 wc1:
 ENDM
 
@@ -141,16 +141,16 @@ ENDM
 
 ;-- the table entry free_code = old_code + k
 add_code	MACRO
-	MOV	BX,D_4126
+	MOV	BX,lzwFreeCode
 	index
 	PUSH	ES
-	MOV	ES,D_411A
-	MOV	AL,D_412F	;suffix char
+	MOV	ES,lzwHashSeg
+	MOV	AL,lzwK	;suffix char
 	MOV	ES:2[BX],AL
-	MOV	AX,D_4122	;prefix code
+	MOV	AX,lzwOldCode	;prefix code
 	MOV	ES:[BX],AX
 	POP	ES
-	INC	D_4126
+	INC	lzwFreeCode
 ENDM
 
 ;C_0F18_000E: void far *LoadZFile(char *name): the decompressed file in newly
@@ -174,7 +174,7 @@ _LoadZFile	PROC FAR	;0F18:000E
 	SHR	AX,1
 	ADD	AX,DX
 	INC	AX
-	MOV	D_4130,AX
+	MOV	lzwTableSeg,AX
 	MOV	AX,1010h	;the input buffer
 	PUSH	AX
 	CALL	_malloc
@@ -187,7 +187,7 @@ _LoadZFile	PROC FAR	;0F18:000E
 	SHR	AX,1
 	ADD	AX,DX
 	INC	AX
-	MOV	D_413C,AX
+	MOV	lzwInSeg,AX
 	MOV	DX,[BP+6]	;file name
 	CALL	FAR PTR LoadZ
 	JC	lz_fail
@@ -195,8 +195,8 @@ _LoadZFile	PROC FAR	;0F18:000E
 	ADD	SP,2
 	CALL	_free
 	ADD	SP,2
-	MOV	DX,D_4138
-	MOV	AX,D_4138+2
+	MOV	DX,lzwDest
+	MOV	AX,lzwDest+2
 	POP	DS
 	POP	SI
 	POP	DI
@@ -218,17 +218,17 @@ _LoadZFile	ENDP
 
 ;C_0F18_008F: decompresses the open file input_handle to output_segment:output_offset
 decompress	PROC FAR
-	MOV	D_412C,9
-	MOV	D_411E,0
-	MOV	D_4126,FIRST_FREE
-	MOV	D_412A,512
+	MOV	lzwNBits,9
+	MOV	lzwBitOfs,0
+	MOV	lzwFreeCode,FIRST_FREE
+	MOV	lzwMaxCode,512
 
-	MOV	AX,D_4130
-	MOV	D_411A,AX
+	MOV	AX,lzwTableSeg
+	MOV	lzwHashSeg,AX
 
-	MOV	BX,D_4118
+	MOV	BX,lzwInput
 	PUSH	DS
-	MOV	DS,D_413C
+	MOV	DS,lzwInSeg
 	XOR	DX,DX
 	MOV	CX,1024
 	MOV	AH,3Fh	;read file
@@ -241,7 +241,7 @@ L1:	read_code
 
 	MOV	CX,1800h	;clear the string table
 	XOR	AX,AX
-	MOV	ES,D_411A
+	MOV	ES,lzwHashSeg
 	MOV	DI,AX
 	REPZ	STOSW
 
@@ -253,59 +253,59 @@ L2:	CMP	AX,CLEAR
 L3:
 	init_tab
 	read_code
-	MOV	D_4120,AX
-	MOV	D_4122,AX
-	MOV	D_412F,AL
-	MOV	D_412E,AL
+	MOV	lzwCurCode,AX
+	MOV	lzwOldCode,AX
+	MOV	lzwK,AL
+	MOV	lzwFinChar,AL
 	write_char
 	JMP	L1
 
-L7:	MOV	D_4120,AX	;a new code
-	MOV	D_4124,AX
-	MOV	ES,D_411A
-	CMP	AX,D_4126	;in the table? (k<w>k<w>k)
+L7:	MOV	lzwCurCode,AX	;a new code
+	MOV	lzwInCode,AX
+	MOV	ES,lzwHashSeg
+	CMP	AX,lzwFreeCode	;in the table? (k<w>k<w>k)
 	JL	L11	;yes
-	MOV	AX,D_4122	;the previous code
-	MOV	D_4120,AX
-	MOV	AL,D_412E	;its last char
+	MOV	AX,lzwOldCode	;the previous code
+	MOV	lzwCurCode,AX
+	MOV	AL,lzwFinChar	;its last char
 	PUSH	AX
-	INC	D_4128
-L11:	CMP	D_4120,255	;code or char?
+	INC	lzwStackCount
+L11:	CMP	lzwCurCode,255	;code or char?
 	JLE	L15	;char
 
-	MOV	BX,D_4120
+	MOV	BX,lzwCurCode
 	index
 	MOV	AL,ES:2[BX]	;suffix char
 	PUSH	AX
-	INC	D_4128
+	INC	lzwStackCount
 	MOV	AX,ES:[BX]	;prefix code
-	MOV	D_4120,AX
+	MOV	lzwCurCode,AX
 	JMP	L11
 
 L15:
 	PUSH	DS
 	POP	ES
-	MOV	AX,D_4120
-	MOV	D_412E,AL
-	MOV	D_412F,AL
+	MOV	AX,lzwCurCode
+	MOV	lzwFinChar,AL
+	MOV	lzwK,AL
 	PUSH	AX
-	INC	D_4128
-	MOV	CX,D_4128	;output the stacked chars
+	INC	lzwStackCount
+	MOV	CX,lzwStackCount	;output the stacked chars
 	JCXZ	L18
 L17:	POP	AX
 	write_char
 	LOOP	L17
-L18:	MOV	D_4128,CX
+L18:	MOV	lzwStackCount,CX
 	add_code
-	MOV	AX,D_4124
-	MOV	D_4122,AX
-	MOV	BX,D_4126	;table full?
-	CMP	BX,D_412A
+	MOV	AX,lzwInCode
+	MOV	lzwOldCode,AX
+	MOV	BX,lzwFreeCode	;table full?
+	CMP	BX,lzwMaxCode
 	JL	L23
-	CMP	D_412C,12	;already twelve bits?
+	CMP	lzwNBits,12	;already twelve bits?
 	JE	L23
-	INC	D_412C	;longer codes
-	SHL	D_412A,1
+	INC	lzwNBits	;longer codes
+	SHL	lzwMaxCode,1
 L23:	JMP	L1
 decompress	ENDP
 
@@ -337,24 +337,24 @@ alloc_para	ENDP
 ;C_0F18_02DD: opens the file named at ds:dx, allocates the memory and decompresses
 ;it; the carry set on error
 LoadZ	PROC FAR
-	MOV	D_4136,0
-	MOV	D_411C,0
-	MOV	D_4138,0
-	MOV	D_4118,0
+	MOV	lzwOutSeg,0
+	MOV	lzwOutOfs,0
+	MOV	lzwDest,0
+	MOV	lzwInput,0
 	MOV	AL,2
 	MOV	AH,3Dh	;open file
 	INT	21h
 	MOV	BX,AX
 	JC	lz1
-	MOV	D_4118,BX
+	MOV	lzwInput,BX
 	;-- the header: the decompressed size
 	MOV	CX,4
-	MOV	DX,OFFSET DGROUP:D_4132
+	MOV	DX,OFFSET DGROUP:lzwDestSize
 	MOV	AH,3Fh	;read file
 	INT	21h
 	JC	lz1
-	MOV	BX,WORD PTR D_4132
-	MOV	DX,WORD PTR D_4132+2
+	MOV	BX,WORD PTR lzwDestSize
+	MOV	DX,WORD PTR lzwDestSize+2
 	MOV	CL,4
 lz0:	SHR	DX,1
 	RCR	BX,1
@@ -362,25 +362,25 @@ lz0:	SHR	DX,1
 	INC	BX
 	CALL	alloc_para
 	JNC	lz2
-	MOV	D_4136,-1
+	MOV	lzwOutSeg,-1
 	JMP	SHORT lz1
-lz2:	MOV	D_411C,AX
-	MOV	D_4138+2,AX
-	MOV	D_4136,DX
-	MOV	D_4138,DX
+lz2:	MOV	lzwOutOfs,AX
+	MOV	lzwDest+2,AX
+	MOV	lzwOutSeg,DX
+	MOV	lzwDest,DX
 	CALL	decompress
 	CLC
-	MOV	AX,WORD PTR D_4132
+	MOV	AX,WORD PTR lzwDestSize
 	OR	AX,AX
 	JNZ	lz1
 	DEC	AX
 lz1:	PUSHF
 	PUSH	AX
-	MOV	BX,D_4118
+	MOV	BX,lzwInput
 	JZ	lz3
 	MOV	AH,3Eh	;close file
 	INT	21h
-lz3:	MOV	BX,D_4136
+lz3:	MOV	BX,lzwOutSeg
 	CMP	BX,-1
 	JNZ	lz5
 	INC	BX
@@ -393,7 +393,7 @@ lz5:	POP	AX
 	MOV	BX,1
 	STC
 	RET
-lz6:	MOV	BX,D_4138
+lz6:	MOV	BX,lzwDest
 	RET
 LoadZ	ENDP
 

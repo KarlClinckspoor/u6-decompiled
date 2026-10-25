@@ -22,42 +22,42 @@
 /*a drawing surface (the same as GAME.EXE's mouse.h)*/
 
 
-extern int D_4A14[][3];/*the 5 main menu highlight colors (r, g, b)*/
-extern int D_4A40[][3];/*VGA palette (r, g, b)*/
-extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern char D_5046, D_5047;/*mouse buttons*/
-extern int D_5048, D_504A;/*mouse x, y*/
-extern void far *D_504E;/*mouse pointer shapes*/
-extern int D_5052;/*mouse pointer shape*/
-extern struct tSurface *D_5054;/*the surface the mouse pointer is drawn on*/
-extern void far *D_5056;/*mouse background save area*/
-extern int D_505F[][3];/*saved VGA palette*/
-extern struct tSurface D_565F;/*text window*/
-extern struct tSurface *D_566D;/*console: surface*/
-extern int D_566F, D_5671;/*console: text cursor x, y*/
-extern void far *D_5673;/*console: font*/
-extern char D_5677, D_5678;/*console: text foreground, background color*/
-extern char *D_5679;/*console: buffer*/
-extern char D_567D;
-extern char far *D_5692;/*song (or midi.dat) data*/
-extern char D_5696[];/*the command line arguments, concatenated*/
-extern struct tSurface D_56E6;
-extern struct tSurface D_5710;/*the screen*/
-extern int D_571E;/*parse position in midi.dat*/
-extern int D_5720;/*music card i/o port*/
-extern struct tSurface D_5722;
-extern struct tSurface D_5732;/*the drawing surface (EGA: the other page)*/
-extern unsigned long D_5740;/*free far memory*/
-extern int D_5746;/*music card: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
-extern struct tSurface D_5748;/*saved screen surface (EGA)*/
-extern int D_575A;/*the main menu screen is drawn*/
-extern int D_575C[];/*scanline offsets*/
-extern int D_58EC;/*mouse on*/
-extern int D_58EE;/*graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
-extern int D_58F0;
-extern void far *D_58F2;/*blocks.xxx*/
-extern void far *D_58F6;/*mouse pointer shapes (cursors.xxx)*/
-extern union tMus D_58FA;/*the music driver*/
+extern int menuColors[][3];/*the 5 main menu highlight colors (r, g, b)*/
+extern int vgaPalette[][3];/*VGA palette (r, g, b)*/
+extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern char mouseL, mouseR;/*mouse buttons*/
+extern int mouseX, mouseY;/*mouse x, y*/
+extern void far *mouseShapes;/*mouse pointer shapes*/
+extern int mouseShape;/*mouse pointer shape*/
+extern struct tSurface *mouseSurface;/*the surface the mouse pointer is drawn on*/
+extern void far *mouseSave;/*mouse background save area*/
+extern int savedPalette[][3];/*saved VGA palette*/
+extern struct tSurface textArea;/*text window*/
+extern struct tSurface *textWin;/*console: surface*/
+extern int textX, textY;/*console: text cursor x, y*/
+extern void far *textFont;/*console: font*/
+extern char textFg, textBg;/*console: text foreground, background color*/
+extern char *textBuf;/*console: buffer*/
+extern char textAlign;
+extern char far *songData;/*song (or midi.dat) data*/
+extern char gameArgs[];/*the command line arguments, concatenated*/
+extern struct tSurface spareSurface;
+extern struct tSurface screen;/*the screen*/
+extern int songPos;/*parse position in midi.dat*/
+extern int musicPort;/*music card i/o port*/
+extern struct tSurface conSurface;
+extern struct tSurface backBuffer;/*the drawing surface (EGA: the other page)*/
+extern unsigned long farMemLeft;/*free far memory*/
+extern int musicCard;/*music card: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
+extern struct tSurface egaSaved;/*saved screen surface (EGA)*/
+extern int menuDrawn;/*the main menu screen is drawn*/
+extern int scanlineOfs[];/*scanline offsets*/
+extern int mouseOn;/*mouse on*/
+extern int adapter;/*graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
+extern int escaped;
+extern void far *blockShapes;/*blocks.xxx*/
+extern void far *cursorShapes;/*mouse pointer shapes (cursors.xxx)*/
+extern union tMus musDrv;/*the music driver*/
 extern int far drvDrawPointer[];/*graphic driver entries for the OSI library: (offset, segment) pairs; declared far in the original (its accesses load its segment)*/
 
 extern void far *LoadZFile(char *);/*load a driver file*/
@@ -99,22 +99,22 @@ InitHercules();
 LoadMusicDriver(int, int);
 PlayMusic(int);
 
-/*0194*/int D_0194 = 0;/*the introduction has been seen (main menu choice 0)*/
+/*0194*/int introSeen = 0;/*the introduction has been seen (main menu choice 0)*/
 /*Hercules 720x348 graphics: the CRTC registers (low byte: index, high byte: value)*/
-/*0196*/int D_0196[9] = {0x3500, 0x2d01, 0x2e02, 0x0703, 0x5b04, 0x0205, 0x5706, 0x5707, 0x0309};
-/*01A8*/int D_01A8 = 0;/*song playing (1-based in D_01C0), 0 none, -2: song 2 loaded but not started*/
+/*0196*/int herculesCrtc[9] = {0x3500, 0x2d01, 0x2e02, 0x0703, 0x5b04, 0x0205, 0x5706, 0x5707, 0x0309};
+/*01A8*/int songPlaying = 0;/*song playing (1-based in songFiles), 0 none, -2: song 2 loaded but not started*/
 
-/*parse an hexadecimal music i/o port (e.g. "388") into D_5720;
+/*parse an hexadecimal music i/o port (e.g. "388") into musicPort;
 returns the pointer to the first non hex digit*/
 /*C_00E1_0006*/char *ParseHexPort(char *str) {
 	int ch;
 
-	for(D_5720 = 0; ((ch = toupper(*str)) >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F'); str++) {
-		D_5720 <<= 4;
+	for(musicPort = 0; ((ch = toupper(*str)) >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F'); str++) {
+		musicPort <<= 4;
 		if(ch >= '0' && ch <= '9')
-			D_5720 += ch - '0';
+			musicPort += ch - '0';
 		else
-			D_5720 += ch - 'A' + 10;
+			musicPort += ch - 'A' + 10;
 	}
 	return str;
 }
@@ -125,29 +125,29 @@ card (A, X, Z, I may be followed by an hexadecimal i/o port)*/
 /*C_00E1_0064*/ParseConfig(char *str) {
 	while(*str) {
 		switch(toupper(*str++)) {
-			case 'V': D_58EE = 0; break;
-			case 'E': D_58EE = 1; break;
-			case 'T': D_58EE = 2; break;
-			case 'C': D_58EE = 3; break;
-			case 'H': D_58EE = 4; break;
-			case 'M': D_58EC = 1; break;
-			case 'K': D_58EC = 0; break;
-			case 'N': D_5746 = 0; break;
-			case 'A': D_5746 = 1; D_5720 = 0x388;
+			case 'V': adapter = 0; break;
+			case 'E': adapter = 1; break;
+			case 'T': adapter = 2; break;
+			case 'C': adapter = 3; break;
+			case 'H': adapter = 4; break;
+			case 'M': mouseOn = 1; break;
+			case 'K': mouseOn = 0; break;
+			case 'N': musicCard = 0; break;
+			case 'A': musicCard = 1; musicPort = 0x388;
 				if(*str == '3' || *str == '2')
 					str = ParseHexPort(str);
 			break;
-			case 'X': D_5746 = 2; D_5720 = 0x220;
+			case 'X': musicCard = 2; musicPort = 0x220;
 				if(*str == '2')
 					str = ParseHexPort(str);
 			break;
-			case 'Y': D_5746 = 3; break;
-			case 'R': D_5746 = 4; break;
-			case 'Z': D_5746 = 5; D_5720 = 0x220;
+			case 'Y': musicCard = 3; break;
+			case 'R': musicCard = 4; break;
+			case 'Z': musicCard = 5; musicPort = 0x220;
 				if(*str == '2')
 					str = ParseHexPort(str);
 			break;
-			case 'I': D_5746 = 6; D_5720 = 0x280;
+			case 'I': musicCard = 6; musicPort = 0x280;
 				if(*str == '2')
 					str = ParseHexPort(str);
 			break;
@@ -163,9 +163,9 @@ give 8/0x15, other extended keys 0*/
 	int key;
 	int blink, done;
 
-	x = D_566F;
-	y = D_5671;
-	color = D_5677;
+	x = textX;
+	y = textY;
+	color = textFg;
 	blink = 0;
 	done = 0;
 	key = 0;
@@ -176,7 +176,7 @@ give 8/0x15, other extended keys 0*/
 			blink = 0;
 			gotoxy(x, y);
 			TXT_putc('_');
-			D_5677 = (D_5677 == color)?D_5678:color;
+			textFg = (textFg == color)?textBg:color;
 		}
 		if(kbhit()) {
 			switch(key = getch()) {
@@ -197,9 +197,9 @@ give 8/0x15, other extended keys 0*/
 	}
 	/*erase the cursor*/
 	gotoxy(x, y);
-	D_5677 = D_5678;
+	textFg = textBg;
 	TXT_putc('_');
-	D_5677 = color;
+	textFg = color;
 	gotoxy(x, y);
 	return key;
 }
@@ -234,10 +234,10 @@ when cancelled (escape, or return on an empty string)*/
 			/*backspace: erase the last character*/
 			len--;
 			gotoxy(xs[len], ys[len]);
-			color = D_5677;
-			D_5677 = D_5678;
+			color = textFg;
+			textFg = textBg;
 			TXT_putc(buf[len]);
-			D_5677 = color;
+			textFg = color;
 			gotoxy(xs[len], ys[len]);
 		}
 		if(key == 0xd) {
@@ -247,8 +247,8 @@ when cancelled (escape, or return on an empty string)*/
 			ret = 1;
 		} else if((isalnum(key) || key == ' ' || key == '-' || key == '\'' || key == '.' || key == ',') && len < max) {
 			buf[len] = key;
-			xs[len] = D_566F;
-			ys[len] = D_5671;
+			xs[len] = textX;
+			ys[len] = textY;
 			if(max != 1)
 				TXT_putc(key);
 			len++;
@@ -271,9 +271,9 @@ rectangle <rects>; returns its index*/
 
 	sel = -1;
 	over = -1;
-	pressed = D_5046 || D_5047;
+	pressed = mouseL || mouseR;
 	do {
-		if(!D_5046 && !D_5047)
+		if(!mouseL && !mouseR)
 			pressed = 0;
 		if(kbhit()) {
 			ch = toupper(getch());
@@ -290,47 +290,47 @@ rectangle <rects>; returns its index*/
 			}
 		}
 		/*a new click on an option*/
-		if((D_5046 || D_5047) && !pressed && over != -1)
+		if((mouseL || mouseR) && !pressed && over != -1)
 			sel = over;
 	} while(sel == -1);
 	return sel;
 }
 
-/*set the VGA palette from D_4A40*/
+/*set the VGA palette from vgaPalette*/
 /*C_00E1_04F9*/SetPalette() {
 	int i;
 
-	if(D_5044 == 0x13) {
+	if(videoMode == 0x13) {
 		for(i = 0; i < 0x100; i++) {
 			if(!(i & 0xf))
 				VID_waitRetrace();
-			PAL_set(i, D_4A40[i]);
+			PAL_set(i, vgaPalette[i]);
 		}
 	}
 }
 
-/*set the VGA palette from the saved one D_505F*/
+/*set the VGA palette from the saved one savedPalette*/
 /*C_00E1_052D*/RestorePalette() {
 	int i;
 
-	if(D_5044 == 0x13) {
+	if(videoMode == 0x13) {
 		for(i = 0; i < 0x100; i++) {
 			if(!(i & 0xf))
 				VID_waitRetrace();
-			PAL_set(i, D_505F[i]);
+			PAL_set(i, savedPalette[i]);
 		}
 	}
 }
 
-/*save the VGA palette into D_505F*/
+/*save the VGA palette into savedPalette*/
 /*C_00E1_0561*/SavePalette() {
 	int i;
 
-	if(D_5044 == 0x13) {
+	if(videoMode == 0x13) {
 		for(i = 0; i < 0x100; i++) {
 			if(!(i & 0xf))
 				VID_waitRetrace();
-			PAL_get(i, D_505F[i]);
+			PAL_get(i, savedPalette[i]);
 		}
 	}
 }
@@ -351,46 +351,46 @@ rectangle <rects>; returns its index*/
 	int i;
 	int sel;
 
-	switch(D_5044) {
+	switch(videoMode) {
 		case 4: menu = LZW_load("mainmenu.cga"); break;
 		case 7: menu = LZW_load("mainmenu.hrc"); break;
 		case 9: menu = LZW_load("mainmenu.tga"); break;
-		case 0xd: menu = LZW_load("mainmenu.ega"); D_5732 = D_5710; break;
+		case 0xd: menu = LZW_load("mainmenu.ega"); backBuffer = screen; break;
 		case 0x13: menu = LZW_load("mainmenu.shp"); break;
 	}
-	switch(D_5044) {
+	switch(videoMode) {
 		case 4: titles = LZW_load("titles.cga"); break;
 		case 7: titles = LZW_load("titles.hrc"); break;
 		case 9: titles = LZW_load("titles.tga"); break;
 		case 0xd: titles = LZW_load("titles.ega"); break;
 		case 0x13: titles = LZW_load("titles.shp"); break;
 	}
-	if(D_01A8 != 1)
+	if(songPlaying != 1)
 		PlayMusic(1);
-	if(!D_575A) {
+	if(!menuDrawn) {
 		SetPalette();
 		/*the title*/
-		src = D_5710;
-		dst = D_5732;
+		src = screen;
+		dst = backBuffer;
 		dst.right = 0x13f; dst.left = dst.top = 0; dst.bottom = 0x3f;
 		src.right = 0x13f; src.left = src.top = 0; src.bottom = 0x3f;
 		DRV(3)(&dst, 0x13, 0, titles, 0);
-		if(D_5044 == 0x13) {
+		if(videoMode == 0x13) {
 			FADE_in(&dst, &src);
-		} else if(D_5044 != 0xd) {
+		} else if(videoMode != 0xd) {
 			DRV(0xf)(&dst, &src);
 		} else {
-			DRV(0x15)(&D_5710);
-			DRV(0xf)(&D_5732, &D_5710);
-			D_5732 = D_5710;
+			DRV(0x15)(&screen);
+			DRV(0xf)(&backBuffer, &screen);
+			backBuffer = screen;
 		}
 		/*"The False Prophet"*/
-		src = D_5710;
-		dst = D_5732;
+		src = screen;
+		dst = backBuffer;
 		dst.right = 0x108; dst.left = 0x3b; dst.top = 0x2f; dst.bottom = 0x4b;
 		src.right = 0x108; src.left = 0x3b; src.top = 0x2f; src.bottom = 0x4b;
 		DRV(3)(&dst, dst.left, dst.top, titles, 1);
-		switch(D_5044) {
+		switch(videoMode) {
 			case 4: case 7:
 				effect = ScaleSpeed(0x46, 0x78);
 				DIS_dissolveCGA(&dst, &src, effect);
@@ -403,8 +403,8 @@ rectangle <rects>; returns its index*/
 				src.segment ^= 0x200;
 				effect = ScaleSpeed(0x32, 0x64);
 				DIS_dissolveEGA(&dst, &src, effect);
-				DRV(0x15)(&D_5710);
-				D_5732 = D_5710;
+				DRV(0x15)(&screen);
+				backBuffer = screen;
 				Delay(10);
 			break;
 			case 0x13:
@@ -412,27 +412,27 @@ rectangle <rects>; returns its index*/
 			break;
 		}
 		/*the menu*/
-		src = D_5710;
-		dst = D_5732;
+		src = screen;
+		dst = backBuffer;
 		dst.right = 0x12b; dst.left = 0x31; dst.top = 0x53; dst.bottom = 0xc4;
 		src.right = 0x12b; src.left = 0x31; src.top = 0x53; src.bottom = 0xc4;
 		DRV(3)(&dst, dst.left, dst.top, menu, 0);
-		if(D_5044 == 0x13) {
+		if(videoMode == 0x13) {
 			FADE_in(&dst, &src);
-		} else if(D_5044 == 0xd) {
-			DRV(0x15)(&D_5710);
+		} else if(videoMode == 0xd) {
+			DRV(0x15)(&screen);
 		} else {
 			DRV(0xf)(&dst, &src);
 		}
-		if(D_5044 == 0x13)
+		if(videoMode == 0x13)
 			for(i = 0; i < 5; i++)
-				PAL_get(colors[i], D_4A14[i]);
-		D_575A = 1;
+				PAL_get(colors[i], menuColors[i]);
+		menuDrawn = 1;
 	}
-	D_58F0 = 0;
-	if(D_5044 == 0xd) {
-		D_5054 = &D_5732;
-		D_5732.segment = D_5710.segment ^ 0x200;
+	escaped = 0;
+	if(videoMode == 0xd) {
+		mouseSurface = &backBuffer;
+		backBuffer.segment = screen.segment ^ 0x200;
 	}
 	MOUSE_SHOW();
 	/*the options' rectangles*/
@@ -444,21 +444,21 @@ rectangle <rects>; returns its index*/
 	sel = 0;
 	over = sel;
 	done = sel;
-	lastX = D_5048 + 1;
-	lastY = D_504A;
+	lastX = mouseX + 1;
+	lastY = mouseY;
 	while(!done) {
 		MOUSE_SERVE();
-		if(D_5044 == 0x13) {
+		if(videoMode == 0x13) {
 			/*highlight the selected option*/
 			VID_inRetrace();
 			for(i = 0; i < 5; i++)
-				PAL_set(colors[i], D_4A14[abs(sel - i)]);
+				PAL_set(colors[i], menuColors[abs(sel - i)]);
 		}
-		if(D_5048 != lastX || D_504A != lastY) {
+		if(mouseX != lastX || mouseY != lastY) {
 			/*the mouse moved*/
 			over = 0;
-			lastX = D_5048;
-			lastY = D_504A;
+			lastX = mouseX;
+			lastY = mouseY;
 			for(i = 0; i < 5; i++) {
 				if(MOUSE_IN_RECT(&rects[i])) {
 					sel = i;
@@ -470,33 +470,33 @@ rectangle <rects>; returns its index*/
 			switch(toupper(getch())) {
 				case 'I':
 					sel = 0; done = 1;
-					if(D_5044 == 0x13)
+					if(videoMode == 0x13)
 						for(i = 0; i < 5; i++)
-							PAL_set(colors[i], D_4A14[abs(sel - i)]);
+							PAL_set(colors[i], menuColors[abs(sel - i)]);
 				break;
 				case 'C':
 					sel = 1; done = 1;
-					if(D_5044 == 0x13)
+					if(videoMode == 0x13)
 						for(i = 0; i < 5; i++)
-							PAL_set(colors[i], D_4A14[abs(sel - i)]);
+							PAL_set(colors[i], menuColors[abs(sel - i)]);
 				break;
 				case 'T':
 					sel = 2; done = 1;
-					if(D_5044 == 0x13)
+					if(videoMode == 0x13)
 						for(i = 0; i < 5; i++)
-							PAL_set(colors[i], D_4A14[abs(sel - i)]);
+							PAL_set(colors[i], menuColors[abs(sel - i)]);
 				break;
 				case 'A':
 					sel = 3; done = 1;
-					if(D_5044 == 0x13)
+					if(videoMode == 0x13)
 						for(i = 0; i < 5; i++)
-							PAL_set(colors[i], D_4A14[abs(sel - i)]);
+							PAL_set(colors[i], menuColors[abs(sel - i)]);
 				break;
 				case 'J':
 					sel = 4; done = 1;
-					if(D_5044 == 0x13)
+					if(videoMode == 0x13)
 						for(i = 0; i < 5; i++)
-							PAL_set(colors[i], D_4A14[abs(sel - i)]);
+							PAL_set(colors[i], menuColors[abs(sel - i)]);
 				break;
 				case 0x11:/*ctrl-Q: quit*/
 					sel = 5;
@@ -507,9 +507,9 @@ rectangle <rects>; returns its index*/
 				case '1': PlayMusic(1); break;
 				case '2':
 					PlayMusic(2);
-					if(D_5746 && D_01A8 == -2) {
-						MUS(6)(D_5692);
-						D_01A8 = 2;
+					if(musicCard && songPlaying == -2) {
+						MUS(6)(songData);
+						songPlaying = 2;
 					}
 				break;
 				case '3': PlayMusic(3); break;
@@ -536,7 +536,7 @@ rectangle <rects>; returns its index*/
 				break;
 			}
 		}
-		if((D_5046 || D_5047) && over)
+		if((mouseL || mouseR) && over)
 			done = 1;
 	}
 	farfree(titles);
@@ -557,8 +557,8 @@ rectangle <rects>; returns its index*/
 		MOUSE_SERVE();
 		if(kbhit())
 			key = getch();
-		if(D_5046 || D_5047)
-			key = D_5046 || D_5047;
+		if(mouseL || mouseR)
+			key = mouseL || mouseR;
 	}
 	MOUSE_HIDE();
 	return key;
@@ -575,19 +575,19 @@ until "journey onward" or quit*/
 	register int done;
 
 	/*the command line, for the game*/
-	D_5696[0] = 0;
+	gameArgs[0] = 0;
 	for(i = 1; i < argc; i++) {
-		sprintf(buf, "%s%s", D_5696, argv[i]);
-		strcpy(D_5696, buf);
+		sprintf(buf, "%s%s", gameArgs, argv[i]);
+		strcpy(gameArgs, buf);
 	}
 	SetDosHandlers();
 	FindDrives();
 	srand(time(0));
 	/*the configuration: CONFIG.U6 then the command line*/
-	D_58F0 = 0;
-	D_58EC = 1;
-	D_58EE = 0;
-	D_5746 = 0;
+	escaped = 0;
+	mouseOn = 1;
+	adapter = 0;
+	musicCard = 0;
 	fd = OSI_open("config.u6");
 	if(fd >= 0) {
 		OSI_read(fd, 0L, 6L, cfg);
@@ -598,15 +598,15 @@ until "journey onward" or quit*/
 	for(i = 1; i < argc; i++)
 		ParseConfig(argv[i]);
 	/*the graphic driver*/
-	switch(D_58EE) {
-		case 0: D_5044 = 0x13; D_4A34.f = (void (far *)())LoadZFile("mcgadrv.bin"); break;
-		case 1: D_5044 = 0xd; D_4A34.f = (void (far *)())LoadZFile("egadrv.bin"); break;
-		case 2: D_5044 = 9; D_4A34.f = (void (far *)())LoadZFile("tgadrv.bin"); break;
-		case 3: D_5044 = 4; D_4A34.f = (void (far *)())LoadZFile("cgadrv.bin"); break;
-		case 4: D_5044 = 7; D_4A34.f = (void (far *)())LoadZFile("cgadrv.bin"); break;
+	switch(adapter) {
+		case 0: videoMode = 0x13; gfxDrv.f = (void (far *)())LoadZFile("mcgadrv.bin"); break;
+		case 1: videoMode = 0xd; gfxDrv.f = (void (far *)())LoadZFile("egadrv.bin"); break;
+		case 2: videoMode = 9; gfxDrv.f = (void (far *)())LoadZFile("tgadrv.bin"); break;
+		case 3: videoMode = 4; gfxDrv.f = (void (far *)())LoadZFile("cgadrv.bin"); break;
+		case 4: videoMode = 7; gfxDrv.f = (void (far *)())LoadZFile("cgadrv.bin"); break;
 	}
 	/*some of its entries, for the OSI library (i = the driver's segment)*/
-	asm mov bx,offset DGROUP:D_4A34
+	asm mov bx,offset DGROUP:gfxDrv
 	asm mov ax,[bx+2]
 	asm mov i,ax
 	drvDrawPointer[0] = 3; drvDrawPointer[1] = i;
@@ -614,102 +614,102 @@ until "journey onward" or quit*/
 	drvDrawPointer[4] = 9; drvDrawPointer[5] = i;
 	drvDrawPointer[6] = 0x12; drvDrawPointer[7] = i;
 	drvDrawPointer[8] = 0xc; drvDrawPointer[9] = i;
-	switch(D_5044) {
-		case 4: case 9: D_5710.segment = 0xb800; break;
-		case 7: D_5710.segment = 0xb000; InitHercules(); break;
-		case 0xd: D_5710.segment = 0xa200; break;
-		case 0x13: D_5710.segment = 0xa000; break;
+	switch(videoMode) {
+		case 4: case 9: screen.segment = 0xb800; break;
+		case 7: screen.segment = 0xb000; InitHercules(); break;
+		case 0xd: screen.segment = 0xa200; break;
+		case 0x13: screen.segment = 0xa000; break;
 	}
-	LoadMusicDriver(D_5746, D_5720);
-	if(D_5044 != 7) {
-		DRV(0)(D_575C);
+	LoadMusicDriver(musicCard, musicPort);
+	if(videoMode != 7) {
+		DRV(0)(scanlineOfs);
 	}
-	D_5710.pScanlines = D_575C;
-	D_5710.right = 0x13f;
-	D_5710.left = 0;
-	D_5710.top = 0;
-	D_5710.bottom = 0xc7;
-	D_565F = D_5722 = D_56E6 = D_5732 = D_5710;
-	if(D_5044 == 0xd) {
-		D_5748 = D_5710;
-		D_5748.right = 0x9f;
-		SURF_alloc(&D_5748);
-		D_5748.right = 0x13f;
-		D_5732 = D_5710;
+	screen.pScanlines = scanlineOfs;
+	screen.right = 0x13f;
+	screen.left = 0;
+	screen.top = 0;
+	screen.bottom = 0xc7;
+	textArea = conSurface = spareSurface = backBuffer = screen;
+	if(videoMode == 0xd) {
+		egaSaved = screen;
+		egaSaved.right = 0x9f;
+		SURF_alloc(&egaSaved);
+		egaSaved.right = 0x13f;
+		backBuffer = screen;
 	} else {
-		SURF_alloc(&D_5732);
+		SURF_alloc(&backBuffer);
 	}
 	/*the console*/
-	D_565F.right = 300;
-	D_565F.left = 0x12;
-	D_565F.top = 0x50;
-	D_565F.bottom = 0xc5;
-	D_566D = &D_5722;
-	D_5673 = LZW_load("u6.set");
-	TXT_select(&D_566D);
-	D_5677 = 0xf;
-	D_5678 = 0;
-	D_5679 = malloc(0x400);
-	D_567D = 3;
+	textArea.right = 300;
+	textArea.left = 0x12;
+	textArea.top = 0x50;
+	textArea.bottom = 0xc5;
+	textWin = &conSurface;
+	textFont = LZW_load("u6.set");
+	TXT_select(&textWin);
+	textFg = 0xf;
+	textBg = 0;
+	textBuf = malloc(0x400);
+	textAlign = 3;
 	/*the mouse*/
-	switch(D_5044) {
-		case 4: D_58F6 = LZW_load("cursors.cga"); break;
-		case 7: D_58F6 = LZW_load("cursors.hrc"); break;
-		case 9: D_58F6 = LZW_load("cursors.tga"); break;
-		case 0xd: D_58F6 = LZW_load("cursors.ega"); break;
-		case 0x13: D_58F6 = LZW_load("intro.ptr"); break;
+	switch(videoMode) {
+		case 4: cursorShapes = LZW_load("cursors.cga"); break;
+		case 7: cursorShapes = LZW_load("cursors.hrc"); break;
+		case 9: cursorShapes = LZW_load("cursors.tga"); break;
+		case 0xd: cursorShapes = LZW_load("cursors.ega"); break;
+		case 0x13: cursorShapes = LZW_load("intro.ptr"); break;
 	}
-	switch(D_5044) {
-		case 4: D_58F2 = LZW_load("blocks.cga"); break;
-		case 7: D_58F2 = LZW_load("blocks.hrc"); break;
-		case 9: D_58F2 = LZW_load("blocks.tga"); break;
-		case 0xd: D_58F2 = LZW_load("blocks.ega"); break;
-		case 0x13: D_58F2 = LZW_load("blocks.shp"); break;
+	switch(videoMode) {
+		case 4: blockShapes = LZW_load("blocks.cga"); break;
+		case 7: blockShapes = LZW_load("blocks.hrc"); break;
+		case 9: blockShapes = LZW_load("blocks.tga"); break;
+		case 0xd: blockShapes = LZW_load("blocks.ega"); break;
+		case 0x13: blockShapes = LZW_load("blocks.shp"); break;
 	}
-	D_5054 = &D_5710;
-	D_5056 = farmalloc(0x400L);
-	D_5048 = D_504A = D_5052 = 0;
-	D_504E = D_58F6;
-	if(D_58EC == 0)
-		MOUSE_NOINIT(&D_5046);
+	mouseSurface = &screen;
+	mouseSave = farmalloc(0x400L);
+	mouseX = mouseY = mouseShape = 0;
+	mouseShapes = cursorShapes;
+	if(mouseOn == 0)
+		MOUSE_NOINIT(&mouseL);
 	else
-		MOUSE_INIT(&D_5046);
-	MOUSE_POINTER(D_58F6, 0);
+		MOUSE_INIT(&mouseL);
+	MOUSE_POINTER(cursorShapes, 0);
 	MOUSE_HIDE();
 	done = 0;
-	D_575A = 0;
-	if(D_5044 == 0x13) {
+	menuDrawn = 0;
+	if(videoMode == 0x13) {
 		LoadPalette(0);
 		for(i = 0; i < 0x100; i++) {
 			if(!(i & 0xf))
 				VID_waitRetrace();
-			PAL_get(i, D_4A40[i]);
+			PAL_get(i, vgaPalette[i]);
 		}
 	}
-	D_5740 = farcoreleft();
+	farMemLeft = farcoreleft();
 	Introduction();
 	while(!done) {
 		switch(MainMenu()) {
 			case 0:/*introduction*/
 				Intro();
-				D_0194 = 1;
+				introSeen = 1;
 			break;
 			case 1:/*create a character*/
 				if(CreateCharacter())
 					break;
 				else {
-					if(D_5044 == 0xd)
-						D_5732 = D_5710;
-					if(!D_0194)
+					if(videoMode == 0xd)
+						backBuffer = screen;
+					if(!introSeen)
 						Intro();
 					StartGame();
 				}
 			break;
 			case 2:/*transfer a character*/
 				if(TransferCharacter()) {
-					if(D_5044 == 0xd)
-						D_5732 = D_5710;
-					if(!D_0194)
+					if(videoMode == 0xd)
+						backBuffer = screen;
+					if(!introSeen)
 						Intro();
 					StartGame();
 				}
@@ -725,9 +725,9 @@ until "journey onward" or quit*/
 		}
 	}
 	PlayMusic(0);
-	if(D_5044 == 0xd)
-		D_5732 = D_5748;
-	SURF_free(&D_5732);
+	if(videoMode == 0xd)
+		backBuffer = egaSaved;
+	SURF_free(&backBuffer);
 	VID_setMode(3);
 }
 
@@ -742,7 +742,7 @@ the 200 lines are drawn on 300 (x1.5)*/
 	asm out dx,al
 	asm sub dl,4
 	asm mov cx,9
-	asm mov si,offset D_0196
+	asm mov si,offset herculesCrtc
 crtc:
 	asm lodsw
 	asm out dx,ax
@@ -775,7 +775,7 @@ line:
 	asm add bx,ax
 	asm shl si,1
 	asm add bx,5
-	asm mov D_575C[si],bx
+	asm mov scanlineOfs[si],bx
 	asm sar si,1
 	asm inc si
 	asm inc di
@@ -789,8 +789,8 @@ next:
 	asm jnz line
 }
 
-/*the music drivers (index 1..6 = D_5746)*/
-/*01B4*/char *D_01B4[] = {
+/*the music drivers (index 1..6 = musicCard)*/
+/*01B4*/char *musicDrivers[] = {
 	"U6ADLIB.DRV",
 	"U6CMS.DRV",
 	"U6TMUS.DRV",
@@ -802,7 +802,7 @@ next:
 /*load the driver of music card <card> and init it with the i/o <port>*/
 /*C_00E1_1614*/LoadMusicDriver(int card, int port) {
 	if(card) {
-		D_58FA.f = (void (far pascal *)())LoadZFile(D_01B4[card - 1]);
+		musDrv.f = (void (far pascal *)())LoadZFile(musicDrivers[card - 1]);
 		MUS(0)(port);
 	}
 }
@@ -813,21 +813,21 @@ closing ')' comes first*/
 	int ch, n;
 
 	while(1) {
-		ch = D_5692[D_571E];
+		ch = songData[songPos];
 		if(ch == ')')
 			return -1;
 		if(isdigit(ch))
 			break;
-		D_571E++;
+		songPos++;
 	}
 	n = 0;
 	while(1) {
-		ch = D_5692[D_571E];
+		ch = songData[songPos];
 		if(!isdigit(ch))
 			break;
 		n = n * 10;
 		n += ch - '0';
-		D_571E++;
+		songPos++;
 	}
 	return n;
 }
@@ -840,11 +840,11 @@ holds a "( a b a b ...)" group per song; without it all 16 channels get
 	int parens, channel, val, prog;
 
 	fd = OSI_open("midi.dat");
-	D_5692 = farmalloc(0x401L);
+	songData = farmalloc(0x401L);
 	if(fd >= 0) {
-		OSI_read(fd, 0L, 0x400L, D_5692);
+		OSI_read(fd, 0L, 0x400L, songData);
 		parens = 0;
-		for(D_571E = 0; D_571E < 0x400; D_571E++) {
+		for(songPos = 0; songPos < 0x400; songPos++) {
 			if(parens > song) {
 				for(channel = 0; (val = MidiNumber()) >= 0; channel++) {
 					prog = MidiNumber();
@@ -852,7 +852,7 @@ holds a "( a b a b ...)" group per song; without it all 16 channels get
 				}
 				break;
 			}
-			if(D_5692[D_571E] == '(')
+			if(songData[songPos] == '(')
 				parens++;
 		}
 		OSI_close(fd);
@@ -861,11 +861,11 @@ holds a "( a b a b ...)" group per song; without it all 16 channels get
 			MUS(0xc)(ch, 2, 0);
 		}
 	}
-	farfree(D_5692);
+	farfree(songData);
 }
 
 /*the songs (index 1..12 for PlayMusic)*/
-/*01C0*/char *D_01C0[] = {
+/*01C0*/char *songFiles[] = {
 	"ultima.m",
 	"bootup.m",
 	"intro.m",
@@ -880,27 +880,27 @@ holds a "( a b a b ...)" group per song; without it all 16 channels get
 	"end.m"
 };
 
-/*play song <song> (1-based in D_01C0), 0 stops the music; song 2 is only
-loaded (D_01A8 = -2), the main menu starts it*/
+/*play song <song> (1-based in songFiles), 0 stops the music; song 2 is only
+loaded (songPlaying = -2), the main menu starts it*/
 /*C_00E1_178A*/PlayMusic(int song) {
-	if(D_5746 == 0)
+	if(musicCard == 0)
 		return;
-	if(song == D_01A8)
+	if(song == songPlaying)
 		return;
-	if(D_01A8) {
+	if(songPlaying) {
 		MUS(9)();
-		D_01A8 = 0;
-		farfree(D_5692);
+		songPlaying = 0;
+		farfree(songData);
 	}
-	if(song && song != D_01A8) {
-		if(D_5746 == 4)
+	if(song && song != songPlaying) {
+		if(musicCard == 4)
 			MidiChannels(song - 1);
-		D_5692 = LZW_load(D_01C0[song - 1]);
+		songData = LZW_load(songFiles[song - 1]);
 		if(song != 2) {
-			MUS(6)(D_5692);
+			MUS(6)(songData);
 		} else {
 			song = -2;
 		}
-		D_01A8 = song;
+		songPlaying = song;
 	}
 }

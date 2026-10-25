@@ -6,48 +6,48 @@
 #pragma inline
 #include <dos.h>
 
-/*this module's variables: its _DATA (int D_49FC = 0;) and its _BSS, in this order
+/*this module's variables: its _DATA (int timerInstalled = 0;) and its _BSS, in this order
   (Turbo C puts the _BSS variables in the order of its hash of their names: the sum of
   their characters, it seems; these names would give 6832 6836 682A 683A 682E)*/
-/*49FC*/int D_49FC = 0;/*installed*/
-extern long D_682A;/*ticks counted since TIM_install*/
-extern void (*D_682E)(void);/*called each tick*/
-extern void interrupt (*D_6832)(void);/*the previous int 1Ch handler*/
-extern long D_6836;/*loops of TIM_calibrate in one tick*/
-extern long D_683A;/*TIM_delay's loop counter*/
+/*49FC*/int timerInstalled = 0;/*installed*/
+extern long timerTicks;/*ticks counted since TIM_install*/
+extern void (*timerHook)(void);/*called each tick*/
+extern void interrupt (*oldInt1C)(void);/*the previous int 1Ch handler*/
+extern long loopsPerTick;/*loops of TIM_calibrate in one tick*/
+extern long delayCount;/*TIM_delay's loop counter*/
 
 /*the default tick callback*/
 /*C_1482_000E*/static void TIM_nop(void) {
 }
 
 /*C_1482_000F*/TIM_setCallback(void (*f)(void)) {
-	D_682E = f;
+	timerHook = f;
 }
 
 /*C_1482_001F*/TIM_resetCallback() {
-	D_682E = TIM_nop;
+	timerHook = TIM_nop;
 }
 
 /*C_1482_002A*/static void interrupt TIM_handler(void) {
-	(*D_682E)();
-	D_682A++;
-	(*D_6832)();
+	(*timerHook)();
+	timerTicks++;
+	(*oldInt1C)();
 }
 
 /*C_1482_0055*/TIM_install() {
-	if(D_49FC == 0) {
-		D_49FC = 1;
-		D_6832 = getvect(0x1c);
-		D_682E = TIM_nop;
+	if(timerInstalled == 0) {
+		timerInstalled = 1;
+		oldInt1C = getvect(0x1c);
+		timerHook = TIM_nop;
 		setvect(0x1c, TIM_handler);
 	}
-	D_682A = 0;
+	timerTicks = 0;
 }
 
 /*C_1482_009C*/TIM_remove() {
-	if(D_49FC) {
-		setvect(0x1c, D_6832);
-		D_49FC = 0;
+	if(timerInstalled) {
+		setvect(0x1c, oldInt1C);
+		timerInstalled = 0;
 	}
 }
 
@@ -55,12 +55,12 @@ extern long D_683A;/*TIM_delay's loop counter*/
 /*C_1482_00BE*/TIM_calibrate() {
 	long t = 3;
 
-	D_6836 = 0;
+	loopsPerTick = 0;
 	TIM_install();
-	while(D_682A != 2)
+	while(timerTicks != 2)
 		;
-	while(D_682A != t)
-		D_6836++;
+	while(timerTicks != t)
+		loopsPerTick++;
 	TIM_remove();
 }
 
@@ -68,8 +68,8 @@ extern long D_683A;/*TIM_delay's loop counter*/
 /*C_1482_0113*/TIM_delay(int ms) {
 	long n;
 
-	n = (ms / 55) * D_6836;
-	D_683A = 0;
-	while(D_683A != n)
-		D_683A++;
+	n = (ms / 55) * loopsPerTick;
+	delayCount = 0;
+	while(delayCount != n)
+		delayCount++;
 }

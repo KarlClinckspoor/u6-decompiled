@@ -9,30 +9,30 @@
 
 /*a drawing surface of the graphics driver (14 bytes)*/
 
-extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern struct tSurface D_5710;/*the screen*/
-extern struct tSurface D_5732;/*the page the introduction draws on*/
-extern int D_575A;
-extern int D_58F0;/*set when the player escapes the introduction*/
-extern void far *D_5ADC;/*the shapes of the introduction (intro.*)*/
-extern struct tSurface D_5BAE;/*twinkle: the surface the stars are drawn on*/
-extern struct tSurface D_6072;/*an off-screen buffer*/
-extern int D_6096;/*twinkle: palette index (a global: the twinkle runs from the timer)*/
-extern char D_6098[];/*twinkle: a palette entry*/
-extern char D_609E[];/*twinkle: a palette entry*/
-extern int D_60A4;/*twinkle: star index*/
-extern int D_60A6;/*twinkle: colour of the star's pixel*/
-extern int D_60A8;/*twinkle: colour of a lit star*/
-extern char far *D_60AA;/*starpos.dat*/
-extern int D_60AE;/*twinkle: first star of the group that twinkles*/
-extern int D_60B0;/*number of stars*/
-extern int D_60B2;/*twinkle: random number (a shift register)*/
-extern int D_60BC[];/*colour of each star*/
-extern int D_62BC[];/*x of each star*/
-extern int D_64BC[];/*y of each star*/
-extern int D_66BC[];/*the hands: x0,y0, x1,y1*/
-extern int D_66C4[];/*where the moving shapes go*/
-extern int D_66D4[];/*the moving shapes: x,y each*/
+extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern struct tSurface screen;/*the screen*/
+extern struct tSurface backBuffer;/*the page the introduction draws on*/
+extern int menuDrawn;
+extern int escaped;/*set when the player escapes the introduction*/
+extern void far *sceneShapes;/*the shapes of the introduction (intro.*)*/
+extern struct tSurface skySurface;/*twinkle: the surface the stars are drawn on*/
+extern struct tSurface workArea;/*an off-screen buffer*/
+extern int twinklePal;/*twinkle: palette index (a global: the twinkle runs from the timer)*/
+extern char twinkleEntry[];/*twinkle: a palette entry*/
+extern char twinkleEntry2[];/*twinkle: a palette entry*/
+extern int starIndex;/*twinkle: star index*/
+extern int starPixel;/*twinkle: colour of the star's pixel*/
+extern int starLit;/*twinkle: colour of a lit star*/
+extern char far *starPosData;/*starpos.dat*/
+extern int twinkleFirst;/*twinkle: first star of the group that twinkles*/
+extern int starCount;/*number of stars*/
+extern int twinkleRandom;/*twinkle: random number (a shift register)*/
+extern int starColor[];/*colour of each star*/
+extern int starX[];/*x of each star*/
+extern int starY[];/*y of each star*/
+extern int hands[];/*the hands: x0,y0, x1,y1*/
+extern int shapeDest[];/*where the moving shapes go*/
+extern int shapePos[];/*the moving shapes: x,y each*/
 
 extern SetPalette();
 extern RestorePalette();
@@ -64,30 +64,30 @@ extern TIM_install();
 extern TIM_remove();
 extern TIM_calibrate();
 
-/*40C4*/int D_40C4[4] = {-8, 0x4d, 0xb6, 0x4f};/*where the hands come to rest: x0,y0, x1,y1*/
-/*40CC*/int D_40CC = 0;/*twinkle: toggles every tick (MCGA palette cycling every other tick)*/
-/*40CE*/unsigned D_40CE = 0;/*twinkle: tick counter*/
+/*40C4*/int handsRest[4] = {-8, 0x4d, 0xb6, 0x4f};/*where the hands come to rest: x0,y0, x1,y1*/
+/*40CC*/int twinkleToggle = 0;/*twinkle: toggles every tick (MCGA palette cycling every other tick)*/
+/*40CE*/unsigned twinkleTicks = 0;/*twinkle: tick counter*/
 
 KeyPressed();
 
-/*a driver entry that returns something (D_4A34.p.ofs selects it)*/
-#define DRVF(type) (*(type (far *)())D_4A34.f)
+/*a driver entry that returns something (gfxDrv.p.ofs selects it)*/
+#define DRVF(type) (*(type (far *)())gfxDrv.f)
 
 /*draws shape n of the introduction*/
-#define SHAPE(x, y, n) DRV(3)(&D_5732, x, y, D_5ADC, n)
+#define SHAPE(x, y, n) DRV(3)(&backBuffer, x, y, sceneShapes, n)
 
 /*the pixel of star i in MCGA video memory*/
-#define STAR_PIXEL(i) *(char far *)((long)(D_64BC[i] * 320) + D_62BC[i] + 0xa0000000L)
+#define STAR_PIXEL(i) *(char far *)((long)(starY[i] * 320) + starX[i] + 0xa0000000L)
 
 /*shows the page that was drawn*/
 #define SHOW_PAGE() \
-	if(D_5044 == 0x13) { \
-		FADE_in(&D_5732, &D_5710); \
-	} else if(D_5044 == 0xd) { \
-		DRV(0x15)(&D_5710); \
-		D_5732.segment = D_5710.segment; \
+	if(videoMode == 0x13) { \
+		FADE_in(&backBuffer, &screen); \
+	} else if(videoMode == 0xd) { \
+		DRV(0x15)(&screen); \
+		backBuffer.segment = screen.segment; \
 	} else { \
-		DRV(0xf)(&D_5732, &D_5710); \
+		DRV(0xf)(&backBuffer, &screen); \
 	}
 
 /*the hands tremble: each moves sideways at random, up to n-1 pixels*/
@@ -107,78 +107,78 @@ KeyPressed();
 
 /*draws the two hands (shapes 3 and 4), moved by x0 and x1, at height y*/
 /*C_0C17_0000*/DrawHands(int x0, int x1, int y) {
-	if(D_5044 == 0xd)
-		D_5732 = D_5710;
+	if(videoMode == 0xd)
+		backBuffer = screen;
 	SHAPE(x0 - 8, y + 0x4d, 3);
 	SHAPE(x1 + 0xb6, y + 0x4f, 4);
 }
 
-/*the timer routine of the night sky: every few ticks a group of stars (from D_60AE,
+/*the timer routine of the night sky: every few ticks a group of stars (from twinkleFirst,
  1 to 5 of them) is lit, then put out; on MCGA the palette entries 0xe8-0xef cycle*/
 /*C_0C17_0072*/void far Twinkle() {
-	if(D_5044 == 0x13) {
+	if(videoMode == 0x13) {
 		/*cycle the palette entries 0xe8-0xef, every other tick*/
-		if(D_40CC == 0) {
+		if(twinkleToggle == 0) {
 			VID_waitRetrace();
-			PAL_get(0xef, D_609E);
-			for(D_6096 = 0xee; D_6096 >= 0xe8; D_6096--) {
-				PAL_get(D_6096, D_6098);
-				PAL_set(D_6096 + 1, D_6098);
+			PAL_get(0xef, twinkleEntry2);
+			for(twinklePal = 0xee; twinklePal >= 0xe8; twinklePal--) {
+				PAL_get(twinklePal, twinkleEntry);
+				PAL_set(twinklePal + 1, twinkleEntry);
 			}
-			PAL_set(0xe8, D_609E);
+			PAL_set(0xe8, twinkleEntry2);
 		}
-		D_40CC = !D_40CC;
-		if(!(D_40CE & 3)) {
+		twinkleToggle = !twinkleToggle;
+		if(!(twinkleTicks & 3)) {
 			/*put out the stars that are lit*/
-			for(D_60A4 = D_60AE; D_60A4 <= D_60B2 % 5 + D_60AE; D_60A4++)
-				if(STAR_PIXEL(D_60A4) == 0xf)
-					STAR_PIXEL(D_60A4) = D_60BC[D_60A4];
+			for(starIndex = twinkleFirst; starIndex <= twinkleRandom % 5 + twinkleFirst; starIndex++)
+				if(STAR_PIXEL(starIndex) == 0xf)
+					STAR_PIXEL(starIndex) = starColor[starIndex];
 		}
-		D_40CE++;
-		if(D_40CE % 20 == 0) {
+		twinkleTicks++;
+		if(twinkleTicks % 20 == 0) {
 			/*light another group of stars*/
-			D_60AE = (D_60AE + 7) % D_60B0;
-			if(D_60B2 & 1) {
-				D_60B2 >>= 1;
-				D_60B2 ^= 0xb8;
+			twinkleFirst = (twinkleFirst + 7) % starCount;
+			if(twinkleRandom & 1) {
+				twinkleRandom >>= 1;
+				twinkleRandom ^= 0xb8;
 			} else {
-				D_60B2 >>= 1;
+				twinkleRandom >>= 1;
 			}
-			for(D_60A4 = D_60AE; D_60A4 <= D_60B2 % 5 + D_60AE; D_60A4++)
-				if(STAR_PIXEL(D_60A4) == D_60BC[D_60A4])
-					STAR_PIXEL(D_60A4) = 0xf;
+			for(starIndex = twinkleFirst; starIndex <= twinkleRandom % 5 + twinkleFirst; starIndex++)
+				if(STAR_PIXEL(starIndex) == starColor[starIndex])
+					STAR_PIXEL(starIndex) = 0xf;
 		}
 	} else {
-		D_60A8 = 0xf;
-		if(D_5044 < 9)
-			D_60A8 = 3;
-		if(D_5044 == 0xd) {
-			D_4A34.p.ofs = 0x1e;
+		starLit = 0xf;
+		if(videoMode < 9)
+			starLit = 3;
+		if(videoMode == 0xd) {
+			gfxDrv.p.ofs = 0x1e;
 			if(DRVF(long)(0))
 				return;
 		}
-		if(!(D_40CE & 3)) {
-			for(D_60A4 = D_60AE; D_60A4 <= D_60B2 % 5 + D_60AE; D_60A4++) {
-				D_4A34.p.ofs = 0x1b;
-				D_60A6 = DRVF(int)(&D_5BAE, D_62BC[D_60A4], D_64BC[D_60A4]);
-				if(D_60A6 == D_60A8) {
-					DRV(0x18)(&D_5BAE, D_62BC[D_60A4], D_64BC[D_60A4], D_60BC[D_60A4]);
+		if(!(twinkleTicks & 3)) {
+			for(starIndex = twinkleFirst; starIndex <= twinkleRandom % 5 + twinkleFirst; starIndex++) {
+				gfxDrv.p.ofs = 0x1b;
+				starPixel = DRVF(int)(&skySurface, starX[starIndex], starY[starIndex]);
+				if(starPixel == starLit) {
+					DRV(0x18)(&skySurface, starX[starIndex], starY[starIndex], starColor[starIndex]);
 				}
 			}
 		}
-		if(++D_40CE % 8 == 0) {
-			D_60AE = (D_60AE + 7) % D_60B0;
-			if(D_60B2 & 1) {
-				D_60B2 >>= 1;
-				D_60B2 ^= 0xb8;
+		if(++twinkleTicks % 8 == 0) {
+			twinkleFirst = (twinkleFirst + 7) % starCount;
+			if(twinkleRandom & 1) {
+				twinkleRandom >>= 1;
+				twinkleRandom ^= 0xb8;
 			} else {
-				D_60B2 >>= 1;
+				twinkleRandom >>= 1;
 			}
-			for(D_60A4 = D_60AE; D_60A4 <= D_60B2 % 5 + D_60AE; D_60A4++) {
-				D_4A34.p.ofs = 0x1b;
-				D_60A6 = DRVF(int)(&D_5BAE, D_62BC[D_60A4], D_64BC[D_60A4]);
-				if(D_60BC[D_60A4] == D_60A6 && D_60A6 != 0) {
-					DRV(0x18)(&D_5BAE, D_62BC[D_60A4], D_64BC[D_60A4], D_60A8);
+			for(starIndex = twinkleFirst; starIndex <= twinkleRandom % 5 + twinkleFirst; starIndex++) {
+				gfxDrv.p.ofs = 0x1b;
+				starPixel = DRVF(int)(&skySurface, starX[starIndex], starY[starIndex]);
+				if(starColor[starIndex] == starPixel && starPixel != 0) {
+					DRV(0x18)(&skySurface, starX[starIndex], starY[starIndex], starLit);
 				}
 			}
 		}
@@ -200,21 +200,21 @@ KeyPressed();
 /*C_0C17_03EF*/DrawGlow() {
 	int c;
 
-	if(D_5044 == 0x13)
+	if(videoMode == 0x13)
 		c = 0xad;
-	else if(D_5044 == 0xd || D_5044 == 9)
+	else if(videoMode == 0xd || videoMode == 9)
 		c = 6;
 	else
 		c = 1;
-	DRV(0x18)(&D_5732, 0x58, 0x55, c);
-	DRV(0x18)(&D_5732, 0x57, 0x56, c);
-	DRV(0x18)(&D_5732, 0x58, 0x56, c);
-	DRV(0x18)(&D_5732, 0x59, 0x56, c);
-	DRV(0x18)(&D_5732, 0x57, 0x57, c);
-	DRV(0x18)(&D_5732, 0x58, 0x57, c);
-	DRV(0x18)(&D_5732, 0x59, 0x57, c);
-	DRV(0x18)(&D_5732, 0x57, 0x58, c);
-	DRV(0x18)(&D_5732, 0x58, 0x58, c);
+	DRV(0x18)(&backBuffer, 0x58, 0x55, c);
+	DRV(0x18)(&backBuffer, 0x57, 0x56, c);
+	DRV(0x18)(&backBuffer, 0x58, 0x56, c);
+	DRV(0x18)(&backBuffer, 0x59, 0x56, c);
+	DRV(0x18)(&backBuffer, 0x57, 0x57, c);
+	DRV(0x18)(&backBuffer, 0x58, 0x57, c);
+	DRV(0x18)(&backBuffer, 0x59, 0x57, c);
+	DRV(0x18)(&backBuffer, 0x57, 0x58, c);
+	DRV(0x18)(&backBuffer, 0x58, 0x58, c);
 }
 
 /*waits until no key is pressed*/
@@ -224,7 +224,7 @@ KeyPressed();
 
 /*the introduction: the night sky with its twinkling stars, then the scene with the hands and
  the stones; texts 0xc8-0xdb (ShowPassage) are told along it. A key goes on to the
- next part, Escape (D_58F0) leaves it.
+ next part, Escape (escaped) leaves it.
  (the locals' order and which ones are declared after which matter for the stack
  layout and the si/di choice: found by trying)*/
 /*C_0C17_0508*/Intro() {
@@ -242,35 +242,35 @@ KeyPressed();
 	int dright;
 	int i;
 
-	D_58F0 = 0;
-	D_6072.left = D_6072.top = 0;
-	D_6072.right = 0x13f;
-	D_6072.bottom = 0x37;
-	if(D_5044 != 0xd) {
-		SURF_alloc(&D_6072);
+	escaped = 0;
+	workArea.left = workArea.top = 0;
+	workArea.right = 0x13f;
+	workArea.bottom = 0x37;
+	if(videoMode != 0xd) {
+		SURF_alloc(&workArea);
 	} else {
-		D_6072.segment = 0xa600;
-		D_5732 = D_5710;
+		workArea.segment = 0xa600;
+		backBuffer = screen;
 	}
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
-	DRV(0xc)(&D_5732, 0);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
+	DRV(0xc)(&backBuffer, 0);
 	TIM_calibrate();
 	frames = ScaleSpeed(0xf, 0x28);
-	switch(D_5044) {
-		case 4: D_5ADC = LZW_load("intro.cga"); break;
-		case 7: D_5ADC = LZW_load("intro.hrc"); break;
-		case 9: D_5ADC = LZW_load("intro.tga"); break;
-		case 0xd: D_5ADC = LZW_load("intro.ega"); break;
-		case 0x13: D_5ADC = LZW_load("intro.shp"); break;
+	switch(videoMode) {
+		case 4: sceneShapes = LZW_load("intro.cga"); break;
+		case 7: sceneShapes = LZW_load("intro.hrc"); break;
+		case 9: sceneShapes = LZW_load("intro.tga"); break;
+		case 0xd: sceneShapes = LZW_load("intro.ega"); break;
+		case 0x13: sceneShapes = LZW_load("intro.shp"); break;
 	}
 	/*the stars: 200 x, 200 y, 200 colours (16 bits each)*/
-	D_60AA = LZW_load("starpos.dat");
+	starPosData = LZW_load("starpos.dat");
 	for(i = 0; i < 0x190; i += 2) {
-		D_62BC[i / 2] = (D_60AA[i] & 0xff) + ((D_60AA[i + 1] & 0xff) << 8);
-		D_64BC[i / 2] = (D_60AA[i + 0x190] & 0xff) + ((D_60AA[i + 0x191] & 0xff) << 8);
-		D_60BC[i / 2] = (D_60AA[i + 0x320] & 0xff) + ((D_60AA[i + 0x321] & 0xff) << 8);
+		starX[i / 2] = (starPosData[i] & 0xff) + ((starPosData[i + 1] & 0xff) << 8);
+		starY[i / 2] = (starPosData[i + 0x190] & 0xff) + ((starPosData[i + 0x191] & 0xff) << 8);
+		starColor[i / 2] = (starPosData[i + 0x320] & 0xff) + ((starPosData[i + 0x321] & 0xff) << 8);
 	}
 	LoadPalette(7);
 	SavePalette();
@@ -279,87 +279,87 @@ KeyPressed();
 	SHAPE(0, 0x70, 5);
 	SHOW_PAGE();
 	/*shuffle the stars*/
-	D_60B0 = 0xc1;
+	starCount = 0xc1;
 	for(i = 0; i < 0x200; i++) {
-		a = rand() % D_60B0;
-		b = rand() % D_60B0;
-		tmp = D_62BC[a];
-		D_62BC[a] = D_62BC[b];
-		D_62BC[b] = tmp;
-		tmp = D_64BC[a];
-		D_64BC[a] = D_64BC[b];
-		D_64BC[b] = tmp;
-		tmp = D_60BC[a];
-		D_60BC[a] = D_60BC[b];
-		D_60BC[b] = tmp;
+		a = rand() % starCount;
+		b = rand() % starCount;
+		tmp = starX[a];
+		starX[a] = starX[b];
+		starX[b] = tmp;
+		tmp = starY[a];
+		starY[a] = starY[b];
+		starY[b] = tmp;
+		tmp = starColor[a];
+		starColor[a] = starColor[b];
+		starColor[b] = tmp;
 	}
-	D_60B2 = rand() % 0xff + 1;
-	D_60AE = 0;
-	D_5BAE = D_5710;
+	twinkleRandom = rand() % 0xff + 1;
+	twinkleFirst = 0;
+	skySurface = screen;
 	/*light the first group of stars*/
-	if(D_5044 == 0x13) {
-		for(i = D_60AE; i <= D_60B2 % 5 + D_60AE; i++)
+	if(videoMode == 0x13) {
+		for(i = twinkleFirst; i <= twinkleRandom % 5 + twinkleFirst; i++)
 			STAR_PIXEL(i) = 0xf;
 	} else {
-		if(D_5044 == 0xd)
-			D_5710.segment ^= 0x200;
+		if(videoMode == 0xd)
+			screen.segment ^= 0x200;
 		for(i = 0; i < 200; i++) {
-			D_4A34.p.ofs = 0x1b;
-			D_60BC[i] = DRVF(int)(&D_5710, D_62BC[i], D_64BC[i]);
+			gfxDrv.p.ofs = 0x1b;
+			starColor[i] = DRVF(int)(&screen, starX[i], starY[i]);
 		}
-		for(i = D_60AE; i <= D_60B2 % 5 + D_60AE; i++) {
-			DRV(0x18)(&D_5710, D_62BC[i], D_64BC[i], 0xf);
+		for(i = twinkleFirst; i <= twinkleRandom % 5 + twinkleFirst; i++) {
+			DRV(0x18)(&screen, starX[i], starY[i], 0xf);
 		}
-		if(D_5044 == 0xd)
-			D_5710.segment ^= 0x200;
+		if(videoMode == 0xd)
+			screen.segment ^= 0x200;
 	}
 	TIM_install();
 	TIM_setCallback(Twinkle);
 	ShowPassage(0xc8);
 	WaitTicks(10);
-	if(D_5044 == 0xd)
-		D_5710.segment ^= 0x200;
+	if(videoMode == 0xd)
+		screen.segment ^= 0x200;
 	DisplayPassage();
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	}
 	FlushKeys();
 	while(!CheckInput());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowPassage(0xc9);
 	DisplayPassage();
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	} else {
-		D_5710.segment ^= 0x200;
+		screen.segment ^= 0x200;
 	}
 	FlushKeys();
 	while(!CheckInput());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	/*the hands come in from the sides*/
-	D_66BC[0] = -0x54;
-	D_66BC[1] = 0x6d;
-	D_66BC[2] = 0x140;
-	D_66BC[3] = 0xc8;
-	if(D_5044 == 0xd)
-		D_5732 = D_5710;
+	hands[0] = -0x54;
+	hands[1] = 0x6d;
+	hands[2] = 0x140;
+	hands[3] = 0xc8;
+	if(videoMode == 0xd)
+		backBuffer = screen;
 	speed = ScaleSpeed(1, 4);
 	done = 0;
 	FlushKeys();
 	do {
 		if(KeyPressed()) {
-			while(FADE_step(D_66BC, D_40C4, 4));
+			while(FADE_step(hands, handsRest, 4));
 			done = 1;
 		}
-		if(D_58F0)
+		if(escaped)
 			goto end;
 		for(i = 0; i < speed && !done; i++)
-			done = !FADE_step(D_66BC, D_40C4, 4);
+			done = !FADE_step(hands, handsRest, 4);
 		SHAPE(0, 0, 6);
-		SHAPE(D_66BC[0], D_66BC[1], 3);
-		SHAPE(D_66BC[2], D_66BC[3], 4);
+		SHAPE(hands[0], hands[1], 3);
+		SHAPE(hands[2], hands[3], 4);
 		SHAPE(0, 0x70, 5);
 		ShowFrame();
 	} while(!done);
@@ -373,7 +373,7 @@ KeyPressed();
 	DisplayPassage();
 	FlushKeys();
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowFrame();
 	SHAPE(0, 0, 6);
@@ -385,12 +385,12 @@ KeyPressed();
 	DisplayPassage();
 	FlushKeys();
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowFrame();
 	FlushKeys();
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	/*the moongate rises*/
 	ShowPassage(0xcd);
@@ -419,7 +419,7 @@ KeyPressed();
 		}
 		if(KeyPressed())
 			i = speed + 0x1e;
-		if(D_58F0)
+		if(escaped)
 			goto end;
 		i -= speed;
 		/*not past 0x1e*/
@@ -440,7 +440,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowPassage(0xce);
 	FlushKeys();
@@ -456,7 +456,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowPassage(0xcf);
 	FlushKeys();
@@ -472,7 +472,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowPassage(0xd0);
 	speed = ScaleSpeed(2, 5);
@@ -494,13 +494,13 @@ KeyPressed();
 		TREMBLE(3);
 		if(KeyPressed())
 			i = speed + 0x3a;
-		if(D_58F0)
+		if(escaped)
 			goto end;
 		i -= speed;
 		i += (0x3a - i) * (i <= 0x3a);
 	}
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	SHAPE(0, 0, 6);
 	SHAPE(0x78, 0x3a, 7);
@@ -512,31 +512,31 @@ KeyPressed();
 	SHAPE(0xd2, 0x84, 0xc);
 	DrawGlow();
 	ShowFrame();
-	switch(D_5044) {
+	switch(videoMode) {
 		case 4:
 		case 7:
 			ofs = ScaleSpeed(0xfa, 0x12c);
-			DRV(0xc)(&D_5732, 0);
-			DIS_dissolveCGA(&D_5732, &D_5710, ofs);
+			DRV(0xc)(&backBuffer, 0);
+			DIS_dissolveCGA(&backBuffer, &screen, ofs);
 			break;
 		case 9:
 			ofs = ScaleSpeed(0x12c, 0x1f4);
-			DRV(0xc)(&D_5732, 0);
-			DIS_dissolveTDY(&D_5732, &D_5710, ofs);
+			DRV(0xc)(&backBuffer, 0);
+			DIS_dissolveTDY(&backBuffer, &screen, ofs);
 			break;
 		case 0xd:
-			D_5732.segment = 0xa600;
-			DRV(0xc)(&D_5732, 0);
-			D_5710.segment ^= 0x200;
+			backBuffer.segment = 0xa600;
+			DRV(0xc)(&backBuffer, 0);
+			screen.segment ^= 0x200;
 			ofs = ScaleSpeed(0xc8, 0x12c);
-			DIS_dissolveEGA(&D_5732, &D_5710, ofs);
-			DRV(0x15)(&D_5710);
-			D_5732 = D_5710;
-			DRV(0xc)(&D_5732, 0);
+			DIS_dissolveEGA(&backBuffer, &screen, ofs);
+			DRV(0x15)(&screen);
+			backBuffer = screen;
+			DRV(0xc)(&backBuffer, 0);
 			break;
 		case 0x13:
-			DRV(0xc)(&D_5732, 0);
-			DIS_dissolve(&D_5732, &D_5710, 0);
+			DRV(0xc)(&backBuffer, 0);
+			DIS_dissolve(&backBuffer, &screen, 0);
 			break;
 	}
 	ShowPassage(0xd1);
@@ -544,47 +544,47 @@ KeyPressed();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
 	RestorePalette();
 	ShowPassage(0xd2);
 	DisplayPassage();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
 	RestorePalette();
 	ShowPassage(0xd3);
 	DisplayPassage();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
 	RestorePalette();
 	ShowPassage(0xd4);
 	DisplayPassage();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
-	if(D_5044 == 0xd) {
-		DRV(0x15)(&D_5710);
-		D_5732 = D_5710;
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
+	if(videoMode == 0xd) {
+		DRV(0x15)(&screen);
+		backBuffer = screen;
 	}
 	RestorePalette();
 	SHAPE(0, 0, 6);
@@ -596,24 +596,24 @@ KeyPressed();
 	SHAPE(0, 0x70, 5);
 	SHAPE(0xd2, 0x84, 0xc);
 	DrawGlow();
-	switch(D_5044) {
+	switch(videoMode) {
 		case 4:
 		case 7:
 			ofs = ScaleSpeed(0xc8, 0x12c);
-			DIS_dissolveCGA(&D_5732, &D_5710, ofs);
+			DIS_dissolveCGA(&backBuffer, &screen, ofs);
 			break;
 		case 9:
 			ofs = ScaleSpeed(0x12c, 0x1f4);
-			DIS_dissolveTDY(&D_5732, &D_5710, ofs);
+			DIS_dissolveTDY(&backBuffer, &screen, ofs);
 			break;
 		case 0xd:
-			D_5710.segment ^= 0x200;
+			screen.segment ^= 0x200;
 			ofs = ScaleSpeed(0xc8, 0x12c);
-			DIS_dissolveEGA(&D_5732, &D_5710, ofs);
-			D_5710.segment ^= 0x200;
+			DIS_dissolveEGA(&backBuffer, &screen, ofs);
+			screen.segment ^= 0x200;
 			break;
 		case 0x13:
-			DIS_dissolve(&D_5732, &D_5710, 0);
+			DIS_dissolve(&backBuffer, &screen, 0);
 			break;
 	}
 	FlushKeys();
@@ -631,7 +631,7 @@ KeyPressed();
 		TREMBLE(3);
 		if(KeyPressed())
 			break;
-		if(D_58F0)
+		if(escaped)
 			goto end;
 	}
 	SHAPE(0, 0, 6);
@@ -660,7 +660,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	speed = ScaleSpeed(4, 0xa);
 	FlushKeys();
@@ -681,41 +681,41 @@ KeyPressed();
 		TREMBLE(4);
 		if(KeyPressed())
 			i = 0x8d - speed;
-		if(D_58F0)
+		if(escaped)
 			goto end;
 		i += speed;
 		i += (0x8d - i) * (i >= 0x8d);
 	}
-	D_66D4[0] = -0x20;
-	D_66D4[1] = 0x7a;
-	D_66D4[2] = 0x44;
-	D_66D4[3] = 0x7a;
-	D_66D4[4] = 0xa8;
-	D_66D4[5] = 0xca;
-	D_66C4[0] = 0x63;
-	D_66C4[1] = 0x28;
-	D_66C4[2] = 0xb7;
-	D_66C4[3] = 0x35;
-	D_66C4[4] = 0xf0;
-	D_66C4[5] = 0x3e;
+	shapePos[0] = -0x20;
+	shapePos[1] = 0x7a;
+	shapePos[2] = 0x44;
+	shapePos[3] = 0x7a;
+	shapePos[4] = 0xa8;
+	shapePos[5] = 0xca;
+	shapeDest[0] = 0x63;
+	shapeDest[1] = 0x28;
+	shapeDest[2] = 0xb7;
+	shapeDest[3] = 0x35;
+	shapeDest[4] = 0xf0;
+	shapeDest[5] = 0x3e;
 	speed = ScaleSpeed(3, 9);
 	done = 0;
 	FlushKeys();
 	do {
 		if(KeyPressed()) {
-			while(FADE_step(D_66D4, D_66C4, 6));
+			while(FADE_step(shapePos, shapeDest, 6));
 			done = 1;
 		}
-		if(D_58F0)
+		if(escaped)
 			goto end;
 		for(i = 0; i < speed && !done; i++)
-			done = !FADE_step(D_66D4, D_66C4, 6);
+			done = !FADE_step(shapePos, shapeDest, 6);
 		SHAPE(0, 0, 6);
 		SHAPE(0x78, 0x3a, 7);
 		DrawHands(left, right, 6 - rand() % 4);
-		SHAPE(D_66D4[0], D_66D4[1], 0);
-		SHAPE(D_66D4[2], D_66D4[3], 2);
-		SHAPE(D_66D4[4], D_66D4[5], 1);
+		SHAPE(shapePos[0], shapePos[1], 0);
+		SHAPE(shapePos[2], shapePos[3], 2);
+		SHAPE(shapePos[4], shapePos[5], 1);
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
@@ -738,42 +738,42 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
-	D_66D4[0] = 0x63;
-	D_66D4[1] = 0x28;
-	D_66D4[2] = 0xb7;
-	D_66D4[3] = 0x35;
-	D_66D4[4] = 0xf0;
-	D_66D4[5] = 0x3e;
-	D_66D4[6] = 0x31;
-	D_66D4[7] = 0x44;
-	D_66C4[0] = 0x12;
-	D_66C4[1] = 0x8e;
-	D_66C4[2] = 0x12;
-	D_66C4[3] = 0x8e;
-	D_66C4[4] = 0x76;
-	D_66C4[5] = 0x7a;
-	D_66C4[6] = 0x31;
-	D_66C4[7] = 0x8a;
+	shapePos[0] = 0x63;
+	shapePos[1] = 0x28;
+	shapePos[2] = 0xb7;
+	shapePos[3] = 0x35;
+	shapePos[4] = 0xf0;
+	shapePos[5] = 0x3e;
+	shapePos[6] = 0x31;
+	shapePos[7] = 0x44;
+	shapeDest[0] = 0x12;
+	shapeDest[1] = 0x8e;
+	shapeDest[2] = 0x12;
+	shapeDest[3] = 0x8e;
+	shapeDest[4] = 0x76;
+	shapeDest[5] = 0x7a;
+	shapeDest[6] = 0x31;
+	shapeDest[7] = 0x8a;
 	done = 0;
 	FlushKeys();
 	do {
 		if(KeyPressed()) {
-			while(FADE_step(D_66D4, D_66C4, 8));
+			while(FADE_step(shapePos, shapeDest, 8));
 			done = 1;
 		}
-		if(D_58F0)
+		if(escaped)
 			goto end;
 		for(i = 0; i < speed && !done; i++)
-			done = !FADE_step(D_66D4, D_66C4, 8);
+			done = !FADE_step(shapePos, shapeDest, 8);
 		SHAPE(0, 0, 6);
 		SHAPE(0x78, 0x3a, 7);
 		DrawHands(left, right, 6 - rand() % 4);
-		SHAPE(D_66D4[0], D_66D4[1], 0);
-		SHAPE(D_66D4[2], D_66D4[3], 2);
-		SHAPE(D_66D4[4], D_66D4[5], 1);
-		SHAPE(D_66D4[6], D_66D4[7], 9);
+		SHAPE(shapePos[0], shapePos[1], 0);
+		SHAPE(shapePos[2], shapePos[3], 2);
+		SHAPE(shapePos[4], shapePos[5], 1);
+		SHAPE(shapePos[6], shapePos[7], 9);
 		SHAPE(0, 0x70, 5);
 		ShowFrame();
 		TREMBLE(4);
@@ -789,7 +789,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowPassage(0xd8);
 	FlushKeys();
@@ -802,7 +802,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowPassage(0xd9);
 	speed = ScaleSpeed(1, 3);
@@ -819,7 +819,7 @@ KeyPressed();
 		TREMBLE(4);
 		if(KeyPressed())
 			i = 0x86 - speed;
-		if(D_58F0)
+		if(escaped)
 			goto end;
 		i += speed;
 		i += (0x86 - i) * (i >= 0x86);
@@ -834,7 +834,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	ShowPassage(0xdb);
 	FlushKeys();
@@ -846,7 +846,7 @@ KeyPressed();
 		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
-	if(D_58F0)
+	if(escaped)
 		goto end;
 	FlushKeys();
 	for(i = 0; i < frames / 2; i++) {
@@ -857,33 +857,33 @@ KeyPressed();
 		TREMBLE(4);
 		if(KeyPressed())
 			break;
-		if(D_58F0)
+		if(escaped)
 			break;
 	}
 end:
 	TIM_remove();
 	TIM_resetCallback();
-	farfree(D_5ADC);
-	farfree(D_60AA);
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
-	DRV(0xc)(&D_5732, 0);
+	farfree(sceneShapes);
+	farfree(starPosData);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
+	DRV(0xc)(&backBuffer, 0);
 	SetPalette();
-	if(D_5044 != 0xd)
-		SURF_free(&D_6072);
-	D_575A = D_58F0 = 0;
+	if(videoMode != 0xd)
+		SURF_free(&workArea);
+	menuDrawn = escaped = 0;
 	PlayMusic(0);
 }
 
 /*whether a key was pressed; also updates the surface the twinkling stars are drawn
- on (D_5BAE: the screen, the visible EGA page)*/
+ on (skySurface: the screen, the visible EGA page)*/
 /*C_0C17_2FBB*/KeyPressed() {
 	int ret;
 
-	D_5BAE = D_5710;
-	if(D_5044 == 0xd)
-		D_5BAE.segment ^= 0x200;
+	skySurface = screen;
+	if(videoMode == 0xd)
+		skySurface.segment ^= 0x200;
 	ret = CheckInput();
 	return ret;
 }

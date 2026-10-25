@@ -6,28 +6,28 @@
 #include <alloc.h>
 #include <conio.h>
 
-extern int D_5044;/*video mode: 0x0d EGA, 0x13 MCGA*/
-extern char D_5046, D_5047;
-extern int D_575A;
-extern int D_58F0;
-extern char D_6094, D_6095;/*DOS version: major, minor*/
-extern struct tSurface D_5710, D_5732;
+extern int videoMode;/*video mode: 0x0d EGA, 0x13 MCGA*/
+extern char mouseL, mouseR;
+extern int menuDrawn;
+extern int escaped;
+extern char dosMajor, dosMinor;/*DOS version: major, minor*/
+extern struct tSurface screen, backBuffer;
 
 /*names of the disks, as the disk prompt says them*/
-/*4038*/char *D_4038[] = {"", "Program", "Intro.", "Endgame", "Game", "Map", "Conversation", "Portrait", "Player"};
-/*404A*/int D_404A = 1;/*the disk in the current drive*/
-/*404C*/int D_404C = 0;/*the disk asked for*/
-/*404E*/char D_404E[9] = {0};/*drive of each game disk (1 = A:)*/
-/*4057*/char D_4057[26] = {0};/*kind of each drive: 0 none, 1 fixed, 2 removable*/
-/*4071*/char D_4071[] = "u6.1";/*name of a disk's marker file; [3] is the disk number*/
-/*4076*/char D_4076 = 0;/*a mouse button was down: wait for it to be released*/
-/*4077*/char D_4077 = 0;
+/*4038*/char *diskNames[] = {"", "Program", "Intro.", "Endgame", "Game", "Map", "Conversation", "Portrait", "Player"};
+/*404A*/int curDisk = 1;/*the disk in the current drive*/
+/*404C*/int wantDisk = 0;/*the disk asked for*/
+/*404E*/char diskDrive[9] = {0};/*drive of each game disk (1 = A:)*/
+/*4057*/char driveKind[26] = {0};/*kind of each drive: 0 none, 1 fixed, 2 removable*/
+/*4071*/char markerFile[] = "u6.1";/*name of a disk's marker file; [3] is the disk number*/
+/*4076*/char mouseWasDown = 0;/*a mouse button was down: wait for it to be released*/
+/*4077*/char mouseHeld = 0;
 
 /*C_0BC1_0000*/int IsDiskIn(int n) {
 	int fd;
 
-	D_4071[3] = n + '0';
-	fd = OSI_open(D_4071);
+	markerFile[3] = n + '0';
+	fd = OSI_open(markerFile);
 	if(fd != -1)
 		OSI_close(fd);
 	return fd != -1;
@@ -37,11 +37,11 @@ extern struct tSurface D_5710, D_5732;
 	int drive;
 	int i;
 
-	drive = D_404E[n];
+	drive = diskDrive[n];
 	bdos(0xe, drive - 1, 0);
 	for(i = 1; i <= 8; i++)
 		if(IsDiskIn(i))
-			D_404E[i] = drive;
+			diskDrive[i] = drive;
 }
 
 /*C_0BC1_0079*/AskForDisk(int n) {
@@ -50,59 +50,59 @@ extern struct tSurface D_5710, D_5732;
 	int drive;
 
 	drive = (bdos(0x19, 0, 0) & 0xff) + 'A';
-	while(D_404A != n && D_404E[n] == 0) {
-		D_404C = n;
-		if(D_5044 == 0xd)
-			D_5732 = D_5710;
-		DRV(0xc)(&D_5732, 0);
-		D_575A = 0;
+	while(curDisk != n && diskDrive[n] == 0) {
+		wantDisk = n;
+		if(videoMode == 0xd)
+			backBuffer = screen;
+		DRV(0xc)(&backBuffer, 0);
+		menuDrawn = 0;
 		ShowPassage(999);
 		DisplayPassage();
 		SetPalette();
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
-			D_5732 = D_5710;
+			DRV(0x15)(&screen);
+			backBuffer = screen;
 		}
 		i = 0;
 		while(!i) {
 			MOUSE_SERVE();
-			if(D_5046 || D_5047) {
-				if(!D_4076) {
-					D_4076 = D_4077 = 1;
+			if(mouseL || mouseR) {
+				if(!mouseWasDown) {
+					mouseWasDown = mouseHeld = 1;
 					i = 0x20;
 				} else {
-					D_4077 = 0;
+					mouseHeld = 0;
 				}
 			} else {
-				D_4076 = D_4077 = 0;
+				mouseWasDown = mouseHeld = 0;
 			}
 			if(!i && kbhit())
 				i = 0x20;
 		}
-		DRV(0xc)(&D_5732, 0);
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		DRV(0xc)(&backBuffer, 0);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
-			D_5732 = D_5710;
-			DRV(0xc)(&D_5732, 0);
+			DRV(0x15)(&screen);
+			backBuffer = screen;
+			DRV(0xc)(&backBuffer, 0);
 		}
 		if(kbhit())
 			if(getch() == 0x1b)
-				D_58F0 = 1;
+				escaped = 1;
 		found = 0;
 		for(i = 0; i < 0x1a; i++) {
-			if(D_4057[i] == 2) {
+			if(driveKind[i] == 2) {
 				bdos(0xe, i, 0);
 				if(IsDiskIn(n)) {
 					found = i + 1;
-					D_404E[n] = found;
+					diskDrive[n] = found;
 					for(i = 1; i <= 8; i++)
-						if(i != n && D_404E[i] == found)
-							D_404E[i] = 0;
-					D_404A = n;
+						if(i != n && diskDrive[i] == found)
+							diskDrive[i] = 0;
+					curDisk = n;
 					break;
 				}
 			}
@@ -117,9 +117,9 @@ extern struct tSurface D_5710, D_5732;
 
 	regs.h.ah = 0x30;
 	intdos(&regs, &regs);
-	D_6094 = regs.h.al;
-	D_6095 = regs.h.ah;
-	if(D_6094 >= 3) {
+	dosMajor = regs.h.al;
+	dosMinor = regs.h.ah;
+	if(dosMajor >= 3) {
 		for(i = 0; i < 0x1a; i++) {
 			regs.h.ah = 0x44;
 			regs.h.al = 8;
@@ -127,35 +127,35 @@ extern struct tSurface D_5710, D_5732;
 			intdos(&regs, &regs);
 			if(regs.x.cflag == 0) {
 				if(regs.x.ax)
-					D_4057[i] = 1;
+					driveKind[i] = 1;
 				else
-					D_4057[i] = 2;
-				if(D_6094 >= 4 || D_6095 >= 2) {
+					driveKind[i] = 2;
+				if(dosMajor >= 4 || dosMinor >= 2) {
 					regs.h.ah = 0x44;
 					regs.h.al = 0xe;
 					regs.h.bl = i + 1;
 					intdos(&regs, &regs);
 					if(regs.h.al && regs.h.al != i + 1)
-						D_4057[i] = 0;
+						driveKind[i] = 0;
 				}
 			}
 		}
 	}
-	if(D_6094 < 3 || (D_6094 == 3 && D_6095 < 2)) {
+	if(dosMajor < 3 || (dosMajor == 3 && dosMinor < 2)) {
 		int86(0x11, &regs, &regs);
 		if(regs.x.ax & 1) {
-			D_4057[0] = 2;
+			driveKind[0] = 2;
 			if(regs.x.ax & 0xc0)
-				D_4057[1] = 2;
+				driveKind[1] = 2;
 		} else {
-			D_4057[0] = D_4057[1] = 0;
+			driveKind[0] = driveKind[1] = 0;
 		}
 		i = bdos(0x19, 0, 0) & 0xff;
 		if(i > 1)
-			D_4057[i] = 1;
+			driveKind[i] = 1;
 	}
-	D_404A = 1;
-	D_404E[1] = (bdos(0x19, 0, 0) & 0xff) + 1;
+	curDisk = 1;
+	diskDrive[1] = (bdos(0x19, 0, 0) & 0xff) + 1;
 	SelectDiskDrive(1);
 }
 
@@ -168,7 +168,7 @@ extern struct tSurface D_5710, D_5732;
 	int rgb[3];
 	int i, j;
 
-	if(D_5044 == 0x13) {
+	if(videoMode == 0x13) {
 		buf = farmalloc(0x300L);
 		fd = OSI_open("palettes.int");
 		if(fd >= 0) {

@@ -25,18 +25,18 @@ union tDrv {
 	void (far *f)();
 	struct { unsigned ofs, seg; } p;
 };
-extern union tDrv D_4A34;
-#define DRV(o) D_4A34.p.ofs = (o); (*D_4A34.f)
+extern union tDrv gfxDrv;
+#define DRV(o) gfxDrv.p.ofs = (o); (*gfxDrv.f)
 
-/*45E2*/int D_45E2 = 1;/*1: the next FADE_step starts a fade*/
+/*45E2*/int fadeStart = 1;/*1: the next FADE_step starts a fade*/
 /*this module's _BSS*/
-extern int *D_681C;/*FADE_step: error term of each value*/
-extern int *D_681E;/*  its distance to go*/
-extern int *D_6820;/*  its direction (+1/-1)*/
-extern int D_6822;/*  the largest distance: the number of steps*/
-extern int D_6824;/*  the steps left*/
-extern char *D_6826;/*FADE_in: the colors used by the picture*/
-extern char *D_6828;/*FADE_out: the same*/
+extern int *fadeErr;/*FADE_step: error term of each value*/
+extern int *fadeDist;/*  its distance to go*/
+extern int *fadeDir;/*  its direction (+1/-1)*/
+extern int fadeSteps;/*  the largest distance: the number of steps*/
+extern int fadeLeft;/*  the steps left*/
+extern char *fadeInColors;/*FADE_in: the colors used by the picture*/
+extern char *fadeOutColors;/*FADE_out: the same*/
 
 extern DRW_getPixel(struct tSurface *s, int x, int y);/*DRW_getPixel*/
 extern VID_waitRetrace(void);/*wait for the vertical retrace*/
@@ -49,40 +49,40 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 	register int i;
 	register int d;
 
-	if(D_45E2) {
-		D_681C = malloc(n * 2);
-		D_681E = malloc(n * 2);
-		D_6820 = malloc(n * 2);
-		D_6822 = 0;
+	if(fadeStart) {
+		fadeErr = malloc(n * 2);
+		fadeDist = malloc(n * 2);
+		fadeDir = malloc(n * 2);
+		fadeSteps = 0;
 		for(i = 0; i < n; i++) {
 			d = cur[i] - target[i];
 			if(d < 0) {
 				d = -d;
-				D_6820[i] = 1;
+				fadeDir[i] = 1;
 			} else {
-				D_6820[i] = -1;
+				fadeDir[i] = -1;
 			}
-			D_681E[i] = d;
-			if(d > D_6822)
-				D_6822 = d;
+			fadeDist[i] = d;
+			if(d > fadeSteps)
+				fadeSteps = d;
 		}
-		d = D_6822 / 2;
+		d = fadeSteps / 2;
 		for(i = 0; i < n; i++)
-			D_681C[i] = d;
-		D_6824 = D_6822;
-		D_45E2 = 0;
+			fadeErr[i] = d;
+		fadeLeft = fadeSteps;
+		fadeStart = 0;
 	}
-	if(D_6824-- == 0) {
-		free(D_681C);
-		free(D_681E);
-		free(D_6820);
-		D_45E2 = 1;
+	if(fadeLeft-- == 0) {
+		free(fadeErr);
+		free(fadeDist);
+		free(fadeDir);
+		fadeStart = 1;
 		return 0;
 	}
 	for(i = 0; i < n; i++) {
-		if((D_681C[i] += D_681E[i]) > D_6822) {
-			D_681C[i] -= D_6822;
-			cur[i] += D_6820[i];
+		if((fadeErr[i] += fadeDist[i]) > fadeSteps) {
+			fadeErr[i] -= fadeSteps;
+			cur[i] += fadeDir[i];
 		}
 	}
 	return 1;
@@ -104,7 +104,7 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 
 	row; width; height;/*(used by the assembly)*/
 	list = calloc(256, 2);
-	D_6826 = calloc(256, 1);
+	fadeInColors = calloc(256, 1);
 	/*the colors used in src's window*/
 	__emit__(0x56);/*push si*/
 	__emit__(0x57);/*push di*/
@@ -132,7 +132,7 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 	__emit__(0x1F);/*pop ds*/
 	__emit__(0x03, 0x77, 0x08);/*add si,[bx].left*/
 	__emit__(0xB7, 0x00);/*mov bh,0*/
-	__emit__(0x8B, 0x3E, &D_6826);/*mov di,D_6826*/
+	__emit__(0x8B, 0x3E, &fadeInColors);/*mov di,fadeInColors*/
 	__emit__(0xFC);/*cld*/
 	__emit__(0x8B, 0x4E, 0xF0);/*mov cx,width*/
 	/*L2:*/
@@ -147,9 +147,9 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 	__emit__(0x5E);/*pop si*/
 	count = 0;
 	for(i = 0; i < 256; i++)
-		if(D_6826[i])
+		if(fadeInColors[i])
 			list[count++] = i;
-	free(D_6826);
+	free(fadeInColors);
 	cur = calloc(count, sizeof(struct tRGB));
 	target = calloc(count, sizeof(struct tRGB));
 	PAL_get(DRW_getPixel(dst, dst->left, dst->top), &rgb);
@@ -185,7 +185,7 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 
 	row; width; height;/*(used by the assembly)*/
 	list = calloc(256, 2);
-	D_6828 = calloc(256, 1);
+	fadeOutColors = calloc(256, 1);
 	/*the colors used in s's window (its scanline table taken as near: a bug?)*/
 	__emit__(0x56);/*push si*/
 	__emit__(0x57);/*push di*/
@@ -210,7 +210,7 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 	__emit__(0x8B, 0x34);/*mov si,[si]*/
 	__emit__(0x03, 0x77, 0x08);/*add si,[bx].left*/
 	__emit__(0xB7, 0x00);/*mov bh,0*/
-	__emit__(0x8B, 0x3E, &D_6828);/*mov di,D_6828*/
+	__emit__(0x8B, 0x3E, &fadeOutColors);/*mov di,fadeOutColors*/
 	__emit__(0xFC);/*cld*/
 	__emit__(0x8B, 0x4E, 0xF0);/*mov cx,width*/
 	/*L2:*/
@@ -225,9 +225,9 @@ extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 	__emit__(0x5E);/*pop si*/
 	count = 0;
 	for(i = 0; i < 256; i++)
-		if(D_6828[i])
+		if(fadeOutColors[i])
 			list[count++] = i;
-	free(D_6828);
+	free(fadeOutColors);
 	cur = calloc(count, sizeof(struct tRGB));
 	target = calloc(count, sizeof(struct tRGB));
 	PAL_get(color, &rgb);

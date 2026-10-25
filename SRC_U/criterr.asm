@@ -7,8 +7,8 @@
 ;
 
 _DATA	SEGMENT PUBLIC WORD 'DATA'
-PUBLIC	D_410E
-D_410E	dw 0	;410E: set to 1 by the critical error handler
+PUBLIC	critError
+critError	dw 0	; D_410E set to 1 by the critical error handler
 _DATA	ENDS
 
 DGROUP	GROUP	_DATA
@@ -50,7 +50,7 @@ CritErrHandler	PROC FAR
 	PUSH	BX
 	MOV	BX,DGROUP
 	MOV	DS,BX
-	MOV	BX,OFFSET DGROUP:D_410E
+	MOV	BX,OFFSET DGROUP:critError
 	MOV	WORD PTR [BX],1
 	XOR	AL,AL
 	POP	BX

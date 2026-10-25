@@ -11,51 +11,51 @@
 
 /*a drawing surface of the graphics driver (GAME.EXE's struct tSurface)*/
 
-extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern struct tSurface D_5710;/*the screen*/
-extern struct tSurface D_5732;/*the back buffer*/
-extern struct tSurface D_565F;/*the vellum's area*/
-extern struct tSurface D_5702;/*copy of D_565F*/
-extern struct tSurface D_5748;
-extern struct tSurface D_5980;
-extern struct tSurface D_599C;/*the text window of the name question*/
-extern struct tSurface D_5AE6;/*the area of the gypsy's pattern*/
-extern struct tSurface D_5AFA;/*EGA: the second page (segment a800)*/
-extern struct tSurface D_5B08;/*EGA: the screen, for the mouse pointer*/
-extern struct tSurface D_6072;/*a 320x56 work surface (the A/B buttons)*/
-extern struct tSurface *D_5054;/*the surface the mouse pointer is drawn on*/
-extern struct tSurface *D_566D;/*the current text window*/
-extern int D_566F, D_5671;/*text cursor x, y*/
-extern char D_5677, D_5678;/*text colors*/
-extern char D_567D;
-extern char D_5046, D_5047;/*mouse buttons*/
-extern char D_505E;/*a mouse is present?*/
-extern int D_575A;/*set when the player gave up*/
-extern int D_59B8;/*the vellum has been shown*/
-extern int D_5A2E;
+extern int videoMode;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
+extern struct tSurface screen;/*the screen*/
+extern struct tSurface backBuffer;/*the back buffer*/
+extern struct tSurface textArea;/*the vellum's area*/
+extern struct tSurface textAreaCopy;/*copy of textArea*/
+extern struct tSurface egaSaved;
+extern struct tSurface dialogArea;
+extern struct tSurface nameWindow;/*the text window of the name question*/
+extern struct tSurface patternArea;/*the area of the gypsy's pattern*/
+extern struct tSurface egaPage2;/*EGA: the second page (segment a800)*/
+extern struct tSurface egaScreen;/*EGA: the screen, for the mouse pointer*/
+extern struct tSurface workArea;/*a 320x56 work surface (the A/B buttons)*/
+extern struct tSurface *mouseSurface;/*the surface the mouse pointer is drawn on*/
+extern struct tSurface *textWin;/*the current text window*/
+extern int textX, textY;/*text cursor x, y*/
+extern char textFg, textBg;/*text colors*/
+extern char textAlign;
+extern char mouseL, mouseR;/*mouse buttons*/
+extern char mouseInstalled;/*a mouse is present?*/
+extern int menuDrawn;/*set when the player gave up*/
+extern int transferFrom;/*here: the vellum has been shown (transfer.c: the game the character comes from)*/
+extern int portraitIdx;
 
 /*the new character*/
-extern char D_5A30[];/*name*/
-extern int D_5A40, D_5A42, D_5A44;/*strength, dexterity, intelligence*/
-extern char D_5A46;/*sex: 'M' or 'F'*/
-extern char D_5A4E[];/*"Avatar"*/
-extern char D_5A5E;/*'G'*/
-extern int D_5A60;/*experience*/
-extern int D_5A62;/*level*/
-extern int D_5A64;/*hit points*/
-extern char D_5A6A;
+extern char newName[];/*name*/
+extern int newStr, newDex, newInt;/*strength, dexterity, intelligence*/
+extern char newSex;/*sex: 'M' or 'F'*/
+extern char newClass[];/*"Avatar"*/
+extern char newGood;/*'G'*/
+extern int newExp;/*experience*/
+extern int newLevel;/*level*/
+extern int newHp;/*hit points*/
+extern char newPortrait;
 
-extern char far *D_5AD2;/*montage image*/
-extern char far *D_5AD6;/*vellum image*/
-extern char far *D_5ADC;/*woods / gypsy image*/
+extern char far *portraits;/*montage image*/
+extern char far *vellum;/*vellum image*/
+extern char far *sceneShapes;/*woods / gypsy image*/
 
 /*the gypsy's table: this module's initialised data*/
-/*0692*/char D_0692 = 75;/*karma (75; +3 when Humility is chosen): objlist 0x1bf9*/
-/*0693*/int D_0693 = 0;/*the vial being poured gives its color this step*/
-/*0695*/int D_0695[8] = {10, 10, 10, 10, -13, -13, -13, -13};/*x offset of each vial (left side +10, right side -13)*/
-/*06A5*/int D_06A5 = -20;/*y offset of the gypsy scene*/
-/*06A7*/int D_06A7[8] = {239, 14, 231, 103, 228, 5, 15, 219};/*pattern color of each virtue (MCGA; set per video mode by CreateCharacter)*/
-/*06B7*/int D_06B7[8][8] = {
+/*0692*/char avatarKarma = 75;/*karma (75; +3 when Humility is chosen): objlist 0x1bf9*/
+/*0693*/int pourColor = 0;/*the vial being poured gives its color this step*/
+/*0695*/int vialOffsetX[8] = {10, 10, 10, 10, -13, -13, -13, -13};/*x offset of each vial (left side +10, right side -13)*/
+/*06A5*/int sceneY = -20;/*y offset of the gypsy scene*/
+/*06A7*/int virtueColor[8] = {239, 14, 231, 103, 228, 5, 15, 219};/*pattern color of each virtue (MCGA; set per video mode by CreateCharacter)*/
+/*06B7*/int questionOf[8][8] = {
 	{-1, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f},
 	{0x69, -1, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75},
 	{0x6a, 0x70, -1, 0x76, 0x77, 0x78, 0x79, 0x7a},
@@ -65,15 +65,15 @@ extern char far *D_5ADC;/*woods / gypsy image*/
 	{0x6e, 0x74, 0x79, 0x7d, 0x80, 0x82, -1, 0x84},
 	{0x6f, 0x75, 0x7a, 0x7e, 0x81, 0x83, 0x84, -1}
 };/*the question (its text number) for each pair of virtues (0 Honesty, 1 Compassion, 2 Valor, 3 Justice, 4 Sacrifice, 5 Honor, 6 Spirituality, 7 Humility)*/
-/*0737*/int D_0737[28] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6};/*virtue chosen by answer A, by question - 0x69*/
-/*076F*/int D_076F[28] = {1, 2, 3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 4, 5, 6, 7, 5, 6, 7, 6, 7, 7};/*virtue chosen by answer B, by question - 0x69*/
-/*07A7*/int D_07A7[8] = {0, 0, 2, 0, 1, 1, 1, 0};/*strength gained per virtue*/
-/*07B7*/int D_07B7[8] = {0, 2, 0, 1, 1, 0, 1, 0};/*dexterity gained per virtue*/
-/*07C7*/int D_07C7[8] = {2, 0, 0, 1, 0, 1, 1, 0};/*intelligence gained per virtue*/
-/*07D7*/int D_07D7 = 1;/*shape base: the arm, the A/B buttons*/
-/*07D9*/int D_07D9 = 9;/*shape base: hand and vials (streams of vials 6, 7)*/
-/*07DB*/int D_07DB = 66;/*shape base: streams, level marks*/
-/*07DD*/int D_07DD[4][3][8] = {
+/*0737*/int answerAVirtue[28] = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6};/*virtue chosen by answer A, by question - 0x69*/
+/*076F*/int answerBVirtue[28] = {1, 2, 3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 7, 3, 4, 5, 6, 7, 4, 5, 6, 7, 5, 6, 7, 6, 7, 7};/*virtue chosen by answer B, by question - 0x69*/
+/*07A7*/int strGain[8] = {0, 0, 2, 0, 1, 1, 1, 0};/*strength gained per virtue*/
+/*07B7*/int dexGain[8] = {0, 2, 0, 1, 1, 0, 1, 0};/*dexterity gained per virtue*/
+/*07C7*/int intGain[8] = {2, 0, 0, 1, 0, 1, 1, 0};/*intelligence gained per virtue*/
+/*07D7*/int shapeArm = 1;/*shape base: the arm, the A/B buttons*/
+/*07D9*/int shapeVial = 9;/*shape base: hand and vials (streams of vials 6, 7)*/
+/*07DB*/int shapeStream = 66;/*shape base: streams, level marks*/
+/*07DD*/int markShape[4][3][8] = {
 	{
 		{58, 79, 100, 124, 40, 126, 32, 52},
 		{54, 75, 96, 118, 38, 120, 28, 48},
@@ -95,7 +95,7 @@ extern char far *D_5ADC;/*woods / gypsy image*/
 		{2, 5, 8, 11, 24, 27, 30, 33}
 	}
 };/*shape of the stream: [kind][level][vial]*/
-/*089D*/int D_089D[4][3][8] = {
+/*089D*/int markX[4][3][8] = {
 	{
 		{4, 4, 4, 4, 20, 20, 20, 20},
 		{4, 4, 4, 4, 19, 19, 19, 19},
@@ -117,52 +117,52 @@ extern char far *D_5ADC;/*woods / gypsy image*/
 		{3, 3, 3, 3, 3, 3, 3, 3}
 	}
 };/*x of the stream: [kind][level][vial]*/
-/*095D*/int D_095D[4][3] = {
+/*095D*/int markY[4][3] = {
 	{27, 19, 19},
 	{22, 14, 14},
 	{14, 14, 14},
 	{11, 11, 11}
 };/*y of the stream: [kind][level]*/
-/*0975*/int D_0975[8] = {2, 5, 8, 11, 24, 27, 30, 33};/*per vial: level marks: shape*/
-/*0985*/int D_0985[8] = {93, 93, 93, 93, 172, 172, 172, 172};/*per vial: arm x (steps 4-12)*/
-/*0995*/int D_0995[8] = {41, 62, 83, 104, 200, 221, 242, 263};/*per vial: vial x*/
-/*09A5*/int D_09A5[8] = {29, 50, 71, 92, 202, 223, 244, 264};/*per vial: hand x, steps 3/13*/
-/*09B5*/int D_09B5[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 4/12*/
-/*09C5*/int D_09C5[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 5/11*/
-/*09D5*/int D_09D5[8] = {109, 109, 109, 109, 168, 168, 168, 168};/*per vial: hand x, steps 6/10*/
-/*09E5*/int D_09E5[8] = {112, 112, 112, 112, 165, 165, 165, 165};/*per vial: hand x, steps 7-9*/
-/*09F5*/int D_09F5[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 4/12*/
-/*0A05*/int D_0A05[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 5/11*/
-/*0A15*/int D_0A15[8] = {41, 41, 41, 41, 41, 41, 41, 41};/*per vial: hand y, steps 6/10*/
-/*0A25*/int D_0A25[8] = {33, 33, 33, 33, 33, 33, 33, 33};/*per vial: hand y, steps 7-9*/
-/*0A35*/int D_0A35[8] = {11, 11, 11, 11, 14, 14, 14, 14};/*per vial: vial shape, standing*/
-/*0A45*/int D_0A45[8] = {12, 12, 12, 12, 13, 13, 13, 13};/*per vial: vial shape, steps 1-2/14-15*/
-/*0A55*/int D_0A55[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 3/13*/
-/*0A65*/int D_0A65[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 4/12*/
-/*0A75*/int D_0A75[8] = {10, 10, 10, 10, 18, 18, 18, 18};/*per vial: vial shape, steps 5/11*/
-/*0A85*/int D_0A85[8] = {16, 16, 16, 16, 46, 46, 46, 46};/*per vial: vial shape, steps 6/10*/
-/*0A95*/int D_0A95[8] = {15, 15, 15, 15, 37, 37, 37, 37};/*per vial: vial shape, steps 7-9*/
-/*0AA5*/int D_0AA5[8] = {0, 0, 0, 0, 5, 5, 5, 5};/*per vial: arm shape, steps 1/15*/
-/*0AB5*/int D_0AB5[8] = {1, 1, 1, 1, 4, 4, 4, 4};/*per vial: arm shape, steps 2-3/13-14*/
-/*0AC5*/int D_0AC5[8] = {2, 2, 2, 2, 3, 3, 3, 3};/*per vial: arm shape, steps 4-12*/
-/*0AD5*/int D_0AD5[3][8] = {
+/*0975*/int vialMarkShape[8] = {2, 5, 8, 11, 24, 27, 30, 33};/*per vial: level marks: shape*/
+/*0985*/int armX[8] = {93, 93, 93, 93, 172, 172, 172, 172};/*per vial: arm x (steps 4-12)*/
+/*0995*/int vialX[8] = {41, 62, 83, 104, 200, 221, 242, 263};/*per vial: vial x*/
+/*09A5*/int handX3[8] = {29, 50, 71, 92, 202, 223, 244, 264};/*per vial: hand x, steps 3/13*/
+/*09B5*/int handX4[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 4/12*/
+/*09C5*/int handX5[8] = {107, 107, 107, 107, 170, 170, 170, 170};/*per vial: hand x, steps 5/11*/
+/*09D5*/int handX6[8] = {109, 109, 109, 109, 168, 168, 168, 168};/*per vial: hand x, steps 6/10*/
+/*09E5*/int handX7[8] = {112, 112, 112, 112, 165, 165, 165, 165};/*per vial: hand x, steps 7-9*/
+/*09F5*/int handY4[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 4/12*/
+/*0A05*/int handY5[8] = {40, 40, 40, 40, 40, 40, 40, 40};/*per vial: hand y, steps 5/11*/
+/*0A15*/int handY6[8] = {41, 41, 41, 41, 41, 41, 41, 41};/*per vial: hand y, steps 6/10*/
+/*0A25*/int handY7[8] = {33, 33, 33, 33, 33, 33, 33, 33};/*per vial: hand y, steps 7-9*/
+/*0A35*/int vialStanding[8] = {11, 11, 11, 11, 14, 14, 14, 14};/*per vial: vial shape, standing*/
+/*0A45*/int vialShape1[8] = {12, 12, 12, 12, 13, 13, 13, 13};/*per vial: vial shape, steps 1-2/14-15*/
+/*0A55*/int vialShape3[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 3/13*/
+/*0A65*/int vialShape4[8] = {9, 9, 9, 9, 17, 17, 17, 17};/*per vial: vial shape, steps 4/12*/
+/*0A75*/int vialShape5[8] = {10, 10, 10, 10, 18, 18, 18, 18};/*per vial: vial shape, steps 5/11*/
+/*0A85*/int vialShape6[8] = {16, 16, 16, 16, 46, 46, 46, 46};/*per vial: vial shape, steps 6/10*/
+/*0A95*/int vialShape7[8] = {15, 15, 15, 15, 37, 37, 37, 37};/*per vial: vial shape, steps 7-9*/
+/*0AA5*/int armShape1[8] = {0, 0, 0, 0, 5, 5, 5, 5};/*per vial: arm shape, steps 1/15*/
+/*0AB5*/int armShape2[8] = {1, 1, 1, 1, 4, 4, 4, 4};/*per vial: arm shape, steps 2-3/13-14*/
+/*0AC5*/int armShape4[8] = {2, 2, 2, 2, 3, 3, 3, 3};/*per vial: arm shape, steps 4-12*/
+/*0AD5*/int streamShape[3][8] = {
 	{43, 67, 86, 107, 36, 116, 25, 44},
 	{44, 68, 87, 108, 35, 115, 24, 43},
 	{45, 69, 88, 109, 34, 114, 23, 42}
 };/*shape of the liquid in the bowl: [3 - level][vial]*/
-/*0B05*/int D_0B05[3][8] = {
+/*0B05*/int streamX[3][8] = {
 	{146, 146, 146, 146, 169, 169, 169, 169},
 	{145, 145, 145, 145, 169, 169, 169, 169},
 	{148, 148, 148, 148, 170, 170, 170, 170}
 };/*x of the liquid in the bowl: [3 - level][vial]*/
-/*0B35*/int D_0B35[3] = {50, 55, 64};/*y of the liquid in the bowl: [3 - level]*/
+/*0B35*/int streamY[3] = {50, 55, 64};/*y of the liquid in the bowl: [3 - level]*/
 
-extern int D_5B16;
-extern int D_5B18[];/*level of each vial*/
-extern int D_5B28;/*number of colors in the pattern*/
-extern int D_5B2A[];/*virtues*/
-extern int D_5B3A[];/*colors of the pattern*/
-extern char D_5B7A[];/*pattern*/
+extern int patternAdded;
+extern int vialLevel[];/*level of each vial*/
+extern int patternColorCount;/*number of colors in the pattern*/
+extern int chosenVirtues[];/*virtues*/
+extern int patternColors[];/*colors of the pattern*/
+extern char pattern[];/*pattern*/
 
 char far *LOAD_far();/*load a whole file into far memory*/
 int DIS_farcpy(void far *, void far *, int);/*far copy (from, to, size)*/
@@ -176,20 +176,20 @@ char far *LZW_load();/*load an image file*/
 	buf = LOAD_far("savegame\\objlist");
 	if(buf[0x1c72])
 		return 1;
-	buf[0x901] = D_5A40;
-	buf[0xa01] = D_5A42;
-	buf[0xb01] = D_5A44;
-	buf[0x13f2] = D_5A44 * 2;
-	buf[0x1c71] = D_5A46 == 'F';
-	buf[0x1bf9] = D_0692;
-	DIS_farcpy(D_5A30, buf + 0xf00, 0xe);
-	buf[0xc02] = D_5A60 % 0x100;
-	buf[0xc03] = D_5A60 / 0x100;
-	if(D_5A64 > 0xff)
-		D_5A64 = 0xff;
-	buf[0xe01] = D_5A64;
-	buf[0xff2] = D_5A62;
-	buf[0x1c72] = D_5A6A + 1;
+	buf[0x901] = newStr;
+	buf[0xa01] = newDex;
+	buf[0xb01] = newInt;
+	buf[0x13f2] = newInt * 2;
+	buf[0x1c71] = newSex == 'F';
+	buf[0x1bf9] = avatarKarma;
+	DIS_farcpy(newName, buf + 0xf00, 0xe);
+	buf[0xc02] = newExp % 0x100;
+	buf[0xc03] = newExp / 0x100;
+	if(newHp > 0xff)
+		newHp = 0xff;
+	buf[0xe01] = newHp;
+	buf[0xff2] = newLevel;
+	buf[0x1c72] = newPortrait + 1;
 	fd = OSI_open("savegame\\objlist");
 	OSI_write(fd, 0L, 0x1c73L, buf);
 	OSI_close(fd);
@@ -203,64 +203,64 @@ char far *LZW_load();/*load an image file*/
 	int ok;
 	int y;
 
-	win = D_599C;
-	switch(D_5044) {
+	win = nameWindow;
+	switch(videoMode) {
 		case 4:
 		case 7:
 			DRV(0xc)(&win, 3);
-			D_5677 = 0;
-			D_5678 = 3;
+			textFg = 0;
+			textBg = 3;
 			break;
 		case 0xd:
-			win.segment = D_5710.segment;
-			win.pScanlines = D_5710.pScanlines;
+			win.segment = screen.segment;
+			win.pScanlines = screen.pScanlines;
 		case 9:
 			DRV(0xc)(&win, 0xe);
-			D_5677 = 0;
-			D_5678 = 0xe;
+			textFg = 0;
+			textBg = 0xe;
 			break;
 		case 0x13:
 			DRV(0xc)(&win, 0x31);
-			D_5677 = 0x3d;
-			D_5678 = 0x31;
+			textFg = 0x3d;
+			textBg = 0x31;
 			break;
 	}
 	win.right -= 0x10;
 	win.left += 0x10;
 	win.top += 0x10;
 	win.bottom -= 0x10;
-	if(D_5044 == 0xd)
-		win.segment = D_5710.segment;
-	D_566D = &win;
+	if(videoMode == 0xd)
+		win.segment = screen.segment;
+	textWin = &win;
 	TXT_clear();
-	D_567D = 2;
+	textAlign = 2;
 	TXT_sprintf("By what name shalt thou be called?\n\n%P");
-	if(D_59B8 == 0 && D_5044 == 0x13)
-		FADE_in(&D_5702, &D_565F);
-	else if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5702, &D_565F);
+	if(transferFrom == 0 && videoMode == 0x13)
+		FADE_in(&textAreaCopy, &textArea);
+	else if(videoMode != 0xd) {
+		DRV(0xf)(&textAreaCopy, &textArea);
 	}
-	D_59B8 = 1;
-	SURF_share(&D_5710, &win, 0);
-	y = D_5671;
+	transferFrom = 1;
+	SURF_share(&screen, &win, 0);
+	y = textY;
 	do {
-		D_566F = D_566D->left;
-		D_5671 = y;
+		textX = textWin->left;
+		textY = y;
 		TXT_clearEos();
-		D_566F = 0x35;
-		if(!InputString(D_5A30, 0xd))
+		textX = 0x35;
+		if(!InputString(newName, 0xd))
 			return 0;
-		D_566F = D_566D->left;
+		textX = textWin->left;
 		clreol();
-		D_567D = 2;
-		TXT_sprintf("%s\n\n%P", D_5A30);
+		textAlign = 2;
+		TXT_sprintf("%s\n\n%P", newName);
 		TXT_sprintf("And art thou Male, or Female?\n\n%P");
 		do {
-			D_566F = 0x9d;
+			textX = 0x9d;
 			clreol();
-			ok = InputString(&D_5A46, 1);
-			D_5A46 = toupper(D_5A46);
-		} while(D_5A46 != 'M' && D_5A46 != 'F' && ok);
+			ok = InputString(&newSex, 1);
+			newSex = toupper(newSex);
+		} while(newSex != 'M' && newSex != 'F' && ok);
 	} while(!ok);
 	ToggleSex();
 	ToggleSex();
@@ -273,14 +273,14 @@ between the colors added so far*/
 	int j;
 	int i;
 
-	D_5AE6.top -= 4;
-	D_5B3A[D_5B28++] = c;
-	for(i = 1; i <= D_5B28; i++)
-		for(j = 0; j < 0x10 / D_5B28; j++)
-			D_5B7A[j * i] = D_5B3A[i - 1];
+	patternArea.top -= 4;
+	patternColors[patternColorCount++] = c;
+	for(i = 1; i <= patternColorCount; i++)
+		for(j = 0; j < 0x10 / patternColorCount; j++)
+			pattern[j * i] = patternColors[i - 1];
 }
 
-/*draw the gypsy's pattern in D_5AE6's area: noise (taken from this very code)
+/*draw the gypsy's pattern in patternArea's area: noise (taken from this very code)
 through the colors of the pattern*/
 /*C_0406_038C*/DrawPattern() {
 	char far *dst;
@@ -290,50 +290,50 @@ through the colors of the pattern*/
 	int y;
 
 	src = MK_FP(_CS, rand() % 0x800);
-	switch(D_5044) {
+	switch(videoMode) {
 		case 4:
 		case 7:
 			/*CGA, Hercules: 4 pixels a byte*/
-			for(y = D_5AE6.top; y <= D_5AE6.bottom; y++) {
-				dst = MK_FP(D_5AE6.segment, D_5AE6.pScanlines[y]);
-				for(x = D_5AE6.left / 4; x <= D_5AE6.right / 4; x++, src += 4)
+			for(y = patternArea.top; y <= patternArea.bottom; y++) {
+				dst = MK_FP(patternArea.segment, patternArea.pScanlines[y]);
+				for(x = patternArea.left / 4; x <= patternArea.right / 4; x++, src += 4)
 					dst[x] =
-						(D_5B7A[*src & 0xf] & 3) +
-						((D_5B7A[(*src + 1) & 0xf] & 3) << 2) +
-						((D_5B7A[(*src + 2) & 0xf] & 3) << 4) +
-						((D_5B7A[(*src + 3) & 0xf] & 3) << 6);
+						(pattern[*src & 0xf] & 3) +
+						((pattern[(*src + 1) & 0xf] & 3) << 2) +
+						((pattern[(*src + 2) & 0xf] & 3) << 4) +
+						((pattern[(*src + 3) & 0xf] & 3) << 6);
 			}
 			break;
 		case 9:
-			/*Tandy (back buffer), EGA (D_5748): 2 pixels a byte*/
-			s = D_5AE6;
-			s.segment = D_5732.segment;
-			s.pScanlines = D_5732.pScanlines;
+			/*Tandy (back buffer), EGA (egaSaved): 2 pixels a byte*/
+			s = patternArea;
+			s.segment = backBuffer.segment;
+			s.pScanlines = backBuffer.pScanlines;
 			goto twoPixels;
 		case 0xd:
-			s = D_5AE6;
-			s.segment = D_5748.segment;
-			s.pScanlines = D_5748.pScanlines;
+			s = patternArea;
+			s.segment = egaSaved.segment;
+			s.pScanlines = egaSaved.pScanlines;
 		twoPixels:
-			for(y = D_5AE6.top; y <= D_5AE6.bottom; y++) {
+			for(y = patternArea.top; y <= patternArea.bottom; y++) {
 				dst = MK_FP(s.segment, s.pScanlines[y]);
-				for(x = D_5AE6.left / 2; x <= D_5AE6.right / 2; x++, src += 2)
+				for(x = patternArea.left / 2; x <= patternArea.right / 2; x++, src += 2)
 					dst[x] =
-						(D_5B7A[*src & 0xf] & 0xf) +
-						((D_5B7A[(*src + 1) & 0xf] & 0xf) << 4);
+						(pattern[*src & 0xf] & 0xf) +
+						((pattern[(*src + 1) & 0xf] & 0xf) << 4);
 			}
-			if(D_5044 == 0xd) {
-				D_5AE6.segment = D_5710.segment;
-				D_5AE6.pScanlines = D_5710.pScanlines;
-				DRV(0xf)(&s, &D_5AE6);
+			if(videoMode == 0xd) {
+				patternArea.segment = screen.segment;
+				patternArea.pScanlines = screen.pScanlines;
+				DRV(0xf)(&s, &patternArea);
 			}
 			break;
 		case 0x13:
 			/*a pixel a byte*/
-			for(y = D_5AE6.top; y <= D_5AE6.bottom; y++) {
-				dst = MK_FP(D_5AE6.segment, D_5AE6.pScanlines[y]);
-				for(x = D_5AE6.left; x <= D_5AE6.right; x++) {
-					dst[x] = D_5B7A[*src & 0xf];
+			for(y = patternArea.top; y <= patternArea.bottom; y++) {
+				dst = MK_FP(patternArea.segment, patternArea.pScanlines[y]);
+				for(x = patternArea.left; x <= patternArea.right; x++) {
+					dst[x] = pattern[*src & 0xf];
 					src++;
 				}
 			}
@@ -354,16 +354,16 @@ through the colors of the pattern*/
 		case 0xb: case 0xc: case 0xd: case 0xe: kind = 3; break;
 		case 0xf: case 0x25: return;
 	}
-	level = D_5B18[n] - 1;
-	ofs = (n > 5 && kind != 3)?D_07D9:D_07DB;
+	level = vialLevel[n] - 1;
+	ofs = (n > 5 && kind != 3)?shapeVial:shapeStream;
 	if(level > -1 && level < 3) {
-		if(D_5044 == 0xd)
-			D_5732.segment = D_5710.segment;
-		DRV(3)(&D_5732,
-			D_089D[kind][level][n] + x + D_0695[n],
-			D_095D[kind][level] + y + D_06A5,
-			D_5ADC,
-			D_07DD[kind][level][n] + ofs
+		if(videoMode == 0xd)
+			backBuffer.segment = screen.segment;
+		DRV(3)(&backBuffer,
+			markX[kind][level][n] + x + vialOffsetX[n],
+			markY[kind][level] + y + sceneY,
+			sceneShapes,
+			markShape[kind][level][n] + ofs
 		);
 	}
 }
@@ -379,115 +379,115 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 	int i;
 
 	y0 = 0x56;
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
 	done = 0;
-	D_0693 = 0;
+	pourColor = 0;
 	switch(step %= 0x10) {
 		case 0:
-			x = D_0995[n];
+			x = vialX[n];
 			y = y0;
-			shape = D_0A35[n];
+			shape = vialStanding[n];
 			break;
 		case 1: case 15:
-			DRV(3)(&D_5732, D_0695[n] + D_0995[n] - 6, y0 + D_06A5 - 0x2d, D_5ADC, D_0AA5[n] + D_07D7);
-			x = D_0995[n];
+			DRV(3)(&backBuffer, vialOffsetX[n] + vialX[n] - 6, y0 + sceneY - 0x2d, sceneShapes, armShape1[n] + shapeArm);
+			x = vialX[n];
 			y = y0;
-			shape = D_0A45[n];
+			shape = vialShape1[n];
 			break;
 		case 2: case 14:
-			DRV(3)(&D_5732, D_0695[n] + D_0995[n] - 6, y0 + D_06A5 - 0x2d, D_5ADC, D_0AB5[n] + D_07D7);
-			x = D_0995[n];
+			DRV(3)(&backBuffer, vialOffsetX[n] + vialX[n] - 6, y0 + sceneY - 0x2d, sceneShapes, armShape2[n] + shapeArm);
+			x = vialX[n];
 			y = y0 - 0x25;
-			shape = D_0A45[n];
+			shape = vialShape1[n];
 			break;
 		case 3: case 13:
-			DRV(3)(&D_5732, D_0695[n] + D_0995[n] - 6, y0 + D_06A5 - 0x2d, D_5ADC, D_0AB5[n] + D_07D7);
-			x = D_09A5[n];
+			DRV(3)(&backBuffer, vialOffsetX[n] + vialX[n] - 6, y0 + sceneY - 0x2d, sceneShapes, armShape2[n] + shapeArm);
+			x = handX3[n];
 			y = y0 - 0x29;
-			shape = D_0A55[n];
+			shape = vialShape3[n];
 			break;
 		case 4: case 12:
-			DRV(3)(&D_5732, D_0985[n], D_06A5 + 0x29, D_5ADC, D_0AC5[n] + D_07D7);
-			x = D_09B5[n];
-			y = D_09F5[n];
-			shape = D_0A65[n];
+			DRV(3)(&backBuffer, armX[n], sceneY + 0x29, sceneShapes, armShape4[n] + shapeArm);
+			x = handX4[n];
+			y = handY4[n];
+			shape = vialShape4[n];
 			break;
 		case 5: case 11:
-			DRV(3)(&D_5732, D_0985[n], D_06A5 + 0x29, D_5ADC, D_0AC5[n] + D_07D7);
-			x = D_09C5[n];
-			y = D_0A05[n];
-			shape = D_0A75[n];
+			DRV(3)(&backBuffer, armX[n], sceneY + 0x29, sceneShapes, armShape4[n] + shapeArm);
+			x = handX5[n];
+			y = handY5[n];
+			shape = vialShape5[n];
 			if(step == 0xb && redraw == 0)
-				D_5B18[n] --;
-			if(D_5B18[n] == 2 && step == 0xb)
+				vialLevel[n] --;
+			if(vialLevel[n] == 2 && step == 0xb)
 				done = 1;
-			if(D_5B18[n] == 3)
-				D_0693 = 1;
+			if(vialLevel[n] == 3)
+				pourColor = 1;
 			break;
 		case 6: case 10:
-			DRV(3)(&D_5732, D_0985[n], D_06A5 + 0x29, D_5ADC, D_0AC5[n] + D_07D7);
-			x = D_09D5[n];
-			y = D_0A15[n];
-			shape = D_0A85[n];
-			if((D_5B18[n] == 1 || D_5B18[n] == 2) && step == 0xa)
+			DRV(3)(&backBuffer, armX[n], sceneY + 0x29, sceneShapes, armShape4[n] + shapeArm);
+			x = handX6[n];
+			y = handY6[n];
+			shape = vialShape6[n];
+			if((vialLevel[n] == 1 || vialLevel[n] == 2) && step == 0xa)
 				done = 1;
-			if(D_5B18[n] == 2)
-				D_0693 = 1;
-			if(D_5B18[n] == 3)
+			if(vialLevel[n] == 2)
+				pourColor = 1;
+			if(vialLevel[n] == 3)
 				done = 1;
 			break;
 		case 7: case 9:
-			DRV(3)(&D_5732, D_0985[n], D_06A5 + 0x29, D_5ADC, D_0AC5[n] + D_07D7);
-			x = D_09E5[n];
-			y = D_0A25[n];
-			shape = D_0A95[n];
-			if(D_5B18[n] == 1 && step == 9)
+			DRV(3)(&backBuffer, armX[n], sceneY + 0x29, sceneShapes, armShape4[n] + shapeArm);
+			x = handX7[n];
+			y = handY7[n];
+			shape = vialShape7[n];
+			if(vialLevel[n] == 1 && step == 9)
 				done = 1;
-			if(D_5B18[n] == 2)
+			if(vialLevel[n] == 2)
 				done = 1;
-			if(D_5B18[n] == 3)
+			if(vialLevel[n] == 3)
 				done = 1;
 			break;
 		case 8:
-			DRV(3)(&D_5732, D_0985[n], D_06A5 + 0x29, D_5ADC, D_0AC5[n] + D_07D7);
-			x = D_09E5[n];
-			y = D_0A25[n];
-			shape = D_0A95[n];
-			if(D_5B18[n] == 1)
-				D_0693 = 1;
-			if(D_5B18[n] == 2)
+			DRV(3)(&backBuffer, armX[n], sceneY + 0x29, sceneShapes, armShape4[n] + shapeArm);
+			x = handX7[n];
+			y = handY7[n];
+			shape = vialShape7[n];
+			if(vialLevel[n] == 1)
+				pourColor = 1;
+			if(vialLevel[n] == 2)
 				done = 1;
-			if(D_5B18[n] == 3)
+			if(vialLevel[n] == 3)
 				done = 1;
 			break;
 	}
 	if((step > 3 && step < 9) || (step > 8 && step < 0xd))
-		x -= D_0695[n];
+		x -= vialOffsetX[n];
 	if(!done) {
 		DrawPouring(n, shape, x, y);
-		DRV(3)(&D_5732, D_0695[n] + x, D_06A5 + y, D_5ADC, D_07D9 + shape);
+		DRV(3)(&backBuffer, vialOffsetX[n] + x, sceneY + y, sceneShapes, shapeVial + shape);
 		for(i = 0; i < 8; i++) {
 			if(i == n)
 				continue;
-			if(D_5B18[i] > 0) {
-				DRV(3)(&D_5732, D_0695[i] + D_0995[i] + 3, D_06A5 + 0x61, D_5ADC, D_0975[i] + D_07DB + D_5B18[i] - 3);
+			if(vialLevel[i] > 0) {
+				DRV(3)(&backBuffer, vialOffsetX[i] + vialX[i] + 3, sceneY + 0x61, sceneShapes, vialMarkShape[i] + shapeStream + vialLevel[i] - 3);
 			}
-			DRV(3)(&D_5732, D_0695[i] + D_0995[i], y0 + D_06A5, D_5ADC, D_0A35[i] + D_07D9);
+			DRV(3)(&backBuffer, vialOffsetX[i] + vialX[i], y0 + sceneY, sceneShapes, vialStanding[i] + shapeVial);
 		}
-		if(step < 9 && D_0693 && redraw == 0) {
-			AddPatternColor(D_06A7[n]);
-			D_5B16 ++;
+		if(step < 9 && pourColor && redraw == 0) {
+			AddPatternColor(virtueColor[n]);
+			patternAdded ++;
 		}
-		if(D_5B16)
+		if(patternAdded)
 			DrawPattern();
-		DRV(3)(&D_5732, 0x8e, D_06A5 + 0x4c, D_5ADC, D_07D9 + 7);
-		if(D_0693) {
-			DRV(3)(&D_5732,
-				D_0B05[3 - D_5B18[n]][n],
-				D_0B35[3 - D_5B18[n]] + D_06A5,
-				D_5ADC,
-				D_0AD5[3 - D_5B18[n]][n] + ((n > 5)?D_07D9:D_07DB)
+		DRV(3)(&backBuffer, 0x8e, sceneY + 0x4c, sceneShapes, shapeVial + 7);
+		if(pourColor) {
+			DRV(3)(&backBuffer,
+				streamX[3 - vialLevel[n]][n],
+				streamY[3 - vialLevel[n]] + sceneY,
+				sceneShapes,
+				streamShape[3 - vialLevel[n]][n] + ((n > 5)?shapeVial:shapeStream)
 			);
 		}
 	}
@@ -496,16 +496,16 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 
 /*draw the mouse pointer on the back buffer (EGA: on the page shown)*/
 /*C_0406_0D3D*/DrawMouseOnBackBuffer() {
-	if(D_5044 == 0xd) {
-		D_5054 = &D_5B08;
-		D_5B08.segment = D_5710.segment;
+	if(videoMode == 0xd) {
+		mouseSurface = &egaScreen;
+		egaScreen.segment = screen.segment;
 		MOUSE_SAVE_BG();
 		MOUSE_DRAW();
 	} else {
-		D_5054 = &D_5732;
+		mouseSurface = &backBuffer;
 		MOUSE_SAVE_BG();
 		MOUSE_DRAW();
-		D_5054 = &D_5710;
+		mouseSurface = &screen;
 	}
 }
 
@@ -539,7 +539,7 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 	got = 0;
 	key = 0;
 	first = 1;
-	cardA = cardB = D_5732;
+	cardA = cardB = backBuffer;
 	cardA.right = 0x125;
 	cardA.left = 0x116;
 	cardA.top = 0xae;
@@ -548,39 +548,39 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 	cardB.left = 0x127;
 	cardB.top = 0xae;
 	cardB.bottom = 0xbc;
-	if(D_5044 == 0xd) {
-		D_565F.segment = D_5732.segment = D_5710.segment;
-		D_5710.segment = D_5AFA.segment;
+	if(videoMode == 0xd) {
+		textArea.segment = backBuffer.segment = screen.segment;
+		screen.segment = egaPage2.segment;
 		DisplayPassage();
-		D_5710.segment = D_565F.segment;
+		screen.segment = textArea.segment;
 	}
 	while(!got) {
-		if(D_5044 == 0xd) {
-			D_5732.segment = D_5710.segment;
-			DRV(0xf)(&D_5AFA, &D_5710);
+		if(videoMode == 0xd) {
+			backBuffer.segment = screen.segment;
+			DRV(0xf)(&egaPage2, &screen);
 		} else {
-			DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
+			DRV(3)(&backBuffer, 0, sceneY, sceneShapes, 0);
 		}
 		MOUSE_SERVE();
 		DrawGypsyStep(0, 0, 1);
 		MOUSE_SERVE();
-		if(D_5044 != 0xd)
+		if(videoMode != 0xd)
 			DisplayPassage();
 		MOUSE_SERVE();
 		if(mouse)
 			DrawMouseOnBackBuffer();
-		if(D_5044 == 0xd) {
-			DRV(0x15)(&D_5710);
+		if(videoMode == 0xd) {
+			DRV(0x15)(&screen);
 			if(first) {
 				first = 0;
-				DRV(0xf)(&D_5732, &D_5710);
+				DRV(0xf)(&backBuffer, &screen);
 			}
 		} else {
-			DRV(0xf)(&D_5732, &D_5710);
+			DRV(0xf)(&backBuffer, &screen);
 		}
 		MOUSE_SERVE();
-		if(D_5046 || D_5047) {
-			while(D_5046 || D_5047)
+		if(mouseL || mouseR) {
+			while(mouseL || mouseR)
 				MOUSE_SERVE();
 			if(MOUSE_IN_RECT(&cardA))
 				key = 'A';
@@ -602,18 +602,18 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 /*C_0406_0F99*/int AskQuestion(int q) {
 	char key;
 
-	if(D_505E) {
-		if(D_5044 == 0xd)
-			D_5732.segment = D_5710.segment;
-		DRV(3)(&D_6072, 0x10f, 0x29, D_5ADC, D_07D7 + 6);
-		DRV(3)(&D_6072, 0x120, 0x29, D_5ADC, D_07D7 + 7);
+	if(mouseInstalled) {
+		if(videoMode == 0xd)
+			backBuffer.segment = screen.segment;
+		DRV(3)(&workArea, 0x10f, 0x29, sceneShapes, shapeArm + 6);
+		DRV(3)(&workArea, 0x120, 0x29, sceneShapes, shapeArm + 7);
 	}
 	do {
 		key = WaitForAnswer(1);
 	} while(key != 'A' && key != 'B');
 	if(key == 'A')
-		return D_0737[q - 0x69];
-	return D_076F[q - 0x69];
+		return answerAVirtue[q - 0x69];
+	return answerBVirtue[q - 0x69];
 }
 
 /*the virtue v was chosen: its attribute points, and the gypsy pours its vial*/
@@ -622,63 +622,63 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 	int step;
 	int i;
 
-	D_5A40 += D_07A7[v];
-	D_5A42 += D_07B7[v];
-	D_5A44 += D_07C7[v];
+	newStr += strGain[v];
+	newDex += dexGain[v];
+	newInt += intGain[v];
 	if(v == 7)
-		D_0692 += 3;
+		avatarKarma += 3;
 	count = ScaleSpeed(3, 0);
 	MOUSE_SERVE();
-	if(D_5044 == 0xd) {
-		D_565F.segment = D_5732.segment = D_5710.segment;
-		DRV(0xf)(&D_5AFA, &D_5710);
-		D_5710.segment = D_5AFA.segment;
+	if(videoMode == 0xd) {
+		textArea.segment = backBuffer.segment = screen.segment;
+		DRV(0xf)(&egaPage2, &screen);
+		screen.segment = egaPage2.segment;
 		DisplayPassage();
-		D_5710.segment = D_565F.segment;
+		screen.segment = textArea.segment;
 	} else {
-		DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
+		DRV(3)(&backBuffer, 0, sceneY, sceneShapes, 0);
 	}
 	MOUSE_SERVE();
 	for(step = 0; step < 0x11; step++) {
 		if(!DrawGypsyStep(v, step, 0))
 			continue;
 		MOUSE_SERVE();
-		if(D_5044 != 0xd)
+		if(videoMode != 0xd)
 			DisplayPassage();
 		MOUSE_SERVE();
 		DrawMouseOnBackBuffer();
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
+			DRV(0x15)(&screen);
 		}
 		MOUSE_SERVE();
 		for(i = 0; i < count; i++) {
-			if(D_5044 == 0xd) {
-				D_5732.segment = D_5710.segment;
-				DRV(0xf)(&D_5AFA, &D_5710);
+			if(videoMode == 0xd) {
+				backBuffer.segment = screen.segment;
+				DRV(0xf)(&egaPage2, &screen);
 			} else {
-				DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
+				DRV(3)(&backBuffer, 0, sceneY, sceneShapes, 0);
 			}
 			MOUSE_SERVE();
 			DrawGypsyStep(v, step, 1);
 			MOUSE_SERVE();
-			if(D_5044 != 0xd)
+			if(videoMode != 0xd)
 				DisplayPassage();
 			MOUSE_SERVE();
 			DrawMouseOnBackBuffer();
-			if(D_5044 != 0xd) {
-				DRV(0xf)(&D_5732, &D_5710);
+			if(videoMode != 0xd) {
+				DRV(0xf)(&backBuffer, &screen);
 			} else {
-				DRV(0x15)(&D_5710);
+				DRV(0x15)(&screen);
 			}
 			MOUSE_SERVE();
 		}
-		if(D_5044 == 0xd) {
-			D_5732.segment = D_5710.segment;
-			DRV(0xf)(&D_5AFA, &D_5710);
+		if(videoMode == 0xd) {
+			backBuffer.segment = screen.segment;
+			DRV(0xf)(&egaPage2, &screen);
 		} else {
-			DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
+			DRV(3)(&backBuffer, 0, sceneY, sceneShapes, 0);
 		}
 		MOUSE_SERVE();
 	}
@@ -696,171 +696,171 @@ gypsy and her questions, then write the character into savegame\objlist;
 	int i;
 	int q;
 
-	if(D_5044 == 0xd) {
-		D_5732.segment = D_5710.segment ^ 0x200;
-		DRV(0xf)(&D_5732, &D_5710);
-		D_5710.segment ^= 0x200;
-		D_5732.segment = D_5710.segment;
-		D_565F.segment = D_5710.segment;
-		D_5B08 = D_5710;
+	if(videoMode == 0xd) {
+		backBuffer.segment = screen.segment ^ 0x200;
+		DRV(0xf)(&backBuffer, &screen);
+		screen.segment ^= 0x200;
+		backBuffer.segment = screen.segment;
+		textArea.segment = screen.segment;
+		egaScreen = screen;
 	}
-	D_599C = D_5732;
-	D_5980 = D_5710;
-	D_599C.right = D_5980.right = 0x124;
-	D_599C.left = D_5980.left = 0x1c;
-	D_599C.top = D_5980.top = 0x57;
-	D_599C.bottom = D_5980.bottom = 0xbd;
-	D_5702 = D_565F;
-	SURF_share(&D_5732, &D_5702, 0);
-	if(D_5044 != 0xd) {
-		DRV(0xc)(&D_5702, 0);
+	nameWindow = backBuffer;
+	dialogArea = screen;
+	nameWindow.right = dialogArea.right = 0x124;
+	nameWindow.left = dialogArea.left = 0x1c;
+	nameWindow.top = dialogArea.top = 0x57;
+	nameWindow.bottom = dialogArea.bottom = 0xbd;
+	textAreaCopy = textArea;
+	SURF_share(&backBuffer, &textAreaCopy, 0);
+	if(videoMode != 0xd) {
+		DRV(0xc)(&textAreaCopy, 0);
 	}
-	D_6072.left = D_6072.top = 0;
-	D_6072.right = 0x13f;
-	D_6072.bottom = 0x37;
-	if(D_5044 != 0xd)
-		SURF_alloc(&D_6072);
+	workArea.left = workArea.top = 0;
+	workArea.right = 0x13f;
+	workArea.bottom = 0x37;
+	if(videoMode != 0xd)
+		SURF_alloc(&workArea);
 	else
-		D_6072.segment = D_5710.segment;
-	save.right = D_565F.right - D_565F.left;
-	save.bottom = D_565F.bottom - D_565F.top;
+		workArea.segment = screen.segment;
+	save.right = textArea.right - textArea.left;
+	save.bottom = textArea.bottom - textArea.top;
 	save.left = save.top = 0;
 	SURF_alloc(&save);
 	/*the vellum*/
 	AskForDisk(2);
-	switch(D_5044) {
+	switch(videoMode) {
 		case 4:
-			D_5AD6 = LZW_load("vellum1.cga");
-			D_06A7[3] = D_06A7[1] = D_06A7[6] = 3;
-			D_06A7[0] = D_06A7[2] = D_06A7[4] = D_06A7[5] = 2;
-			D_06A7[7] = 1;
+			vellum = LZW_load("vellum1.cga");
+			virtueColor[3] = virtueColor[1] = virtueColor[6] = 3;
+			virtueColor[0] = virtueColor[2] = virtueColor[4] = virtueColor[5] = 2;
+			virtueColor[7] = 1;
 			break;
 		case 7:
-			D_5AD6 = LZW_load("vellum1.hrc");
-			D_06A7[3] = D_06A7[1] = D_06A7[6] = 3;
-			D_06A7[0] = D_06A7[2] = D_06A7[4] = D_06A7[5] = 2;
-			D_06A7[7] = 1;
+			vellum = LZW_load("vellum1.hrc");
+			virtueColor[3] = virtueColor[1] = virtueColor[6] = 3;
+			virtueColor[0] = virtueColor[2] = virtueColor[4] = virtueColor[5] = 2;
+			virtueColor[7] = 1;
 			break;
 		case 9:
-			D_5AD6 = LZW_load("vellum1.tga");
-			D_06A7[0] = 9;
-			D_06A7[2] = 4;
-			D_06A7[3] = 0xa;
-			D_06A7[4] = 0xc;
-			D_06A7[7] = 7;
+			vellum = LZW_load("vellum1.tga");
+			virtueColor[0] = 9;
+			virtueColor[2] = 4;
+			virtueColor[3] = 0xa;
+			virtueColor[4] = 0xc;
+			virtueColor[7] = 7;
 			break;
 		case 0xd:
-			D_5AD6 = LZW_load("vellum1.ega");
-			D_06A7[0] = 9;
-			D_06A7[2] = 4;
-			D_06A7[3] = 0xa;
-			D_06A7[4] = 0xc;
-			D_06A7[7] = 7;
+			vellum = LZW_load("vellum1.ega");
+			virtueColor[0] = 9;
+			virtueColor[2] = 4;
+			virtueColor[3] = 0xa;
+			virtueColor[4] = 0xc;
+			virtueColor[7] = 7;
 			break;
 		case 0x13:
-			D_5AD6 = LZW_load("vellum1.shp");
+			vellum = LZW_load("vellum1.shp");
 			break;
 	}
 	AskForDisk(2);
-	switch(D_5044) {
-		case 4: D_5AD2 = LZW_load("montage.cga"); break;
-		case 7: D_5AD2 = LZW_load("montage.hrc"); break;
-		case 9: D_5AD2 = LZW_load("montage.tga"); break;
-		case 0xd: D_5AD2 = LZW_load("montage.ega"); break;
-		case 0x13: D_5AD2 = LZW_load("montage.shp"); break;
+	switch(videoMode) {
+		case 4: portraits = LZW_load("montage.cga"); break;
+		case 7: portraits = LZW_load("montage.hrc"); break;
+		case 9: portraits = LZW_load("montage.tga"); break;
+		case 0xd: portraits = LZW_load("montage.ega"); break;
+		case 0x13: portraits = LZW_load("montage.shp"); break;
 	}
-	DRV(0xf)(&D_565F, &save);
-	if(D_5044 == 0x13)
-		FADE_out(&D_565F, 0);
-	if(D_5044 == 0xd)
-		D_5702.segment = D_565F.segment = D_5710.segment;
-	DRV(0xc)(&D_565F, 0);
+	DRV(0xf)(&textArea, &save);
+	if(videoMode == 0x13)
+		FADE_out(&textArea, 0);
+	if(videoMode == 0xd)
+		textAreaCopy.segment = textArea.segment = screen.segment;
+	DRV(0xc)(&textArea, 0);
 	SetPalette();
-	DRV(3)(&D_5702, D_5702.left, D_5702.top, D_5AD6, 0);
-	D_5A2E = D_59B8 = 0;
+	DRV(3)(&textAreaCopy, textAreaCopy.left, textAreaCopy.top, vellum, 0);
+	portraitIdx = transferFrom = 0;
 	MOUSE_SHOW();
 	PlayMusic(4);
-	D_575A = 0;
+	menuDrawn = 0;
 	do {
 		MOUSE_HIDE();
 		if(!AskNameAndSex()) {
-			D_575A = 1;
+			menuDrawn = 1;
 			break;
 		}
 		MOUSE_SHOW();
 	} while(!PortraitScreen(0));
-	if(D_575A) {
+	if(menuDrawn) {
 		/*given up*/
-		if(D_5044 == 0xd) {
-			D_565F.segment = D_5710.segment;
-			D_565F.pScanlines = D_5710.pScanlines;
+		if(videoMode == 0xd) {
+			textArea.segment = screen.segment;
+			textArea.pScanlines = screen.pScanlines;
 		}
-		farfree(D_5AD2);
-		farfree(D_5AD6);
-		if(D_5044 == 0x13)
-			FADE_out(&D_565F, 0);
-		DRV(0xc)(&D_565F, 0);
+		farfree(portraits);
+		farfree(vellum);
+		if(videoMode == 0x13)
+			FADE_out(&textArea, 0);
+		DRV(0xc)(&textArea, 0);
 		SetPalette();
-		if(D_5044 == 0x13) {
-			FADE_in(&save, &D_565F);
-		} else if(D_5044 == 0xd) {
-			DRV(0xf)(&save, &D_565F);
-			DRV(0x15)(&D_5710);
+		if(videoMode == 0x13) {
+			FADE_in(&save, &textArea);
+		} else if(videoMode == 0xd) {
+			DRV(0xf)(&save, &textArea);
+			DRV(0x15)(&screen);
 		} else {
-			DRV(0xf)(&save, &D_565F);
+			DRV(0xf)(&save, &textArea);
 		}
 		SURF_free(&save);
-		if(D_5044 != 0xd)
-			SURF_free(&D_6072);
+		if(videoMode != 0xd)
+			SURF_free(&workArea);
 		PlayMusic(0);
 		return 1;
 	}
 	MOUSE_HIDE();
-	farfree(D_5AD2);
-	farfree(D_5AD6);
+	farfree(portraits);
+	farfree(vellum);
 	SURF_free(&save);
 	TIM_calibrate();
 	/*the woods*/
 	AskForDisk(2);
-	switch(D_5044) {
-		case 4: D_5ADC = LZW_load("woods.cga"); break;
-		case 7: D_5ADC = LZW_load("woods.hrc"); break;
-		case 9: D_5ADC = LZW_load("woods.tga"); break;
-		case 0xd: D_5ADC = LZW_load("woods.ega"); break;
-		case 0x13: D_5ADC = LZW_load("woods.shp"); break;
+	switch(videoMode) {
+		case 4: sceneShapes = LZW_load("woods.cga"); break;
+		case 7: sceneShapes = LZW_load("woods.hrc"); break;
+		case 9: sceneShapes = LZW_load("woods.tga"); break;
+		case 0xd: sceneShapes = LZW_load("woods.ega"); break;
+		case 0x13: sceneShapes = LZW_load("woods.shp"); break;
 	}
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
-	if(D_5044 != 0xd) {
-		DRV(0xc)(&D_5732, 0);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
+	if(videoMode != 0xd) {
+		DRV(0xc)(&backBuffer, 0);
 	}
-	if(D_5044 == 0xd) {
-		DRV(0x15)(&D_5710);
+	if(videoMode == 0xd) {
+		DRV(0x15)(&screen);
 	}
 	LoadPalette(4);
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0);
-	if(D_5044 == 0x13) {
-		FADE_in(&D_5732, &D_5710);
-	} else if(D_5044 == 0xd) {
-		DRV(0x15)(&D_5710);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, 0, 0, sceneShapes, 0);
+	if(videoMode == 0x13) {
+		FADE_in(&backBuffer, &screen);
+	} else if(videoMode == 0xd) {
+		DRV(0x15)(&screen);
 	} else {
-		DRV(0xf)(&D_5732, &D_5710);
+		DRV(0xf)(&backBuffer, &screen);
 	}
-	if(D_5044 == 0xd)
-		D_6072.segment = 0xa600;
+	if(videoMode == 0xd)
+		workArea.segment = 0xa600;
 	ShowPassage(100);
 	do {
-		if(D_5044 == 0xd)
-			D_5732.segment = D_5710.segment;
-		DRV(3)(&D_5732, 0, 0, D_5ADC, 0);
+		if(videoMode == 0xd)
+			backBuffer.segment = screen.segment;
+		DRV(3)(&backBuffer, 0, 0, sceneShapes, 0);
 		DisplayPassage();
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
+			DRV(0x15)(&screen);
 		}
 	} while(!PollInput());
 	speed = ScaleSpeed(2, 10);
@@ -869,16 +869,16 @@ gypsy and her questions, then write the character into savegame\objlist;
 	/*the woods scroll by; one more round once i reaches 0xbf (the constant
 	1 after the comma is what gives the original's mov al,1/or al,al)*/
 	while(!done && (done = i == 0xbf, 1)) {
-		if(D_5044 == 0xd)
-			D_5732.segment = D_5710.segment;
-		DRV(3)(&D_5732, D_5732.left - i, 0, D_5ADC, 0);
-		DRV(3)(&D_5732, D_5732.left + 0x140 - i, 0, D_5ADC, 1);
-		if(D_5044 == 0x13)
+		if(videoMode == 0xd)
+			backBuffer.segment = screen.segment;
+		DRV(3)(&backBuffer, backBuffer.left - i, 0, sceneShapes, 0);
+		DRV(3)(&backBuffer, backBuffer.left + 0x140 - i, 0, sceneShapes, 1);
+		if(videoMode == 0x13)
 			VID_waitRetrace();
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
+			DRV(0x15)(&screen);
 		}
 		if(PollInput())
 			i = 0xbf - speed;
@@ -887,89 +887,89 @@ gypsy and her questions, then write the character into savegame\objlist;
 	}
 	ShowPassage(0x65);
 	do {
-		if(D_5044 == 0xd)
-			D_5732.segment = D_5710.segment;
-		DRV(3)(&D_5732, D_5732.left - 0xbf, 0, D_5ADC, 0);
-		DRV(3)(&D_5732, D_5732.left + 0x81, 0, D_5ADC, 1);
+		if(videoMode == 0xd)
+			backBuffer.segment = screen.segment;
+		DRV(3)(&backBuffer, backBuffer.left - 0xbf, 0, sceneShapes, 0);
+		DRV(3)(&backBuffer, backBuffer.left + 0x81, 0, sceneShapes, 1);
 		DisplayPassage();
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
+			DRV(0x15)(&screen);
 		}
 	} while(!PollInput());
 	ShowPassage(0x66);
 	do {
-		if(D_5044 == 0xd)
-			D_5732.segment = D_5710.segment;
-		DRV(3)(&D_5732, D_5732.left - 0xbf, 0, D_5ADC, 0);
-		DRV(3)(&D_5732, D_5732.left + 0x81, 0, D_5ADC, 1);
+		if(videoMode == 0xd)
+			backBuffer.segment = screen.segment;
+		DRV(3)(&backBuffer, backBuffer.left - 0xbf, 0, sceneShapes, 0);
+		DRV(3)(&backBuffer, backBuffer.left + 0x81, 0, sceneShapes, 1);
 		DisplayPassage();
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
+			DRV(0x15)(&screen);
 		}
 	} while(!PollInput());
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, D_5732.left - 0xbf, 0, D_5ADC, 0);
-	DRV(3)(&D_5732, D_5732.left + 0x81, 0, D_5ADC, 1);
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, backBuffer.left - 0xbf, 0, sceneShapes, 0);
+	DRV(3)(&backBuffer, backBuffer.left + 0x81, 0, sceneShapes, 1);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	} else {
-		DRV(0x15)(&D_5710);
+		DRV(0x15)(&screen);
 	}
-	farfree(D_5ADC);
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	D_575A = 0;
-	DRV(0xc)(&D_5710, 0);
-	if(D_5044 != 0xd) {
-		DRV(0xc)(&D_5732, 0);
+	farfree(sceneShapes);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	menuDrawn = 0;
+	DRV(0xc)(&screen, 0);
+	if(videoMode != 0xd) {
+		DRV(0xc)(&backBuffer, 0);
 	} else {
-		DRV(0x15)(&D_5710);
-		DRV(0xc)(&D_5710, 0);
+		DRV(0x15)(&screen);
+		DRV(0xc)(&screen, 0);
 	}
 	/*the gypsy*/
 	AskForDisk(2);
 	LoadPalette(5);
-	switch(D_5044) {
-		case 4: D_5ADC = LZW_load("gypsy.cga"); break;
-		case 7: D_5ADC = LZW_load("gypsy.hrc"); break;
-		case 9: D_5ADC = LZW_load("gypsy.tga"); break;
-		case 0xd: D_5ADC = LZW_load("gypsy.ega"); break;
-		case 0x13: D_5ADC = LZW_load("gypsy.shp"); break;
+	switch(videoMode) {
+		case 4: sceneShapes = LZW_load("gypsy.cga"); break;
+		case 7: sceneShapes = LZW_load("gypsy.hrc"); break;
+		case 9: sceneShapes = LZW_load("gypsy.tga"); break;
+		case 0xd: sceneShapes = LZW_load("gypsy.ega"); break;
+		case 0x13: sceneShapes = LZW_load("gypsy.shp"); break;
 	}
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	strcpy(D_5A4E, "Avatar");
-	D_5A5E = 'G';
-	D_5A40 = D_5A42 = D_5A44 = 0xf;
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	strcpy(newClass, "Avatar");
+	newGood = 'G';
+	newStr = newDex = newInt = 0xf;
 	for(i = 0; i < 8; i++) {
-		D_5B2A[i] = i;
-		D_5B18[i] = 3;
-		D_5B7A[i] = 0xff;
+		chosenVirtues[i] = i;
+		vialLevel[i] = 3;
+		pattern[i] = 0xff;
 	}
-	D_5B16 = 0;
-	D_5B28 = 0;
-	D_5AE6.right = 0xac;
-	D_5AE6.left = 0x93;
-	D_5AE6.bottom = D_5AE6.top = D_06A5 + 0x7f;
-	SURF_share(&D_5732, &D_5AE6, 0);
-	DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
-	if(D_5044 == 0xd) {
-		D_5AFA = D_5710;
-		D_5AFA.segment = 0xa800;
-		DRV(0xf)(&D_5710, &D_5AFA);
+	patternAdded = 0;
+	patternColorCount = 0;
+	patternArea.right = 0xac;
+	patternArea.left = 0x93;
+	patternArea.bottom = patternArea.top = sceneY + 0x7f;
+	SURF_share(&backBuffer, &patternArea, 0);
+	DRV(3)(&backBuffer, 0, sceneY, sceneShapes, 0);
+	if(videoMode == 0xd) {
+		egaPage2 = screen;
+		egaPage2.segment = 0xa800;
+		DRV(0xf)(&screen, &egaPage2);
 	}
 	DrawGypsyStep(0, 0, 1);
-	if(D_5044 == 0x13) {
-		FADE_in(&D_5732, &D_5710);
-	} else if(D_5044 == 0xd) {
-		DRV(0x15)(&D_5710);
+	if(videoMode == 0x13) {
+		FADE_in(&backBuffer, &screen);
+	} else if(videoMode == 0xd) {
+		DRV(0x15)(&screen);
 	} else {
-		DRV(0xf)(&D_5732, &D_5710);
+		DRV(0xf)(&backBuffer, &screen);
 	}
 	ShowPassage(0x67);
 	WaitForAnswer(0);
@@ -977,212 +977,212 @@ gypsy and her questions, then write the character into savegame\objlist;
 	WaitForAnswer(0);
 	MOUSE_SHOW();
 	/*the questions: the 8 virtues in pairs, then the 4 winners, then the 2 last*/
-	Shuffle(D_5B2A, 8);
+	Shuffle(chosenVirtues, 8);
 	for(i = 0; i < 4; i++) {
-		q = D_06B7[D_5B2A[i * 2]][D_5B2A[i * 2 + 1]];
+		q = questionOf[chosenVirtues[i * 2]][chosenVirtues[i * 2 + 1]];
 		ShowPassage(q);
 		virtue = AskQuestion(q);
 		ChooseVirtue(virtue);
-		D_5B2A[i] = virtue;
+		chosenVirtues[i] = virtue;
 	}
-	Shuffle(D_5B2A, 4);
+	Shuffle(chosenVirtues, 4);
 	for(i = 0; i < 2; i++) {
-		q = D_06B7[D_5B2A[i * 2]][D_5B2A[i * 2 + 1]];
+		q = questionOf[chosenVirtues[i * 2]][chosenVirtues[i * 2 + 1]];
 		ShowPassage(q);
 		virtue = AskQuestion(q);
 		ChooseVirtue(virtue);
-		D_5B2A[i] = virtue;
+		chosenVirtues[i] = virtue;
 	}
-	q = D_06B7[D_5B2A[0]][D_5B2A[1]];
+	q = questionOf[chosenVirtues[0]][chosenVirtues[1]];
 	ShowPassage(q);
 	virtue = AskQuestion(q);
 	ChooseVirtue(virtue);
 	MOUSE_HIDE();
 	ShowPassage(0x85);
 	WaitForAnswer(0);
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
-	if(D_5044 == 0xd) {
-		DRV(0x15)(&D_5710);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
+	if(videoMode == 0xd) {
+		DRV(0x15)(&screen);
 	}
 	/*the gypsy's pattern*/
 	LoadPalette(6);
-	D_5AE6.right = 0xcb;
-	D_5AE6.left = 0x74;
-	D_5AE6.top = 0x23;
-	D_5AE6.bottom = 0x7f;
+	patternArea.right = 0xcb;
+	patternArea.left = 0x74;
+	patternArea.top = 0x23;
+	patternArea.bottom = 0x7f;
 	DrawPattern();
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc6);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, 0, 0, sceneShapes, 0xc6);
 	ShowPassage(0x86);
-	if(D_5044 == 0x13) {
-		FADE_in(&D_5732, &D_5710);
-	} else if(D_5044 == 0xd) {
-		DRV(0x15)(&D_5710);
+	if(videoMode == 0x13) {
+		FADE_in(&backBuffer, &screen);
+	} else if(videoMode == 0xd) {
+		DRV(0x15)(&screen);
 	} else {
-		DRV(0xf)(&D_5732, &D_5710);
+		DRV(0xf)(&backBuffer, &screen);
 	}
 	do {
-		if(D_5044 == 0xd)
-			D_5732.segment = D_5710.segment;
+		if(videoMode == 0xd)
+			backBuffer.segment = screen.segment;
 		DrawPattern();
-		DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc6);
+		DRV(3)(&backBuffer, 0, 0, sceneShapes, 0xc6);
 		DisplayPassage();
-		if(D_5044 != 0xd) {
-			DRV(0xf)(&D_5732, &D_5710);
+		if(videoMode != 0xd) {
+			DRV(0xf)(&backBuffer, &screen);
 		} else {
-			DRV(0x15)(&D_5710);
+			DRV(0x15)(&screen);
 		}
 	} while(!PollInput());
 	DrawPattern();
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc6);
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, 0, 0, sceneShapes, 0xc6);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	} else {
-		DRV(0x15)(&D_5710);
+		DRV(0x15)(&screen);
 	}
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0x75);
-	switch(D_5044) {
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0x75);
+	switch(videoMode) {
 		case 4:
 		case 7:
-			DRV(0xc)(&D_5732, 1);
+			DRV(0xc)(&backBuffer, 1);
 			ret = ScaleSpeed(600, 800);
-			DIS_dissolveCGA(&D_5732, &D_5710, ret);
+			DIS_dissolveCGA(&backBuffer, &screen, ret);
 			break;
 		case 9:
-			DRV(0xc)(&D_5732, 0xb);
+			DRV(0xc)(&backBuffer, 0xb);
 			ret = ScaleSpeed(800, 1200);
-			DIS_dissolveTDY(&D_5732, &D_5710, ret);
+			DIS_dissolveTDY(&backBuffer, &screen, ret);
 			break;
 		case 0xd:
-			D_5732.segment = D_5710.segment;
-			DRV(0xc)(&D_5710, 0xb);
-			D_5710.segment ^= 0x200;
+			backBuffer.segment = screen.segment;
+			DRV(0xc)(&screen, 0xb);
+			screen.segment ^= 0x200;
 			ret = ScaleSpeed(300, 400);
-			DIS_dissolveEGA(&D_5732, &D_5710, ret);
-			D_5710.segment ^= 0x200;
-			DRV(0x15)(&D_5710);
+			DIS_dissolveEGA(&backBuffer, &screen, ret);
+			screen.segment ^= 0x200;
+			DRV(0x15)(&screen);
 			break;
 		case 0x13:
-			DRV(0xc)(&D_5710, 0x75);
+			DRV(0xc)(&screen, 0x75);
 			break;
 	}
 	LoadPalette(6);
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, 0, 0, sceneShapes, 0xc7);
 	ShowPassage(0x87);
-	if(D_5044 == 0x13) {
-		FADE_in(&D_5732, &D_5710);
-	} else if(D_5044 == 0xd) {
-		D_5710.segment ^= 0x200;
+	if(videoMode == 0x13) {
+		FADE_in(&backBuffer, &screen);
+	} else if(videoMode == 0xd) {
+		screen.segment ^= 0x200;
 		ret = ScaleSpeed(300, 400);
-		DIS_dissolveEGA(&D_5732, &D_5710, ret);
-		D_5710.segment ^= 0x200;
-		DRV(0x15)(&D_5710);
-	} else if(D_5044 == 9) {
+		DIS_dissolveEGA(&backBuffer, &screen, ret);
+		screen.segment ^= 0x200;
+		DRV(0x15)(&screen);
+	} else if(videoMode == 9) {
 		ret = ScaleSpeed(400, 600);
-		DIS_dissolveTDY(&D_5732, &D_5710, ret);
+		DIS_dissolveTDY(&backBuffer, &screen, ret);
 	} else {
 		ret = ScaleSpeed(300, 400);
-		DIS_dissolveCGA(&D_5732, &D_5710, ret);
+		DIS_dissolveCGA(&backBuffer, &screen, ret);
 	}
 	TIM_delay(2000);
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
 	DisplayPassage();
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	} else {
-		DRV(0x15)(&D_5710);
+		DRV(0x15)(&screen);
 	}
 	ShowPassage(0x88);
 	while(!PollInput());
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, 0, 0, sceneShapes, 0xc7);
 	DisplayPassage();
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	} else {
-		DRV(0x15)(&D_5710);
+		DRV(0x15)(&screen);
 	}
 	ShowPassage(0x89);
 	while(!PollInput());
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, 0, 0, sceneShapes, 0xc7);
 	DisplayPassage();
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	} else {
-		DRV(0x15)(&D_5710);
+		DRV(0x15)(&screen);
 	}
 	while(!PollInput());
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
+	if(videoMode == 0xd)
+		backBuffer.segment = screen.segment;
+	DRV(3)(&backBuffer, 0, 0, sceneShapes, 0xc7);
+	if(videoMode != 0xd) {
+		DRV(0xf)(&backBuffer, &screen);
 	} else {
-		DRV(0x15)(&D_5710);
+		DRV(0x15)(&screen);
 	}
-	farfree(D_5ADC);
-	if(D_5044 == 0x13)
-		FADE_out(&D_5710, 0);
-	DRV(0xc)(&D_5710, 0);
-	if(D_5044 != 0xd) {
-		DRV(0xc)(&D_5732, 0);
+	farfree(sceneShapes);
+	if(videoMode == 0x13)
+		FADE_out(&screen, 0);
+	DRV(0xc)(&screen, 0);
+	if(videoMode != 0xd) {
+		DRV(0xc)(&backBuffer, 0);
 	} else {
-		DRV(0x15)(&D_5710);
-		DRV(0xc)(&D_5710, 0);
-		D_5732 = D_5710;
+		DRV(0x15)(&screen);
+		DRV(0xc)(&screen, 0);
+		backBuffer = screen;
 	}
 	SetPalette();
 	/*the new character*/
 	AskForDisk(8);
-	if(D_5044 != 0xd)
-		SURF_free(&D_6072);
-	D_5A60 = 0x172;
-	D_5A64 = 0x5a;
-	D_5A62 = 3;
-	D_6072.left = D_6072.top = 0;
-	D_6072.right = 0x13f;
-	D_6072.bottom = 0x37;
-	if(D_5044 != 0xd)
-		SURF_alloc(&D_6072);
+	if(videoMode != 0xd)
+		SURF_free(&workArea);
+	newExp = 0x172;
+	newHp = 0x5a;
+	newLevel = 3;
+	workArea.left = workArea.top = 0;
+	workArea.right = 0x13f;
+	workArea.bottom = 0x37;
+	if(videoMode != 0xd)
+		SURF_alloc(&workArea);
 	else
-		D_6072.segment = 0xa600;
+		workArea.segment = 0xa600;
 	ret = 0;
 	if(WriteNewCharacter()) {
 		/*the disk already holds a character*/
 		ShowPassage(0x3e6);
 		DisplayPassage();
 		ret = 1;
-		if(D_5044 == 0xd) {
-			DRV(0x15)(&D_5710);
-			D_5732 = D_5710;
+		if(videoMode == 0xd) {
+			DRV(0x15)(&screen);
+			backBuffer = screen;
 		} else {
-			DRV(0xf)(&D_5732, &D_5710);
+			DRV(0xf)(&backBuffer, &screen);
 		}
 		while(!PollInput());
-		DRV(0xc)(&D_5732, 0);
-		if(D_5044 == 0xd) {
-			DRV(0x15)(&D_5710);
-			D_5732 = D_5710;
-			DRV(0xc)(&D_5732, 0);
+		DRV(0xc)(&backBuffer, 0);
+		if(videoMode == 0xd) {
+			DRV(0x15)(&screen);
+			backBuffer = screen;
+			DRV(0xc)(&backBuffer, 0);
 		} else {
-			DRV(0xf)(&D_5732, &D_5710);
+			DRV(0xf)(&backBuffer, &screen);
 		}
 	}
 	AskForDisk(2);
-	if(D_5044 != 0xd)
-		SURF_free(&D_6072);
+	if(videoMode != 0xd)
+		SURF_free(&workArea);
 	PlayMusic(0);
 	return ret;
 }
