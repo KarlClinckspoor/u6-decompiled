@@ -21,6 +21,7 @@ static const uint8_t *font;
 static int open_now, want_open, tab, row = -1;
 static char rec_names[8][64];
 static int nrec;
+static int confirm_new;	/* the New game row was chosen once: the next Enter does it */
 
 /* colours, found in the game's palette at each draw */
 static uint8_t c_black, c_dark, c_mid, c_light, c_white, c_hilite, c_bad;
@@ -29,7 +30,10 @@ static uint8_t last_pal[768];
 
 static int key_queue[16], kq_head, kq_tail;
 
+static void (*idle_hook)(void);
+
 int overlay_is_open(void) { return open_now; }
+void overlay_set_idle_hook(void (*fn)(void)) { idle_hook = fn; }
 
 static int key_hook(uint16_t bios_key, int down)
 {
@@ -79,7 +83,7 @@ static void prepare_colours(const uint8_t *pal)
 	c_hilite = (uint8_t)nearest(pal, 63, 52, 10);
 	c_bad = (uint8_t)nearest(pal, 63, 16, 16);
 	for (i = 0; i < 256; i++)
-		dim_map[i] = (uint8_t)nearest(pal, pal[i * 3] / 4, pal[i * 3 + 1] / 4, pal[i * 3 + 2] / 4);
+		dim_map[i] = (uint8_t)nearest(pal, pal[i * 3] / 6, pal[i * 3 + 1] / 6, pal[i * 3 + 2] / 6);
 }
 
 static void put_char(uint8_t *fb, int x, int y, unsigned char ch, uint8_t colour)
@@ -125,7 +129,7 @@ typedef struct Row {
 
 enum {
 	R_FULLSCREEN, R_SCALE, R_ASPECT, R_INTEGER, R_SOUND, R_VOLUME, R_FOLDER, R_RECORDING,
-	R_ATSTART, R_STATUS, R_SPEED, R_TAKEOVER, R_REC0
+	R_ATSTART, R_NEWGAME, R_STATUS, R_SPEED, R_TAKEOVER, R_REC0
 };
 
 static int build_rows(Row *rows)
@@ -150,9 +154,13 @@ static int build_rows(Row *rows)
 	case TAB_GAME: {
 		const char *d = settings.data[0] ? settings.data : "(not set)";
 		size_t len = strlen(d);
-		ROW("Game folder", len > 20 ? d + len - 20 : d, "Your copy of Ultima VI. Change it with --data PATH (next start).", 2, R_FOLDER);
+		char tail[20];
+		snprintf(tail, sizeof tail, "%s%s", len > 15 ? ".." : "", len > 15 ? d + len - 13 : d);
+		ROW("Game folder", tail, "Your copy of Ultima VI. Change it with --data PATH (next start).", 2, R_FOLDER);
 		ROW("Record sessions", settings.recording ? "On" : "Off", "Each session's inputs go to recordings/ in the home folder (newest five kept). Next start.", 0, R_RECORDING);
 		ROW("Show this at start", settings.settings_at_start ? "On" : "Off", "Opens this screen before the game starts.", 0, R_ATSTART);
+		if (session_can_start_new_game())
+			ROW("New game", confirm_new ? "Sure? Enter" : ">", "Starts over from the game folder's saved game (a new character if it has none). Yours goes to backups/.", 1, R_NEWGAME);
 		break;
 	}
 	case TAB_REPLAY:
@@ -193,6 +201,13 @@ static void change(Row *r, int dir)
 			;
 		i = (i + (dir < 0 ? 4 : 1)) % 5;
 		session_set_replay_speed(speeds[i]);
+		return;
+	case R_NEWGAME:
+		if (!confirm_new) {
+			confirm_new = 1;
+			return;
+		}
+		session_new_game();
 		return;
 	case R_TAKEOVER:
 		session_take_over();
@@ -273,6 +288,8 @@ static void handle_key(int key)
 {
 	Row rows[16];
 	int n = build_rows(rows), scan = key >> 8;
+	if (scan != 0x1C)
+		confirm_new = 0;
 	switch (scan) {
 	case 0x01:	/* Esc */
 		open_now = 0;
@@ -340,6 +357,8 @@ void overlay_run_modal(void)
 		int16_t mx, my;
 		uint16_t b;
 		plat_pump();
+		if (idle_hook)
+			idle_hook();
 		while (kq_head != kq_tail) {
 			handle_key(key_queue[kq_head]);
 			kq_head = (kq_head + 1) % 16;
@@ -359,7 +378,7 @@ void overlay_run_modal(void)
 	plat_video_dirty();
 }
 
-static void pump_hook(void)
+void overlay_pump_hook(void)
 {
 	if (want_open && !open_now)
 		overlay_run_modal();
@@ -370,5 +389,5 @@ void overlay_init(const uint8_t *f)
 	font = f;
 	plat_set_key_hook(key_hook);
 	plat_set_draw_hook(draw);
-	plat_set_pump_hook(pump_hook);
+	plat_set_pump_hook(overlay_pump_hook);
 }

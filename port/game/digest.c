@@ -4,7 +4,7 @@
  * random generator, which is what a replay that went another way changes first. */
 #include "u6.h"
 
-extern uint32_t port_rand_state(void);
+extern void osi_rand_state(uint16_t *lo, uint16_t *hi);
 
 static uint64_t h;
 
@@ -51,8 +51,10 @@ uint64_t port_game_digest(void)
 	if (NPCFlag)
 		mix(NPCFlag, 0x100);
 	{
-		uint32_t r = port_rand_state();
-		mix(&r, 4);
+		uint16_t lo, hi;
+		osi_rand_state(&lo, &hi);
+		mix(&lo, 2);
+		mix(&hi, 2);
 	}
 	return h;
 }

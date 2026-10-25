@@ -17,7 +17,8 @@ typedef struct Settings {
 extern Settings settings;
 
 void settings_defaults(void);
-void settings_load(const char *home);
+/* 0 if there was no settings file yet (the first run) */
+int settings_load(const char *home);
 void settings_save(void);
 
 #endif

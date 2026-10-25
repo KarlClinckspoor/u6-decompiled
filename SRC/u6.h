@@ -652,6 +652,7 @@ extern struct {
 
 #ifndef __TURBOC__
 #include "portprot.h"/*port only: prototypes of every game function (tools/mkprotos.py)*/
+#include "../port/sys/osi.h"/*port only: prototypes of the OSI library (assembly in DOS)*/
 #endif
 
 #endif

@@ -17,12 +17,12 @@ void settings_defaults(void)
 	settings.sound = 1;
 	settings.volume = 50;
 	settings.recording = 1;
-	settings.settings_at_start = 1;
+	settings.settings_at_start = 0;
 }
 
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
-void settings_load(const char *home)
+int settings_load(const char *home)
 {
 	FILE *f;
 	char line[1200];
@@ -30,7 +30,7 @@ void settings_load(const char *home)
 		home[0] && home[strlen(home) - 1] != '/' && home[strlen(home) - 1] != '\\' ? "/" : "");
 	f = fopen(cfg_path, "r");
 	if (!f)
-		return;
+		return 0;
 	while (fgets(line, sizeof line, f)) {
 		char *eq = strchr(line, '='), *v, *e;
 		if (!eq || line[0] == '#')
@@ -51,6 +51,7 @@ void settings_load(const char *home)
 		else if (!strcmp(line, "data")) snprintf(settings.data, sizeof settings.data, "%s", v);
 	}
 	fclose(f);
+	return 1;
 }
 
 void settings_save(void)

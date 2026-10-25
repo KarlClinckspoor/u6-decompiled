@@ -28,7 +28,10 @@ endif()
 
 # ---- the game's C, compiled as Turbo C saw it ----
 file(GLOB GAME_C ${GAME_SRC}/*.c)
-add_library(u6game OBJECT ${GAME_C} game/digest.c)
+# gamestat.c's variables are one block in the saved game: the port defines them as a
+# packed block of its own (port/tools/gen_gamestat.py)
+list(REMOVE_ITEM GAME_C ${GAME_SRC}/gamestat.c)
+add_library(u6game OBJECT ${GAME_C} game/digest.c game/gamestat_port.c)
 target_include_directories(u6game PRIVATE ${GAME_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/include)
 foreach(f ${GAME_C})
 	get_filename_component(n ${f} NAME_WE)

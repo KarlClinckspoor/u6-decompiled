@@ -51,6 +51,8 @@ int plat_quit_requested(void);
 
 /* Milliseconds since plat_init, from a monotonic clock. */
 uint32_t plat_ms(void);
+/* Milliseconds since start, counting the pauses too. */
+uint32_t plat_real_ms(void);
 void plat_sleep_ms(uint32_t ms);
 /* Handles window and input events, lets the overlay run, presents the screen when it
  * changed. Called from every wait and poll of the game. */
@@ -69,13 +71,17 @@ void plat_clock_pause(int paused);
 void plat_video_source(const uint8_t *pixels, const uint8_t *palette6);
 /* The game's screen changed: present at the next pump (at most once per host frame). */
 void plat_video_dirty(void);
+/* What the next present would show (the frame with the overlay drawn): screenshots. */
+int plat_video_capture(uint8_t *frame, uint8_t *palette6);
 
 /* ---- Keyboard ----
  * Keys are delivered as the BIOS keyboard buffer held them (int 16h): scan code in the
  * high byte, ASCII (or 0) in the low byte. */
 int plat_key_available(void);
 uint16_t plat_key_get(void);      /* 0 when none */
-uint16_t plat_key_shift(void);    /* BIOS shift flags: 1 right shift, 2 left shift, 4 ctrl, 8 alt */
+uint16_t plat_key_shift(void);
+/* Puts a key in the buffer as if typed (tests: --keys). */
+void plat_push_key(uint16_t bios_key);    /* BIOS shift flags: 1 right shift, 2 left shift, 4 ctrl, 8 alt */
 
 /* ---- Mouse: position in the game's 320x200 pixels ---- */
 

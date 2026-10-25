@@ -359,7 +359,7 @@ without MIDI.DAT, all 16 channels get (2, 0)*/
 			if(parenCount > songIdx) {
 				for(channel = 0; (val1 = MUS_ParseMidiNumber()) >= 0; channel ++) {
 					val2 = MUS_ParseMidiNumber();
-					MUS_Driver.iii.ofs = 0xc; (*MUS_Driver.f)(channel, val1, val2);
+					MUS_DRV(0xc)(channel, val1, val2);
 				}
 				break;
 			}
@@ -369,7 +369,7 @@ without MIDI.DAT, all 16 channels get (2, 0)*/
 		OSI_close(fd);
 	} else {/*no midi.dat*/
 		for(ch = 0; ch < 16; ch++) {
-			MUS_Driver.iii.ofs = 0xc; (*MUS_Driver.f)(ch, 2, 0);
+			MUS_DRV(0xc)(ch, 2, 0);
 		}
 	}
 }
@@ -399,7 +399,7 @@ The song is loaded into TalkBuf.*/
 	if(song == MUS_MIndex)
 		return;
 	if(MUS_MIndex != 0) {
-		MUS_Driver.iii.ofs = 9; (*MUS_Driver.f)();/*stop*/
+		MUS_DRV(9)();/*stop*/
 		MUS_MIndex = 0;
 	}
 	if(song == 0)
@@ -412,7 +412,7 @@ The song is loaded into TalkBuf.*/
 	IsZFile = 1;
 	LoadFile(MUS_SongFiles[song - 1], TalkBuf);
 	IsZFile = 0;
-	MUS_Driver.iii.ofs = 6; (*MUS_Driver.f)(TalkBuf);/*play*/
+	MUS_DRV(6)(TalkBuf);/*play*/
 	MUS_MIndex = song;
 }
 
@@ -463,5 +463,5 @@ and call its init entry with the i/o <port>*/
 	IsZFile = 1;
 	MUS_Driver.p = LoadFile(MUS_DriverFiles[adapter - 1], 0L);
 	IsZFile = 0;
-	MUS_Driver.iii.ofs = 0; (*MUS_Driver.f)(port);
+	MUS_DRV(0)(port);
 }

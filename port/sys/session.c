@@ -33,6 +33,11 @@ static uint32_t pace_first_tick, pace_start_ms, pace_have;
 static int took_over;
 
 const char *session_home(void) { return home; }
+void session_set_home(const char *dir)
+{
+	snprintf(home, sizeof home, "%s", dir);
+	snprintf(game_home, sizeof game_home, "%s", dir);
+}
 const char *session_game_home(void) { return game_home; }
 
 int session_is_replaying(void) { return rp_mode == RP_REPLAY && !rp_finished(); }
@@ -141,9 +146,16 @@ static int path_ci(char *out, size_t size, const char *dir, const char *name)
 	return 1;
 }
 
+/* the overlay's list of game folder files the game deleted (dosfs) goes with the copy */
+#define DELETED_LIST ".dosfs-deleted"
+
 static void stage_savegame(const char *stage)
 {
-	char src[1100];
+	char src[1100], dst[1100];
+	hostfs_join(src, sizeof src, game_home, DELETED_LIST);
+	hostfs_join(dst, sizeof dst, rec_dir, DELETED_LIST);	/* beside stage/ */
+	if (hostfs_exists(src))
+		hostfs_copy_file(src, dst);
 	if (path_ci(src, sizeof src, game_home, "SAVEGAME") && hostfs_is_dir(src))
 		hostfs_copy_tree(src, stage);
 	else if (path_ci(src, sizeof src, settings.data, "SAVEGAME") && hostfs_is_dir(src))
@@ -170,6 +182,11 @@ int session_start(const char *home_dir, const char *replay, const char *record, 
 		snprintf(game_home, sizeof game_home, "%s", tmp);
 		hostfs_join(dst, sizeof dst, game_home, "SAVEGAME");
 		hostfs_copy_tree(stage, dst);
+		hostfs_join(f, sizeof f, replay_dir, DELETED_LIST);
+		hostfs_join(dst, sizeof dst, game_home, DELETED_LIST);
+		if (hostfs_exists(f))
+			hostfs_copy_file(f, dst);
+		hostfs_join(f, sizeof f, replay_dir, "RECORD.U6R");
 		if (rp_start_replay(f) != 0) {
 			plat_log("cannot read the recording %s", f);
 			return -1;
@@ -210,18 +227,60 @@ void session_end(void)
 		hostfs_remove_tree(game_home);
 }
 
-void session_play_recording(const char *name)
+/* restarts the port with these options (and the same home) */
+static void restart(const char *opt, const char *val)
 {
-	char arg[1100];
-	char *argv[4];
-	snprintf(arg, sizeof arg, "%s", name);
-	argv[0] = self_path;
-	argv[1] = "--replay";
-	argv[2] = arg;
-	argv[3] = 0;
+	char *argv[6];
+	int n = 0;
+	argv[n++] = self_path;
+	argv[n++] = "--home";
+	argv[n++] = home;
+	if (opt)
+		argv[n++] = (char *)opt;
+	if (val)
+		argv[n++] = (char *)val;
+	argv[n] = 0;
 	session_end();
 	plat_shutdown();
 	session_exec(self_path, argv);
+}
+
+void session_play_recording(const char *name)
+{
+	char arg[1100];
+	snprintf(arg, sizeof arg, "%s", name);
+	restart("--replay", arg);
+}
+
+/* New game: the home's saved game (and its list of deleted game folder files) is moved to
+ * backups/, so the game folder's own, as installed, shows through; without a character
+ * there, the creation screen comes first. */
+int session_can_start_new_game(void)
+{
+	return rp_mode != RP_REPLAY && !took_over;
+}
+
+void session_new_game(void)
+{
+	char src[1100], dir[1100], dst[1100], name[64];
+	time_t t = time(NULL);
+	strftime(name, sizeof name, "SAVEGAME-%Y%m%d-%H%M%S", localtime(&t));
+	hostfs_join(dir, sizeof dir, home, "backups");
+	hostfs_mkdirs(dir);
+	hostfs_join(dst, sizeof dst, dir, name);
+	hostfs_mkdirs(dst);
+	if (path_ci(src, sizeof src, home, "SAVEGAME") && hostfs_is_dir(src)) {
+		hostfs_copy_tree(src, dst);
+		hostfs_remove_tree(src);
+	}
+	hostfs_join(src, sizeof src, home, DELETED_LIST);
+	if (hostfs_exists(src)) {
+		hostfs_join(dir, sizeof dir, dst, DELETED_LIST);
+		hostfs_copy_file(src, dir);
+		remove(src);
+	}
+	plat_log("new game: the previous saved game is in %s", dst);
+	restart(0, 0);
 }
 
 void session_take_over(void)
@@ -276,17 +335,43 @@ void session_pace_tick(uint32_t tick)
 
 /* ---- exec ---- */
 #ifdef _WIN32
+#include <windows.h>
 #include <process.h>
+/* _execv joins the arguments with spaces: quote the ones that have spaces */
 void session_exec(const char *path, char **argv)
 {
-	_execv(path, (const char *const *)argv);
+	static char quoted[8][1200];
+	char *args[9];
+	char exe[1100];
+	int i;
+	if (GetModuleFileNameA(NULL, exe, sizeof exe))
+		path = exe;
+	for (i = 0; argv[i] && i < 8; i++) {
+		if (strchr(argv[i], ' ') || !argv[i][0]) {
+			snprintf(quoted[i], sizeof quoted[i], "\"%s\"", argv[i]);
+			args[i] = quoted[i];
+		} else
+			args[i] = argv[i];
+	}
+	args[i] = 0;
+	_execv(path, (const char *const *)args);
 	exit(0);
 }
 #else
 #include <unistd.h>
 void session_exec(const char *path, char **argv)
 {
+#ifdef __linux__
+	static char exe[1100];
+	ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+	if (n > 0) {
+		exe[n] = 0;
+		path = exe;
+	}
+#endif
 	execv(path, argv);
+	if (!strchr(path, '/'))
+		execvp(path, argv);
 	exit(0);
 }
 #endif

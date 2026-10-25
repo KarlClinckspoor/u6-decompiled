@@ -9,6 +9,8 @@
 int session_start(const char *home_dir, const char *replay, const char *record, int black_box,
 	const char *argv0);
 void session_end(void);
+/* the home before the session starts (the settings screen, character creation) */
+void session_set_home(const char *dir);
 const char *session_home(void);
 /* the directory the game's writes go to and its reads look in first */
 const char *session_game_home(void);

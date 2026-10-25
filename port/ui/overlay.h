@@ -10,6 +10,8 @@ void overlay_init(const uint8_t *font);
 /* Opens the screen now and returns when it is closed (the game waits). */
 void overlay_run_modal(void);
 int overlay_is_open(void);
+/* called on each round of the open screen's loop (the port's test options) */
+void overlay_set_idle_hook(void (*fn)(void));
 
 /* what the overlay asks of the session (port/sys/session.c) */
 int session_is_replaying(void);
@@ -20,6 +22,8 @@ void session_play_recording(const char *name);      /* restarts the port to repl
 void session_take_over(void);
 int session_replay_speed(void);              /* 0 = as fast as possible, else 1, 2, 4, 8 */
 void session_set_replay_speed(int speed);
-void session_apply_settings(void);           /* display and sound settings changed */
+void session_apply_settings(void);
+int session_can_start_new_game(void);
+void session_new_game(void);                 /* restarts the port */           /* display and sound settings changed */
 
 #endif

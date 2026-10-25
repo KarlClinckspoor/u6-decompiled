@@ -20,6 +20,14 @@
 #define DOS_ARENA_SIZE   0x100000u   /* the first megabyte */
 #define DOS_HEAP_START   0x10000u    /* where the far heap starts (paragraph 1000h) */
 #define DOS_HEAP_END     0xA0000u    /* 640 KB */
+/* Segments DOS_SEG_FOREIGN..FFFFh stand for pointers outside the arena: FP_SEG of such a
+ * pointer is DOS_SEG_FOREIGN + n, where n numbers a 64 KB window starting at (or a little
+ * below) the pointer; FP_OFF is the offset in that window; MK_FP(DOS_SEG_FOREIGN + n, off)
+ * gives the window's base + off. 4096 windows; the arena's F0000h.. range (BIOS ROM in a
+ * PC) is not reachable through MK_FP. */
+#define DOS_SEG_FOREIGN  0xF000u
+/* The arena is allocated this much larger, so that any seg:off (up to 10FFEFh) is inside. */
+#define DOS_ARENA_SLACK  0x10010u
 
 extern uint8_t *dos_base;
 
@@ -34,5 +42,13 @@ long dos_linear(const volatile void *p);
 void *dos_farmalloc(unsigned long size);
 void dos_farfree(void *p);
 unsigned long dos_farcoreleft(void);
+
+/* Additions for port/sys. */
+/* The largest free block above the far heap, in paragraphs (what DOS function 48h with
+ * BX=FFFFh reports): OSI_memory, OSI_copy. */
+uint16_t dos_free_paragraphs(void);
+/* A pointer to linear address seg*16+off taken as 16-bit offset arithmetic inside the
+ * segment, as the 8086 does: dos_mk_fp(seg, (uint16_t)(off + n)). */
+#define dos_seg_ptr(seg, off) ((uint8_t *)dos_mk_fp((uint16_t)(seg), (uint16_t)(off)))
 
 #endif

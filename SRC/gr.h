@@ -31,6 +31,7 @@ struct tPixmap/*size:6*/ {
 	unsigned char data[0x1000];/*_04*/
 };
 
+#ifdef __TURBOC__
 /*init driver (video mode or segment + GrDriverOption), returns struct tGr far **/
 #define GR_INIT(a)               (GrDriver.iii.ofs = 0x00, (struct tGr far *)(*GrDriver.f)(a))
 /*restore video mode before exit/exec*/
@@ -74,5 +75,31 @@ struct tPixmap/*size:6*/ {
 #define GR_SET_ANIM_FRAME(a,b)             (GrDriver.iii.ofs = 0x4b, (*GrDriver.f)(a,b))
 /*low: only used when the Codex vanishes, some screen transition effect*/
 #define GR_CODEX_EFFECT()                (GrDriver.iii.ofs = 0x4e, (*GrDriver.f)())
+
+#else
+/*the native port: the driver is C (port/gfx/mcga.c), called directly*/
+#include "../port/gfx/mcga.h"
+#define GR_INIT(a)                         (mcga_attach_image(GrDriver.p, 13796), (struct tGr *)GRDRV_00(a))
+#define GR_SHUTDOWN()                      GRDRV_03()
+#define GR_SET_COLOR(c)                    GRDRV_06(c)
+#define GR_PUT_PIXEL(x,y)                  GRDRV_09(x,y)
+#define GR_FILL_RECT(x0,y0,x1,y1)          GRDRV_12(x0,y0,x1,y1)
+#define GR_SCROLL_RECT_Y(x0,y0,x1,y1,dy)   GRDRV_15(x0,y0,x1,y1,dy)
+#define GR_DRAW_PIXMAP(p,x,y)              GRDRV_18(p,x,y)
+#define GR_PUT_CHAR(ch,x,y)                GRDRV_1E(ch,x,y)
+#define GR_INIT_PALETTE()                  GRDRV_24()
+#define GR_CYCLE_PALETTE(a)                GRDRV_27(a)
+#define GR_INIT_MEMORY(seg,size)           GRDRV_2A(seg,size)
+#define GR_PUT_TILE_SCREEN(tile,x,y)       GRDRV_2D(tile,x,y)
+#define GR_DEFINE_SPRITE(i,a,b,c,d)        GRDRV_33(i,a,b,c,d)
+#define GR_DRAW_SPRITE(i,x,y)              GRDRV_36(i,x,y)
+#define GR_SAVE_SPRITE_BG(i,x,y)           GRDRV_39(i,x,y)
+#define GR_ANIMATE_TILES()                 GRDRV_3F()
+#define GR_PUT_TILE(tile,x,y)              GRDRV_42(tile,x,y)
+#define GR_COPY_TO_SCREEN(x0,y0,x1,y1,a,b) GRDRV_45(x0,y0,x1,y1,a,b)
+#define GR_FADE_TO_SCREEN(x0,y0,x1,y1)     GRDRV_48(x0,y0,x1,y1)
+#define GR_SET_ANIM_FRAME(a,b)             GRDRV_4B(a,b)
+#define GR_CODEX_EFFECT()                  GRDRV_4E()
+#endif
 
 #endif

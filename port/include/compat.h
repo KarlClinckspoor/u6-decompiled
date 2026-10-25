@@ -14,6 +14,8 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -57,6 +59,12 @@ void port_srand(unsigned seed);
 #define random(num) ((int)(((long)port_rand() * (num)) / 0x8000L))
 #define exit port_exit
 void port_exit(int code);
+
+/* ---- the music driver's entries (port/sys/musdrv.c, portable.h's MUS_DRV) ---- */
+void MUSDRV_0(int port);
+void MUSDRV_6(void *song);
+void MUSDRV_9(void);
+void MUSDRV_0xc(int channel, int a, int b);
 
 /* ---- the game's entry point ---- */
 #define main game_main

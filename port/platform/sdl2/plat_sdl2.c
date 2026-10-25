@@ -194,6 +194,17 @@ void plat_video_source(const uint8_t *pixels, const uint8_t *palette6)
 
 void plat_video_dirty(void) { dirty = 1; }
 
+int plat_video_capture(uint8_t *frame, uint8_t *palette6)
+{
+	if (!src_pixels)
+		return -1;
+	memcpy(frame, src_pixels, 320 * 200);
+	memcpy(palette6, src_palette, 768);
+	if (draw_hook)
+		draw_hook(frame, palette6);
+	return 0;
+}
+
 /* ---- keyboard: SDL scancodes to PC set-1 scan codes and BIOS words ---- */
 static uint8_t scan_of(SDL_Scancode sc)
 {
@@ -325,6 +336,15 @@ static void push_key(uint16_t w)
 		return;	/* the BIOS beeps and drops it */
 	keybuf[key_tail] = w;
 	key_tail = next;
+}
+
+void plat_push_key(uint16_t bios_key)
+{
+	if (key_hook && key_hook(bios_key, 1)) {
+		key_hook(bios_key, 0);
+		return;
+	}
+	push_key(bios_key);
 }
 
 int plat_key_available(void) { return key_head != key_tail; }
@@ -474,6 +494,7 @@ uint32_t plat_ms(void)
 {
 	return (paused ? paused_at : SDL_GetTicks()) - paused_total;
 }
+uint32_t plat_real_ms(void) { return SDL_GetTicks(); }
 void plat_sleep_ms(uint32_t ms) { SDL_Delay(ms); }
 
 /* ---- files ---- */

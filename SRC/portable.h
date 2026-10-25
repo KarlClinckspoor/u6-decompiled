@@ -65,4 +65,13 @@ typedef int64_t NEARLONG;
 #define PTR2INT16(p) (intptr_t)(p)
 #endif
 
+/*a call of the music driver's entry point o (MUS_DRV(6)(song)): in DOS a far
+  call through MUS_Driver with its offset set to o; the port has the entries
+  as C functions MUSDRV_0, MUSDRV_6, MUSDRV_9, MUSDRV_0xc (port/sys/musdrv.c)*/
+#ifdef __TURBOC__
+#define MUS_DRV(o) MUS_Driver.iii.ofs = o; (*MUS_Driver.f)
+#else
+#define MUS_DRV(o) MUSDRV_##o
+#endif
+
 #endif
