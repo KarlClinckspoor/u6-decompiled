@@ -11,8 +11,7 @@ extern char D_5046, D_5047;
 extern int D_575A;
 extern int D_58F0;
 extern char D_6094, D_6095;/*DOS version: major, minor*/
-struct t14 { char b[14]; };
-extern struct t14 D_5710, D_5732;
+extern struct tSurface D_5710, D_5732;
 
 /*names of the disks, as the disk prompt says them*/
 /*4038*/char *D_4038[] = {"", "Program", "Intro.", "Endgame", "Game", "Map", "Conversation", "Portrait", "Player"};

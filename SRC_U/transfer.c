@@ -8,14 +8,6 @@
 #include <string.h>
 
 /*a drawing surface of the graphics driver (14 bytes)*/
-struct t14 {
-	unsigned seg;/*_00*//*video memory segment (or of an off-screen buffer)*/
-	void far *p;/*_02*/
-	int right;/*_06*/
-	int left;/*_08*/
-	int top;/*_0A*/
-	int bottom;/*_0C*/
-};
 
 /*a character of Ultima IV's PARTY.SAV (the program takes 40 bytes for it)*/
 struct tU4Char {
@@ -49,17 +41,17 @@ struct tU5Char {
 };
 
 extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern struct t14 D_5710;/*the screen*/
-extern struct t14 D_5732;
-extern struct t14 D_565F;/*the console's surface*/
-extern struct t14 *D_566D;/*the console: surface it writes on*/
+extern struct tSurface D_5710;/*the screen*/
+extern struct tSurface D_5732;
+extern struct tSurface D_565F;/*the console's surface*/
+extern struct tSurface *D_566D;/*the console: surface it writes on*/
 extern int D_566F;/*the console: x*/
 extern int D_5671;/*the console: y*/
 extern char D_5677, D_5678;/*the console: text colours*/
 extern char D_567D;/*the console: alignment (0 left, 1 right, 2 centred)*/
-extern struct t14 D_5702;
+extern struct tSurface D_5702;
 extern int D_575A;
-extern struct t14 D_6072;
+extern struct tSurface D_6072;
 
 /*0263's initialised data*/
 /*03CA*/char D_03CA[] = "a:\\party.sav";/*Ultima IV's save file; [0]: the drive letter*/
@@ -103,14 +95,14 @@ extern int D_5A2E;/*portrait (0-5)*/
 extern char *D_5ADA;/*the save file read*/
 extern void far *D_5AD2;/*the portraits (montage)*/
 extern void far *D_5AD6;/*the vellum pictures*/
-extern struct t14 D_58FE[5];/*the buttons*/
-extern struct t14 D_5980;
-extern struct t14 D_599C;
-extern struct t14 D_59AA;/*the title*/
-extern struct t14 D_5A20;/*the character sheet*/
+extern struct tSurface D_58FE[5];/*the buttons*/
+extern struct tSurface D_5980;
+extern struct tSurface D_599C;
+extern struct tSurface D_59AA;/*the title*/
+extern struct tSurface D_5A20;/*the character sheet*/
 
 extern C_00E1_028A(char *, int);/*text input*/
-extern C_00E1_041B(struct t14 *, char *);/*waits for a button or key: index in the keys*/
+extern C_00E1_041B(struct tSurface *, char *);/*waits for a button or key: index in the keys*/
 extern C_00E1_04F9();
 extern C_00E1_178A(int);
 extern C_0406_0006();
@@ -119,16 +111,16 @@ extern C_09A0_000B(int);
 extern C_09A0_21C5();
 extern C_0BC1_0079(int);/*AskForDisk*/
 extern C_10E1_000A();
-extern C_1277_000C(struct t14 *);/*gives a surface an off-screen buffer*/
-extern C_1277_00D8(struct t14 *);/*frees it*/
-extern C_12EA_000A(struct t14 *, ...);
+extern C_1277_000C(struct tSurface *);/*gives a surface an off-screen buffer*/
+extern C_1277_00D8(struct tSurface *);/*frees it*/
+extern C_12EA_000A(struct tSurface *, ...);
 extern C_12EE_0229(char far *);/*console puts*/
 extern C_12EE_0249(char far *, ...);/*console printf*/
 extern C_12EE_0277(char far *, ...);/*console printf*/
 extern C_1339_0000();/*mouse cursor on*/
 extern C_1339_0016();/*mouse cursor off*/
-extern C_136D_014D(struct t14 *, struct t14 *);/*MCGA: palette fade in*/
-extern C_136D_0346(struct t14 *, int);/*MCGA: palette fade out*/
+extern C_136D_014D(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
+extern C_136D_0346(struct tSurface *, int);/*MCGA: palette fade out*/
 extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 extern char *C_145A_0006(char *);/*loads a file in memory*/
 
@@ -281,7 +273,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_5A20.left -= 0x86;
 	/*the buttons*/
 	if(D_5044 == 0xd)
-		D_599C.seg = D_5710.seg;
+		D_599C.segment = D_5710.segment;
 	DRV(3)(&D_599C, D_58FE[0].left, D_58FE[0].top, D_5AD6, 2);
 	DRV(3)(&D_599C, D_58FE[1].left, D_58FE[1].top, D_5AD6, 3);
 	DRV(3)(&D_599C, D_58FE[2].left, D_58FE[2].top, D_5AD6, 0x10);
@@ -303,7 +295,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	int ret;
 
 	if(D_5044 == 0xd)
-		D_599C.seg = D_5710.seg;
+		D_599C.segment = D_5710.segment;
 	C_1339_0016();
 	D_59AA.right = D_5A20.right = 0x123;
 	D_59AA.left = D_5A20.left = 0x1e;
@@ -325,11 +317,11 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	C_12EA_000A(&D_5732, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
 	bottom = D_5A20.bottom;
 	if(D_5044 == 0xd) {
-		D_59AA.seg = D_5A20.seg = D_5710.seg;
-		D_5A20.p = D_5710.p;
+		D_59AA.segment = D_5A20.segment = D_5710.segment;
+		D_5A20.pScanlines = D_5710.pScanlines;
 	} else {
-		D_5A20.seg = D_599C.seg;
-		D_5A20.p = D_599C.p;
+		D_5A20.segment = D_599C.segment;
+		D_5A20.pScanlines = D_599C.pScanlines;
 	}
 	D_5A20.bottom = --D_5A20.top;
 	switch(D_5044) {
@@ -398,7 +390,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 				C_00E1_028A(D_5A30, 0xd);
 				C_12EA_000A(&D_5732, &D_5A20, 0);
 				if(D_5044 == 0xd)
-					D_5A20.seg = D_5710.seg;
+					D_5A20.segment = D_5710.segment;
 				DrawSheet();
 				C_12EA_000A(&D_5710, &D_5A20, 0);
 				if(D_5044 != 0xd) {
@@ -411,7 +403,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 				ToggleSex();
 				C_12EA_000A(&D_5732, &D_5A20, 0);
 				if(D_5044 == 0xd)
-					D_5A20.seg = D_5710.seg;
+					D_5A20.segment = D_5710.segment;
 				DrawSheet();
 				C_12EA_000A(&D_5710, &D_5A20, 0);
 				if(D_5044 != 0xd) {
@@ -433,7 +425,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	int key;
 	int frame;
 	int bottom;
-	struct t14 portrait;
+	struct tSurface portrait;
 	int done;
 	int ret;
 
@@ -447,7 +439,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 		frame = 0x10;
 	}
 	if(D_5044 == 0xd) {
-		D_599C.seg = portrait.seg = D_5710.seg;
+		D_599C.segment = portrait.segment = D_5710.segment;
 		C_1339_0016();
 	}
 	portrait.right = 0x102;
@@ -475,7 +467,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_58FE[3].bottom = 0xb2;
 	D_58FE[4] = D_58FE[3];
 	if(D_5044 == 0xd)
-		D_5732.seg = D_5710.seg;
+		D_5732.segment = D_5710.segment;
 	C_12EA_000A(&D_5732, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
 	switch(D_5044) {
 		case 4: case 7: DRV(0xc)(&D_599C, 3); break;
@@ -484,11 +476,11 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	}
 	bottom = D_5A20.bottom;
 	if(D_5044 == 0xd) {
-		D_5A20.seg = D_5710.seg;
-		D_5A20.p = D_5710.p;
+		D_5A20.segment = D_5710.segment;
+		D_5A20.pScanlines = D_5710.pScanlines;
 	} else {
-		D_5A20.seg = D_599C.seg;
-		D_5A20.p = D_599C.p;
+		D_5A20.segment = D_599C.segment;
+		D_5A20.pScanlines = D_599C.pScanlines;
 	}
 	D_5A20.bottom = --D_5A20.top;
 	switch(D_5044) {
@@ -560,17 +552,17 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	int found;
 	int ndrives;
 	int key;
-	struct t14 title;
-	struct t14 text;
-	struct t14 bar;
-	struct t14 buttons[27];
-	struct t14 line;
+	struct tSurface title;
+	struct tSurface text;
+	struct tSurface bar;
+	struct tSurface buttons[27];
+	struct tSurface line;
 	char keys[32];
 	int i;
 	int color;
 
 	if(D_5044 == 0xd)
-		D_5732.seg = D_5710.seg;
+		D_5732.segment = D_5710.segment;
 	for(i = 0; i < 27; i++) {
 		C_12EA_000A(&D_5732, &buttons[i], 0);
 		buttons[i].top = 0xae;
@@ -605,8 +597,8 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_567D = 2;
 	C_12EE_0249("TRANSFER A CHARACTER%P");
 	if(D_5044 == 0xd) {
-		text.seg = D_5710.seg;
-		text.p = D_5710.p;
+		text.segment = D_5710.segment;
+		text.pScanlines = D_5710.pScanlines;
 	}
 	D_566D = &text;
 	D_566F = text.left;
@@ -700,12 +692,12 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 
 /*the main menu's "Transfer a character"*/
 /*C_0263_13D6*/TransferCharacter() {
-	struct t14 save;
+	struct tSurface save;
 	int ret;
 
 	C_00E1_178A(4);
 	if(D_5044 == 0xd) {
-		D_5732.seg = D_5710.seg ^ 0x200;
+		D_5732.segment = D_5710.segment ^ 0x200;
 		DRV(0xf)(&D_5732, &D_5710);
 		D_5732 = D_5710;
 	}
@@ -715,7 +707,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	if(D_5044 != 0xd)
 		C_1277_000C(&D_6072);
 	else
-		D_6072.seg = 0xa600;
+		D_6072.segment = 0xa600;
 	C_0BC1_0079(2);
 	if(D_5044 != 0xd)
 		C_1277_00D8(&D_6072);
@@ -748,12 +740,12 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 		case 0x13: D_5AD2 = C_13BC_000C("montage.shp"); break;
 	}
 	if(D_5044 == 0xd)
-		D_565F.seg = D_5710.seg ^ 0x200;
+		D_565F.segment = D_5710.segment ^ 0x200;
 	DRV(0xf)(&D_565F, &save);
 	if(D_5044 == 0x13)
 		C_136D_0346(&D_565F, 0);
 	if(D_5044 == 0xd)
-		D_5702.seg = D_565F.seg = D_5710.seg;
+		D_5702.segment = D_565F.segment = D_5710.segment;
 	DRV(0xc)(&D_565F, 0);
 	C_00E1_04F9();
 	/*the vellum*/
@@ -775,11 +767,11 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 		}
 		ret = 0;
 		if(D_5044 == 0xd) {
-			D_5732.seg = D_5710.seg ^ 0x200;
+			D_5732.segment = D_5710.segment ^ 0x200;
 			DRV(0xf)(&D_5732, &D_5710);
 			DRV(0x15)(&D_5710);
-			D_5710.seg ^= 0x200;
-			D_599C.seg = D_5980.seg = D_5710.seg;
+			D_5710.segment ^= 0x200;
+			D_599C.segment = D_5980.segment = D_5710.segment;
 		}
 		/*the character, then the portrait: until it is chosen or given up*/
 		do {
@@ -788,7 +780,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 			ret = PortraitScreen(1);
 		} while(!ret);
 		if(D_5044 == 0xd)
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 		if(ret)
 			break;
 		C_1339_0016();
@@ -801,7 +793,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 		if(D_5044 != 0xd)
 			C_1277_000C(&D_6072);
 		else
-			D_6072.seg = 0xa600;
+			D_6072.segment = 0xa600;
 		C_0BC1_0079(8);
 		if(C_0406_0006()) {
 			if(D_5044 == 0xd)
@@ -841,8 +833,8 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	farfree(D_5AD6);
 	/*put the screen back*/
 	if(D_5044 == 0xd) {
-		D_565F.seg = D_5710.seg;
-		D_565F.p = D_5710.p;
+		D_565F.segment = D_5710.segment;
+		D_565F.pScanlines = D_5710.pScanlines;
 	}
 	DRV(0xc)(&D_565F, 0);
 	C_00E1_04F9();
@@ -863,7 +855,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	if(D_5044 != 0xd)
 		C_1277_000C(&D_6072);
 	else
-		D_6072.seg = 0xa600;
+		D_6072.segment = 0xa600;
 	C_0BC1_0079(2);
 	if(D_5044 != 0xd)
 		C_1277_00D8(&D_6072);

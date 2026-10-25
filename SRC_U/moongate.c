@@ -8,23 +8,15 @@
 #include <stdlib.h>
 
 /*a drawing surface of the graphics driver (14 bytes)*/
-struct t14 {
-	unsigned seg;/*_00*//*video memory segment (or of an off-screen buffer)*/
-	void far *p;/*_02*/
-	int right;/*_06*/
-	int left;/*_08*/
-	int top;/*_0A*/
-	int bottom;/*_0C*/
-};
 
 extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern struct t14 D_5710;/*the screen*/
-extern struct t14 D_5732;/*the page the introduction draws on*/
+extern struct tSurface D_5710;/*the screen*/
+extern struct tSurface D_5732;/*the page the introduction draws on*/
 extern int D_575A;
 extern int D_58F0;/*set when the player escapes the introduction*/
 extern void far *D_5ADC;/*the shapes of the introduction (intro.*)*/
-extern struct t14 D_5BAE;/*twinkle: the surface the stars are drawn on*/
-extern struct t14 D_6072;/*an off-screen buffer*/
+extern struct tSurface D_5BAE;/*twinkle: the surface the stars are drawn on*/
+extern struct tSurface D_6072;/*an off-screen buffer*/
 extern int D_6096;/*twinkle: palette index (a global: the twinkle runs from the timer)*/
 extern char D_6098[];/*twinkle: a palette entry*/
 extern char D_609E[];/*twinkle: a palette entry*/
@@ -53,17 +45,17 @@ extern C_06E9_2B34(int);/*waits n ticks*/
 extern C_09A0_000B(int);/*writes text n*/
 extern C_09A0_21C5();
 extern C_0BC1_03D2(int);
-extern C_1277_000C(struct t14 *);/*gives a surface an off-screen buffer*/
-extern C_1277_00D8(struct t14 *);/*frees it*/
+extern C_1277_000C(struct tSurface *);/*gives a surface an off-screen buffer*/
+extern C_1277_00D8(struct tSurface *);/*frees it*/
 extern C_1368_0015();
 extern C_136D_0004(int *, int *, int);/*moves n coordinates one step towards their targets: 0 when all are there*/
-extern C_136D_014D(struct t14 *, struct t14 *);/*MCGA: palette fade in*/
-extern C_136D_0346(struct t14 *, int);/*MCGA: palette fade out*/
+extern C_136D_014D(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
+extern C_136D_0346(struct tSurface *, int);/*MCGA: palette fade out*/
 extern void far *C_13BC_000C(char *);/*loads a file in memory*/
-extern C_13F2_000C(struct t14 *, struct t14 *, int);/*MCGA: dissolve*/
-extern C_13F2_01D5(struct t14 *, struct t14 *, int);/*EGA: dissolve*/
-extern C_13F2_037A(struct t14 *, struct t14 *, int);/*CGA, Hercules: dissolve*/
-extern C_13F2_0504(struct t14 *, struct t14 *, int);/*Tandy: dissolve*/
+extern C_13F2_000C(struct tSurface *, struct tSurface *, int);/*MCGA: dissolve*/
+extern C_13F2_01D5(struct tSurface *, struct tSurface *, int);/*EGA: dissolve*/
+extern C_13F2_037A(struct tSurface *, struct tSurface *, int);/*CGA, Hercules: dissolve*/
+extern C_13F2_0504(struct tSurface *, struct tSurface *, int);/*Tandy: dissolve*/
 extern C_1475_0099(int, char *);/*MCGA: sets a palette entry*/
 extern C_1475_00B8(int, char *);/*MCGA: gets a palette entry*/
 extern C_1482_000F(void (far *)());/*installs a timer routine*/
@@ -93,7 +85,7 @@ KeyPressed();
 		C_136D_014D(&D_5732, &D_5710); \
 	} else if(D_5044 == 0xd) { \
 		DRV(0x15)(&D_5710); \
-		D_5732.seg = D_5710.seg; \
+		D_5732.segment = D_5710.segment; \
 	} else { \
 		DRV(0xf)(&D_5732, &D_5710); \
 	}
@@ -257,7 +249,7 @@ KeyPressed();
 	if(D_5044 != 0xd) {
 		C_1277_000C(&D_6072);
 	} else {
-		D_6072.seg = 0xa600;
+		D_6072.segment = 0xa600;
 		D_5732 = D_5710;
 	}
 	if(D_5044 == 0x13)
@@ -310,7 +302,7 @@ KeyPressed();
 			STAR_PIXEL(i) = 0xf;
 	} else {
 		if(D_5044 == 0xd)
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 		for(i = 0; i < 200; i++) {
 			D_4A34.p.ofs = 0x1b;
 			D_60BC[i] = DRVF(int)(&D_5710, D_62BC[i], D_64BC[i]);
@@ -319,14 +311,14 @@ KeyPressed();
 			DRV(0x18)(&D_5710, D_62BC[i], D_64BC[i], 0xf);
 		}
 		if(D_5044 == 0xd)
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 	}
 	C_1482_0055();
 	C_1482_000F(Twinkle);
 	C_09A0_000B(0xc8);
 	Delay(10);
 	if(D_5044 == 0xd)
-		D_5710.seg ^= 0x200;
+		D_5710.segment ^= 0x200;
 	C_09A0_21C5();
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&D_5732, &D_5710);
@@ -340,7 +332,7 @@ KeyPressed();
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&D_5732, &D_5710);
 	} else {
-		D_5710.seg ^= 0x200;
+		D_5710.segment ^= 0x200;
 	}
 	FlushKeys();
 	while(!C_06E9_033A());
@@ -533,9 +525,9 @@ KeyPressed();
 			C_13F2_0504(&D_5732, &D_5710, ofs);
 			break;
 		case 0xd:
-			D_5732.seg = 0xa600;
+			D_5732.segment = 0xa600;
 			DRV(0xc)(&D_5732, 0);
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 			ofs = C_06E9_0AF0(0xc8, 0x12c);
 			C_13F2_01D5(&D_5732, &D_5710, ofs);
 			DRV(0x15)(&D_5710);
@@ -615,10 +607,10 @@ KeyPressed();
 			C_13F2_0504(&D_5732, &D_5710, ofs);
 			break;
 		case 0xd:
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 			ofs = C_06E9_0AF0(0xc8, 0x12c);
 			C_13F2_01D5(&D_5732, &D_5710, ofs);
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 			break;
 		case 0x13:
 			C_13F2_000C(&D_5732, &D_5710, 0);
@@ -891,7 +883,7 @@ end:
 
 	D_5BAE = D_5710;
 	if(D_5044 == 0xd)
-		D_5BAE.seg ^= 0x200;
+		D_5BAE.segment ^= 0x200;
 	ret = C_06E9_033A();
 	return ret;
 }

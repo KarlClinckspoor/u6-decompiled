@@ -7,10 +7,9 @@
 #include <conio.h>
 
 /*a 14-byte graphics area (see disk.c); the first word is the only one used here*/
-struct t14 { int w0; char b[12]; };
 /*a text window of the console library (C_132B_0006 makes one current)*/
 struct tWin {
-	struct t14 *area;/*+00 where it is drawn*/
+	struct tSurface *area;/*+00 where it is drawn*/
 	int curX, curY;/*+02,+04 cursor*/
 	int f06, f08;
 	unsigned char bgColor;/*+0a*/
@@ -22,18 +21,12 @@ struct tWin {
 
 extern int D_5044;/*video mode: 0x0d EGA, 0x13 MCGA*/
 extern struct tWin D_566D;/*the console's normal text window*/
-extern struct t14 D_5710;/*the screen*/
-extern struct t14 D_5732;/*the drawing area (EGA: copy of the screen's)*/
-extern struct t14 D_6072;/*the text area of a passage*/
-extern int D_6078;/*D_6072 +06: its width - 1 (?)*/
-extern int D_607A;/*D_6072 +08*/
-extern int D_607C;/*D_6072 +0a*/
-extern int D_607E;/*D_6072 +0c: its height - 1 (?)*/
+extern struct tSurface D_5710;/*the screen*/
+extern struct tSurface D_5732;/*the drawing area (EGA: copy of the screen's)*/
+extern struct tSurface D_6072;/*the text area of a passage*/
 extern int D_6080;
 extern int D_6082, D_6084;/*where the text area is on the screen: x (in 8-pixel columns?), y*/
-extern struct t14 D_6086;/*copy of D_5732 the text area is shown in*/
-extern int D_608E;/*D_6086 +08*/
-extern int D_6090;/*D_6086 +0a*/
+extern struct tSurface D_6086;/*copy of D_5732 the text area is shown in*/
 extern int D_58F2, D_58F4;
 extern int D_404C;/*the disk asked for (disk.c)*/
 extern char *D_4038[];/*names of the disks*/
@@ -58,7 +51,7 @@ screen; DisplayPassage puts it there*/
 		getch();
 	D_6086 = D_5732;
 	win.area = &D_6072;
-	D_607C = D_607A = win.curX = win.curY = 0;
+	D_6072.top = D_6072.left = win.curX = win.curY = 0;
 	win.f10 = 3;
 	switch(D_5044) {
 	case 4: case 7:
@@ -83,11 +76,11 @@ screen; DisplayPassage puts it there*/
 	case 0:
 		D_6082 = 1;
 		D_6084 = 159;
-		D_608E = 8;
-		D_6090 = 169;
+		D_6086.left = 8;
+		D_6086.top = 169;
 		D_6080 = 1;
-		D_6078 = 304;
-		D_607E = 15;
+		D_6072.right = 304;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Upon your world, five seasons have passed since your ");
 		C_12EE_0277("triumphant homecoming from Britannia.");
@@ -96,11 +89,11 @@ screen; DisplayPassage puts it there*/
 	case 1:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("You have traded the Avatar's life of peril and adventure ");
 		C_12EE_0277("for the lonely serenity of a world at peace. But ");
@@ -110,11 +103,11 @@ screen; DisplayPassage puts it there*/
 	case 2:
 		D_6082 = 33;
 		D_6084 = 157;
-		D_608E = 40;
-		D_6090 = 165;
+		D_6086.left = 40;
+		D_6086.top = 165;
 		D_6080 = 0;
-		D_6078 = 234;
-		D_607E = 7;
+		D_6072.right = 234;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Outside, a chill wind rises...");
 		win.f10 = 2;
@@ -122,11 +115,11 @@ screen; DisplayPassage puts it there*/
 	case 3:
 		D_6082 = 0;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 166;
+		D_6086.left = 8;
+		D_6086.top = 166;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("...and in moments, the storm is upon you.");
 		win.f10 = 2;
@@ -134,11 +127,11 @@ screen; DisplayPassage puts it there*/
 	case 4:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 162;
+		D_6086.left = 8;
+		D_6086.top = 162;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Tongues of lightning lash the sky, conducting an unceasing ");
 		C_12EE_0277("crescendo of thunder....");
@@ -146,11 +139,11 @@ screen; DisplayPassage puts it there*/
 	case 5:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 162;
+		D_6086.left = 8;
+		D_6086.top = 162;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("In a cataclysm of sound and light, a bolt of searing ");
 		C_12EE_0277("blue fire strikes the earth!");
@@ -158,11 +151,11 @@ screen; DisplayPassage puts it there*/
 	case 6:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 162;
+		D_6086.left = 8;
+		D_6086.top = 162;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Lightning among the stones!\nIs this a sign from ");
 		C_12EE_0277("distant Britannia?");
@@ -171,11 +164,11 @@ screen; DisplayPassage puts it there*/
 	case 8:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 164;
+		D_6086.left = 8;
+		D_6086.top = 164;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 23;
+		D_6072.right = 303;
+		D_6072.bottom = 23;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("You bolt from your house, stumbling, running blind in the");
 		C_12EE_0277(" storm. Into the forest, down the path, through the ");
@@ -184,11 +177,11 @@ screen; DisplayPassage puts it there*/
 	case 9:
 		D_6082 = 1;
 		D_6084 = 12;
-		D_608E = 8;
-		D_6090 = 20;
+		D_6086.left = 8;
+		D_6086.top = 20;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Near the stones, the smell of damp, blasted earth hangs ");
 		C_12EE_0277("in the air. In a frozen moment of lightning-");
@@ -198,11 +191,11 @@ screen; DisplayPassage puts it there*/
 	case 10:
 		D_6082 = 33;
 		D_6084 = 30;
-		D_608E = 40;
-		D_6090 = 38;
+		D_6086.left = 40;
+		D_6086.top = 38;
 		D_6080 = 0;
-		D_6078 = 234;
-		D_607E = 7;
+		D_6072.right = 234;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Wondering, you pick it up....");
 		win.f10 = 2;
@@ -210,11 +203,11 @@ screen; DisplayPassage puts it there*/
 	case 11:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 170;
+		D_6086.left = 8;
+		D_6086.top = 170;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("...and from the heart of the stones, a softly glowing door ");
 		C_12EE_0277("ascends in silence!");
@@ -222,11 +215,11 @@ screen; DisplayPassage puts it there*/
 	case 12:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Exultant memories wash over you as you clutch the stone. ");
 		C_12EE_0277("When last you saw an orb such as this, it was cast down ");
@@ -235,11 +228,11 @@ screen; DisplayPassage puts it there*/
 	case 13:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("But your joy soon gives way to apprehension.\n\n");
 		C_12EE_0277("The gate to Britannia has always been blue...\nas ");
@@ -249,11 +242,11 @@ screen; DisplayPassage puts it there*/
 	case 14:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 170;
+		D_6086.left = 8;
+		D_6086.top = 170;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Abruptly, the portal quivers and begins to sink ");
 		C_12EE_0277("into the ground.  Its crimson light wanes!");
@@ -261,11 +254,11 @@ screen; DisplayPassage puts it there*/
 	case 15:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 174;
+		D_6086.left = 8;
+		D_6086.top = 174;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Desperation makes the decision an easy one.");
 		win.f10 = 2;
@@ -273,11 +266,11 @@ screen; DisplayPassage puts it there*/
 	case 100:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 174;
+		D_6086.left = 8;
+		D_6086.top = 174;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Welcome, O Seeker!%c", QUOTE_END);
 		win.f10 = 2;
@@ -285,11 +278,11 @@ screen; DisplayPassage puts it there*/
 	case 101:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 164;
+		D_6086.left = 8;
+		D_6086.top = 164;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 23;
+		D_6072.right = 303;
+		D_6072.bottom = 23;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("A lonely stroll along an unfamiliar forest path brings you ");
 		C_12EE_0277("upon a curious gypsy wagon, its exotic colors dappled in the ");
@@ -298,11 +291,11 @@ screen; DisplayPassage puts it there*/
 	case 102:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 164;
+		D_6086.left = 8;
+		D_6086.top = 164;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 23;
+		D_6072.right = 303;
+		D_6072.bottom = 23;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("A woman's voice rings out with friendship, beckoning you into ");
 		C_12EE_0277("across the wagon's threshold and, as it happens, ");
@@ -311,11 +304,11 @@ screen; DisplayPassage puts it there*/
 	case 103:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 143;
+		D_6086.left = 8;
+		D_6086.top = 143;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 39;
+		D_6072.right = 303;
+		D_6072.bottom = 39;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"At last thou hast come to fulfill thy destiny,%c ", QUOTE_END);
 		C_12EE_0277("the gypsy says. She smiles, as if in great relief.\n\n");
@@ -325,11 +318,11 @@ screen; DisplayPassage puts it there*/
 	case 104:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 143;
+		D_6086.left = 8;
+		D_6086.top = 143;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 39;
+		D_6072.right = 303;
+		D_6072.bottom = 39;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("On a wooden table eight bottles stand, a rainbow of bubbling ");
 		C_12EE_0277("liquids.\n\n");
@@ -339,11 +332,11 @@ screen; DisplayPassage puts it there*/
 	case 105:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Entrusted to deliver an uncounted purse of gold, thou dost ");
 		C_12EE_0277("meet a poor beggar. Dost thou A) deliver the gold Honestly, ");
@@ -353,11 +346,11 @@ screen; DisplayPassage puts it there*/
 	case 106:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou has been prohibited by thy absent Lord from joining ");
 		C_12EE_0277("thy friends in a close-pitched battle. Dost thou A) refrain, ");
@@ -367,11 +360,11 @@ screen; DisplayPassage puts it there*/
 	case 107:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"A merchant owes thy friend money, now long past due. Thou ");
 		C_12EE_0277("dost see the same merchant drop a purse of gold. Dost thou ");
@@ -381,11 +374,11 @@ screen; DisplayPassage puts it there*/
 	case 108:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thee and thy friend are valiant but penniless warriors. Thou ");
 		C_12EE_0277("both set forth to slay a mighty dragon. Thy friend dost ");
@@ -396,11 +389,11 @@ screen; DisplayPassage puts it there*/
 	case 109:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou art sworn to protect thy Lord at any cost, yet thou knowest ");
 		C_12EE_0277("he hath committed a crime. Authorities ask thee of the affair. ");
@@ -410,11 +403,11 @@ screen; DisplayPassage puts it there*/
 	case 110:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thy friend doth seek admittance to thy spiritual order. Thou ");
 		C_12EE_0277("art asked to vouch for his purity of spirit, of which thou art ");
@@ -424,11 +417,11 @@ screen; DisplayPassage puts it there*/
 	case 111:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thy Lord doth mistakenly believe he slew a dragon. Thou hast ");
 		C_12EE_0277("proof that thy lance felled the beast. When asked, dost thou ");
@@ -438,11 +431,11 @@ screen; DisplayPassage puts it there*/
 	case 112:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou dost manage to disarm thy mortal enemy in a duel. He is ");
 		C_12EE_0277("at thy mercy. Dost thou A) Show Compassion by permitting him to ");
@@ -451,11 +444,11 @@ screen; DisplayPassage puts it there*/
 	case 113:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"After twenty years thou hast found the slayer of thy best ");
 		C_12EE_0277("friends. The villain proves to be a man who provides the sole ");
@@ -465,11 +458,11 @@ screen; DisplayPassage puts it there*/
 	case 114:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thee and thy friends hath been routed and ordered to retreat. ");
 		C_12EE_0277("In defiance of thy orders, dost thou A) Stop in Compassion to aid ");
@@ -479,11 +472,11 @@ screen; DisplayPassage puts it there*/
 	case 115:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou art sworn to uphold a Lord who doth participate in the ");
 		C_12EE_0277("forbidden torture of prisoners. Each night their cries of pain ");
@@ -493,11 +486,11 @@ screen; DisplayPassage puts it there*/
 	case 116:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou hast been taught to preserve all life as sacred. A man ");
 		C_12EE_0277("lies fatally stung by a venomous serpent. He prays for a ");
@@ -507,11 +500,11 @@ screen; DisplayPassage puts it there*/
 	case 117:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"The Captain of the King's Guard asks that one among thee ");
 		C_12EE_0277("visit a hospital to cheer the children with tales of valiant personal ");
@@ -521,11 +514,11 @@ screen; DisplayPassage puts it there*/
 	case 118:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou hast been sent to secure a needed treaty with a distant ");
 		C_12EE_0277("Lord. Thy host is agreeable to thy proposal but insults thy ");
@@ -535,11 +528,11 @@ screen; DisplayPassage puts it there*/
 	case 119:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"A burly knight accosts thee and demands thy food. Dost thou ");
 		C_12EE_0277("A) Valiantly refuse and engage the knight, or B) Sacrifice ");
@@ -548,11 +541,11 @@ screen; DisplayPassage puts it there*/
 	case 120:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"During battle thou art ordered to guard thy commander's empty ");
 		C_12EE_0277("tent. The battle goes poorly and thou dost yearn to aid thy ");
@@ -562,11 +555,11 @@ screen; DisplayPassage puts it there*/
 	case 121:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"A local bully pushes for a fight. Dost thou A) Valiantly ");
 		C_12EE_0277("trounce the rogue; or B) Decline, knowing in thy Spirit that ");
@@ -575,11 +568,11 @@ screen; DisplayPassage puts it there*/
 	case 122:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Although a simple fisherman, thou art also a skillful swordsman. Thy ");
 		C_12EE_0277("Lord dost seek to assemble a peacetime guard. Dost thou A) Answer ");
@@ -589,11 +582,11 @@ screen; DisplayPassage puts it there*/
 	case 123:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"During a pitched battle, thou dost see a fellow desert his ");
 		C_12EE_0277("post, endangering many. As he flees, he is set upon by several enemies.");
@@ -603,11 +596,11 @@ screen; DisplayPassage puts it there*/
 	case 124:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou hast sworn to do thy Lord's bidding in all. He covets ");
 		C_12EE_0277("a piece of land and orders its owner removed. Dost thou A) Serve ");
@@ -617,11 +610,11 @@ screen; DisplayPassage puts it there*/
 	case 125:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou dost believe that virtue resides in all people. Thou dost see ");
 		C_12EE_0277("a rogue steal from thy Lord. Dost thou A) Call him to Justice; or B) ");
@@ -630,11 +623,11 @@ screen; DisplayPassage puts it there*/
 	case 126:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Unwitnessed, thou hast slain a mighty dragon in defense ");
 		C_12EE_0277("of thy life. A poor warrior claims the offered reward. ");
@@ -644,11 +637,11 @@ screen; DisplayPassage puts it there*/
 	case 127:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou art a bounty hunter sworn to return an alleged murderer. ");
 		C_12EE_0277("After his capture, thou dost come to believe him innocent. Dost ");
@@ -658,11 +651,11 @@ screen; DisplayPassage puts it there*/
 	case 128:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou hast spent thy life in charitable and righteous work. Thine ");
 		C_12EE_0277("uncle the innkeeper lies ill and asks thee to take over his tavern. ");
@@ -672,11 +665,11 @@ screen; DisplayPassage puts it there*/
 	case 129:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thou art an elderly, wealthy merchant. Thy end is near. Dost thou ");
 		C_12EE_0277("A) Sacrifice all thy wealth to feed hundreds of starving children, ");
@@ -686,11 +679,11 @@ screen; DisplayPassage puts it there*/
 	case 130:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"In thy youth thou didst pledge to marry thy sweetheart. Now ");
 		C_12EE_0277("thou art on a sacred quest in distant lands. Thy sweetheart ");
@@ -700,11 +693,11 @@ screen; DisplayPassage puts it there*/
 	case 131:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Though thou art but a peasant shepherd, thou art discovered to be the ");
 		C_12EE_0277("sole descendant of a noble family long thought extinct. ");
@@ -714,11 +707,11 @@ screen; DisplayPassage puts it there*/
 	case 132:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 133;
+		D_6086.left = 8;
+		D_6086.top = 133;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 55;
+		D_6072.right = 303;
+		D_6072.bottom = 55;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Thy parents wish thee to become an apprentice. Two positions ");
 		C_12EE_0277("are available. Dost thou A) Become an acolyte in a worthy Spiritual ");
@@ -727,11 +720,11 @@ screen; DisplayPassage puts it there*/
 	case 133:
 		D_6082 = 1;
 		D_6084 = 124;
-		D_608E = 8;
-		D_6090 = 140;
+		D_6086.left = 8;
+		D_6086.top = 140;
 		D_6080 = 3;
-		D_6078 = 303;
-		D_607E = 47;
+		D_6072.right = 303;
+		D_6072.bottom = 47;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"The path of the Avatar lies beneath thy feet, worthy %s,%c ", D_5A30, QUOTE_END);
 		C_12EE_0277("the gypsy intones. With a mysterious smile, she passes you the flask of shimmering liquids. ");
@@ -741,11 +734,11 @@ screen; DisplayPassage puts it there*/
 	case 134:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("As you drink from the flask, vertigo overwhelms you. ");
 		C_12EE_0277("A soothing mist obscures the gypsy's face, and you sink ");
@@ -754,11 +747,11 @@ screen; DisplayPassage puts it there*/
 	case 135:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("You wake in a different time, upon another world's shore. ");
 		C_12EE_0277("Though the Avatar's quests bring you both triumph and tragedy, ");
@@ -767,11 +760,11 @@ screen; DisplayPassage puts it there*/
 	case 136:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("The sagas of Ultima IV and Ultima V chronicle your perilous ");
 		C_12EE_0277("travels, and your name and your deeds are written forever among ");
@@ -780,11 +773,11 @@ screen; DisplayPassage puts it there*/
 	case 137:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 164;
+		D_6086.left = 8;
+		D_6086.top = 164;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 23;
+		D_6072.right = 303;
+		D_6072.bottom = 23;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Finally, tempered by your struggles against the enemies of Virtue, you ");
 		C_12EE_0277("are proven ready to answer the epic challenge of Ultima VI!");
@@ -792,11 +785,11 @@ screen; DisplayPassage puts it there*/
 	case 200:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Dazed, you emerge from the portal to find yourself ");
 		C_12EE_0277("standing on a desolate plain. Nearby rests a massive ");
@@ -805,11 +798,11 @@ screen; DisplayPassage puts it there*/
 	case 201:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("At first the plain is still. Then a hundred voices ");
 		C_12EE_0277("raise a slow, deathlike song, drawing closer and ");
@@ -819,11 +812,11 @@ screen; DisplayPassage puts it there*/
 	case 202:
 		D_6082 = 33;
 		D_6084 = 157;
-		D_608E = 40;
-		D_6090 = 165;
+		D_6086.left = 40;
+		D_6086.top = 165;
 		D_6080 = 0;
-		D_6078 = 234;
-		D_607E = 7;
+		D_6072.right = 234;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		win.f10 = 2;
 		C_12EE_0277("...but you have no place to go.");
@@ -831,11 +824,11 @@ screen; DisplayPassage puts it there*/
 	case 203:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 164;
+		D_6086.left = 8;
+		D_6086.top = 164;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 23;
+		D_6072.right = 303;
+		D_6072.bottom = 23;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Before you can offer a protest to the creatures ");
 		C_12EE_0277("who surround you, scaly claws grasp your body.");
@@ -843,11 +836,11 @@ screen; DisplayPassage puts it there*/
 	case 204:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 170;
+		D_6086.left = 8;
+		D_6086.top = 170;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		win.f10 = 2;
 		C_12EE_0277("With unearthly strength, the monsters bind you to the altar stone!");
@@ -855,11 +848,11 @@ screen; DisplayPassage puts it there*/
 	case 205:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 170;
+		D_6086.left = 8;
+		D_6086.top = 170;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Kneeling, the hordes sway and chant as a stately ");
 		C_12EE_0277("winged nightmare steps forward.");
@@ -868,11 +861,11 @@ screen; DisplayPassage puts it there*/
 	case 206:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 164;
+		D_6086.left = 8;
+		D_6086.top = 164;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 23;
+		D_6072.right = 303;
+		D_6072.bottom = 23;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("The leader unwraps a velvet covered, brass-bound ");
 		C_12EE_0277("book and recites from it in a formal, stilted tongue.");
@@ -880,11 +873,11 @@ screen; DisplayPassage puts it there*/
 	case 207:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 164;
+		D_6086.left = 8;
+		D_6086.top = 164;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 23;
+		D_6072.right = 303;
+		D_6072.bottom = 23;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Shouts and jeers explode from the masses as the priest ");
 		C_12EE_0277("slams shut the book. In his hand a malignant dagger ");
@@ -893,11 +886,11 @@ screen; DisplayPassage puts it there*/
 	case 208:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 170;
+		D_6086.left = 8;
+		D_6086.top = 170;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("You close your eyes. A dying scream, certainly your own, ");
 		C_12EE_0277("curdles the air.");
@@ -906,11 +899,11 @@ screen; DisplayPassage puts it there*/
 	case 209:
 		D_6082 = 1;
 		D_6084 = 80;
-		D_608E = 8;
-		D_6090 = 94;
+		D_6086.left = 8;
+		D_6086.top = 94;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 7;
+		D_6072.right = 303;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		win.f10 = 2;
 		C_12EE_0277("Catcalls, the dagger, a scream, Death....");
@@ -918,11 +911,11 @@ screen; DisplayPassage puts it there*/
 	case 210:
 		D_6082 = 1;
 		D_6084 = 80;
-		D_608E = 8;
-		D_6090 = 94;
+		D_6086.left = 8;
+		D_6086.top = 94;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 7;
+		D_6072.right = 303;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		win.f10 = 2;
 		C_12EE_0277("Pandemonium. Shrieks of rage, of terror.");
@@ -930,11 +923,11 @@ screen; DisplayPassage puts it there*/
 	case 211:
 		D_6082 = 1;
 		D_6084 = 80;
-		D_608E = 8;
-		D_6090 = 94;
+		D_6086.left = 8;
+		D_6086.top = 94;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 7;
+		D_6072.right = 303;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		win.f10 = 2;
 		C_12EE_0277("From the inevitable, an impossibility emerges.");
@@ -942,11 +935,11 @@ screen; DisplayPassage puts it there*/
 	case 212:
 		D_6082 = 1;
 		D_6084 = 80;
-		D_608E = 8;
-		D_6090 = 94;
+		D_6086.left = 8;
+		D_6086.top = 94;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 7;
+		D_6072.right = 303;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		win.f10 = 2;
 		C_12EE_0277("You are still alive.");
@@ -954,11 +947,11 @@ screen; DisplayPassage puts it there*/
 	case 213:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Silent red light fills the darkness. There is the wooden ");
 		C_12EE_0277("clack of a crossbow, and a violet- fletched rose blooms ");
@@ -967,11 +960,11 @@ screen; DisplayPassage puts it there*/
 	case 214:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Friendly faces vault from a newborn moongate, while a ");
 		C_12EE_0277("rain of quarrels holds the furious mob at bay. The ");
@@ -981,11 +974,11 @@ screen; DisplayPassage puts it there*/
 	case 215:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("\"Quickly, old friend! To the gate!%c Accompanied by the ", QUOTE_END);
 		C_12EE_0277("swordsman Shamino and a grinning, crossbow-wielding ");
@@ -995,11 +988,11 @@ screen; DisplayPassage puts it there*/
 	case 216:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Snatching the fallen priest's book, Iolo dives ");
 		C_12EE_0277("into the redness with Shamino at his heels. The howling throng ");
@@ -1008,11 +1001,11 @@ screen; DisplayPassage puts it there*/
 	case 217:
 		D_6082 = 1;
 		D_6084 = 160;
-		D_608E = 8;
-		D_6090 = 170;
+		D_6086.left = 8;
+		D_6086.top = 170;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("The gate wanes rapidly as you and Dupre charge through...");
 		win.f10 = 2;
@@ -1020,11 +1013,11 @@ screen; DisplayPassage puts it there*/
 	case 218:
 		D_6082 = 33;
 		D_6084 = 157;
-		D_608E = 41;
-		D_6090 = 165;
+		D_6086.left = 41;
+		D_6086.top = 165;
 		D_6080 = 0;
-		D_6078 = 234;
-		D_607E = 7;
+		D_6072.right = 234;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		win.f10 = 2;
 		C_12EE_0277("...but not rapidly enough.");
@@ -1032,11 +1025,11 @@ screen; DisplayPassage puts it there*/
 	case 219:
 		D_6082 = 1;
 		D_6084 = 152;
-		D_608E = 8;
-		D_6090 = 160;
+		D_6086.left = 8;
+		D_6086.top = 160;
 		D_6080 = 2;
-		D_6078 = 303;
-		D_607E = 31;
+		D_6072.right = 303;
+		D_6072.bottom = 31;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("From the mob's vanguard, three of the abominations ");
 		C_12EE_0277("scramble toward the gate. Driven by fury, ");
@@ -1046,11 +1039,11 @@ screen; DisplayPassage puts it there*/
 	case 998:
 		D_6082 = 1;
 		D_6084 = 72;
-		D_608E = 8;
-		D_6090 = 80;
+		D_6086.left = 8;
+		D_6086.top = 80;
 		D_6080 = 1;
-		D_6078 = 303;
-		D_607E = 15;
+		D_6072.right = 303;
+		D_6072.bottom = 15;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("A game is already in progress.  Please run the install ");
 		C_12EE_0277("program to create a new character disk.");
@@ -1059,11 +1052,11 @@ screen; DisplayPassage puts it there*/
 	case 999:
 		D_6082 = 32;
 		D_6084 = 72;
-		D_608E = 40;
-		D_6090 = 80;
+		D_6086.left = 40;
+		D_6086.top = 80;
 		D_6080 = 0;
-		D_6078 = 200;
-		D_607E = 7;
+		D_6072.right = 200;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("Please insert the ");
 		C_12EE_0277(D_4038[D_404C]);
@@ -1073,11 +1066,11 @@ screen; DisplayPassage puts it there*/
 	default:
 		D_6082 = 1;
 		D_6084 = 159;
-		D_608E = 9;
-		D_6090 = 169;
+		D_6086.left = 9;
+		D_6086.top = 169;
 		D_6080 = 0;
-		D_6078 = 200;
-		D_607E = 7;
+		D_6072.right = 200;
+		D_6072.bottom = 7;
 		DRV(0xc)(&D_6072, color);
 		C_12EE_0277("<< Passage undefined! >>");
 	}
@@ -1088,7 +1081,7 @@ screen; DisplayPassage puts it there*/
 /*draws the passage's frame (?) and copies the text area to the screen*/
 /*C_09A0_21C5*/DisplayPassage() {
 	if(D_5044 == 0xd)
-		D_5732.w0 = D_6086.w0 = D_5710.w0;
+		D_5732.segment = D_6086.segment = D_5710.segment;
 	DRV(3)(&D_5732, D_6082, D_6084, D_58F2, D_58F4, D_6080);
 	DRV(0xf)(&D_6072, &D_6086);
 }

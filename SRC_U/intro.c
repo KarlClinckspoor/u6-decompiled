@@ -11,11 +11,6 @@
 #include <dos.h>
 
 /*a drawing surface, as GAME.EXE's tSurface*/
-struct tSurface {
-	unsigned seg;/*_00 segment of the pixels*/
-	unsigned far *rows;/*_02 offset of each scan line*/
-	int right, left, top, bottom;/*_06,_08,_0a,_0c clipping rectangle*/
-};
 
 /*---- other modules ----*/
 extern C_00E1_04F9();
@@ -58,12 +53,6 @@ extern int D_5746;/*music on*/
 extern struct tSurface D_5748;/*EGA: the page the noise is drawn into*/
 extern void far *D_5692;/*the music driver's song*/
 /*the music driver (as GAME.EXE's MUS_Driver): its entries take the pascal convention*/
-union tMus {
-	void (far pascal *f)();
-	struct { unsigned ofs, seg; } p;
-};
-extern union tMus D_58FA;
-#define MUS(o) D_58FA.p.ofs = (o); (*D_58FA.f)
 
 /*the scenes are drawn in layers, each with its own copy of the screen surface
  (its own clipping rectangle)*/
@@ -150,11 +139,11 @@ int ScaleSpeed(int, int);
 	switch(D_5044) {
 		case 4: case 7:/*CGA, Hercules: 4 pixels a byte*/
 			s = D_5FBA;
-			s.seg = D_5732.seg;
-			s.rows = D_5732.rows;
+			s.segment = D_5732.segment;
+			s.pScanlines = D_5732.pScanlines;
 			src = MK_FP(_CS, rand() & 0xe00);
 			for(y = s.top; y <= s.bottom; y++) {
-				dst = MK_FP(s.seg, s.rows[y]);
+				dst = MK_FP(s.segment, s.pScanlines[y]);
 				for(x = s.left / 4; x <= s.right / 4; x++) {
 					dst[x] = 0;
 					if(*src++ & 1)
@@ -170,13 +159,13 @@ int ScaleSpeed(int, int);
 		break;
 		case 9:/*Tandy: 2 pixels a byte*/
 			s = D_5FBA;
-			s.seg = D_5732.seg;
-			s.rows = D_5732.rows;
+			s.segment = D_5732.segment;
+			s.pScanlines = D_5732.pScanlines;
 		goto two;
 		case 0xd:/*EGA: in the other page, then copied to the screen*/
 			s = D_5FBA;
-			s.seg = D_5748.seg;
-			s.rows = D_5748.rows;
+			s.segment = D_5748.segment;
+			s.pScanlines = D_5748.pScanlines;
 			s.left = 0xe5;
 			s.top = 0x32;
 			s.right = 0x11d;
@@ -184,7 +173,7 @@ int ScaleSpeed(int, int);
 		two:
 			src = MK_FP(_CS, rand() & 0xe00);
 			for(y = s.top; y <= s.bottom; y++) {
-				dst = MK_FP(s.seg, s.rows[y]);
+				dst = MK_FP(s.segment, s.pScanlines[y]);
 				for(x = s.left / 2; x <= s.right / 2; x++) {
 					dst[x] = 0;
 					if(*src++ & 1)
@@ -198,7 +187,7 @@ int ScaleSpeed(int, int);
 		case 0x13:/*MCGA: a pixel a byte*/
 			src = MK_FP(_CS, rand() & 0xe00);
 			for(y = D_5FBA.top; y <= D_5FBA.bottom; y++) {
-				dst = MK_FP(D_5FBA.seg, D_5FBA.rows[y]);
+				dst = MK_FP(D_5FBA.segment, D_5FBA.pScanlines[y]);
 				for(x = D_5FBA.left; x <= D_5FBA.right; x++)
 					dst[x] = (*src++ & 1)?0xf:0;
 			}
@@ -234,7 +223,7 @@ int ScaleSpeed(int, int);
 /*draw picture n of the monitor (shape n + 0x10 of intro1) at its place*/
 /*C_06E9_02E6*/DrawMonitorShape(int n) {
 	if(D_5044 == 0xd)
-		D_5FBA.seg = D_5710.seg;
+		D_5FBA.segment = D_5710.segment;
 	DRV(3)(&D_5FBA, D_0FF6[n] + D_5FBA.left - D_6066, D_1062[n] + D_5FBA.top, D_6060, n + 0x10);
 }
 
@@ -531,7 +520,7 @@ int ScaleSpeed(int, int);
 	if(D_5044 != 0xd)
 		C_1277_000C(&D_6072);
 	else
-		D_6072.seg = 0xa600;
+		D_6072.segment = 0xa600;
 	C_0BC1_03D2(1);
 	C_00E1_0561();
 	C_1482_00BE();
@@ -558,7 +547,7 @@ int ScaleSpeed(int, int);
 		C_136D_014D(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
-		D_5732.seg = D_5710.seg;
+		D_5732.segment = D_5710.segment;
 	} else {
 		DRV(0xf)(&D_5732, &D_5710);
 	}
@@ -582,7 +571,7 @@ int ScaleSpeed(int, int);
 		C_136D_014D(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
-		D_5BAE.seg = D_5BBC.seg = D_5BCA.seg = D_5732.seg = D_5710.seg;
+		D_5BAE.segment = D_5BBC.segment = D_5BCA.segment = D_5732.segment = D_5710.segment;
 	} else {
 		DRV(0xf)(&D_5732, &D_5710);
 	}
@@ -618,7 +607,7 @@ int ScaleSpeed(int, int);
 		C_136D_014D(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
-		D_5BAE.seg = D_5BCA.seg = D_5732.seg = D_5710.seg;
+		D_5BAE.segment = D_5BCA.segment = D_5732.segment = D_5710.segment;
 	} else {
 		DRV(0xf)(&D_5732, &D_5710);
 	}
@@ -899,7 +888,7 @@ int ScaleSpeed(int, int);
 		C_136D_014D(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
-		D_5732.seg = D_5710.seg;
+		D_5732.segment = D_5710.segment;
 	} else {
 		DRV(0xf)(&D_5732, &D_5710);
 	}
@@ -1099,7 +1088,7 @@ int ScaleSpeed(int, int);
 	DRV(3)(&D_5BAE, 0x7c, 5, shapes, 2);
 	if(D_5044 == 0xd) {
 		D_5BD8 = D_5710;
-		D_5BD8.seg = 0xa600;
+		D_5BD8.segment = 0xa600;
 		DRV(0xf)(&D_5710, &D_5BD8);
 	} else {
 		DRV(0xf)(&D_5BAE, &D_5BBC);
@@ -1125,10 +1114,10 @@ int ScaleSpeed(int, int);
 			C_13F2_0504(&D_5BBC, &D_5BAE, speed);
 		goto show;
 		case 0xd:
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 			speed = ScaleSpeed(200, 300);
 			C_13F2_01D5(&D_5BD8, &D_5710, speed);
-			D_5710.seg ^= 0x200;
+			D_5710.segment ^= 0x200;
 		break;
 		case 0x13:
 			C_12EA_000A(&D_5710, &D_5BAE, 0);
@@ -1186,7 +1175,7 @@ quit:
 /*C_06E9_2AF6*/ShowFrame() {
 	if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
-		D_5BAE.seg = D_5BBC.seg = D_5BCA.seg = D_5732.seg = D_5710.seg;
+		D_5BAE.segment = D_5BBC.segment = D_5BCA.segment = D_5732.segment = D_5710.segment;
 	} else {
 		DRV(0xf)(&D_5732, &D_5710);
 	}

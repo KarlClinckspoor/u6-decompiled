@@ -7,48 +7,40 @@
 #include <process.h>
 
 /*a drawing surface of the graphics driver (14 bytes)*/
-struct t14 {
-	unsigned seg;/*_00*//*video memory segment (or of an off-screen buffer)*/
-	unsigned far *ytable;/*_02*//*offset of each row*/
-	int right;/*_06*/
-	int left;/*_08*/
-	int top;/*_0A*/
-	int bottom;/*_0C*/
-};
 
 extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
-extern struct t14 D_5710;/*the screen*/
-extern struct t14 D_5732;
-extern struct t14 D_565F;/*the console's surface*/
-extern struct t14 *D_566D;/*the console: surface it writes on*/
+extern struct tSurface D_5710;/*the screen*/
+extern struct tSurface D_5732;
+extern struct tSurface D_565F;/*the console's surface*/
+extern struct tSurface *D_566D;/*the console: surface it writes on*/
 extern int D_566F;/*the console: x*/
 extern int D_5671;/*the console: y*/
 extern char D_5677, D_5678;/*the console: text colours*/
 extern char D_567D;
-extern struct t14 D_5702;
+extern struct tSurface D_5702;
 extern void far *D_5AD6;/*the vellum background picture*/
-extern struct t14 D_6072;
+extern struct tSurface D_6072;
 extern char D_5696[];/*GAME.EXE's command line argument*/
 
 extern C_00E1_04F9();
 extern C_06E9_0351();/*nonzero when the player wants to go on (key or time)*/
 extern C_0BC1_0079(int);/*AskForDisk*/
-extern C_1277_000C(struct t14 *);/*allocates an off-screen buffer (and row table) of a surface's size*/
-extern C_1277_00D8(struct t14 *);/*frees them*/
+extern C_1277_000C(struct tSurface *);/*allocates an off-screen buffer (and row table) of a surface's size*/
+extern C_1277_00D8(struct tSurface *);/*frees them*/
 extern C_1288_0002();
-extern C_12EA_000A(struct t14 *, struct t14 *, int);
+extern C_12EA_000A(struct tSurface *, struct tSurface *, int);
 extern C_12EE_0249(char far *, ...);/*console printf*/
 extern C_12EE_0277(char far *);/*console print*/
 extern C_1336_001E(int);
-extern C_136D_014D(struct t14 *, struct t14 *);/*MCGA: palette fade in*/
-extern C_136D_0346(struct t14 *, int);/*MCGA: palette fade out*/
+extern C_136D_014D(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
+extern C_136D_0346(struct tSurface *, int);/*MCGA: palette fade out*/
 extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 
 /*C_0676_0006*/Credits() {
-	struct t14 save;
-	struct t14 box;
-	struct t14 box2;
-	struct t14 tmp;
+	struct tSurface save;
+	struct tSurface box;
+	struct tSurface box2;
+	struct tSurface tmp;
 
 	if(D_5044 == 0xd) {
 		DRV(0xf)(&D_5732, &D_5710);
@@ -77,14 +69,14 @@ extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 		case 0x13: D_5AD6 = C_13BC_000C("vellum1.shp"); break;
 	}
 	if(D_5044 == 0xd)
-		D_565F.seg = D_5710.seg ^ 0x200;
+		D_565F.segment = D_5710.segment ^ 0x200;
 	DRV(0xf)(&D_565F, &save);
 	if(D_5044 == 0x13)
 		C_136D_0346(&D_565F, 0);
 	DRV(0xc)(&D_565F, 0);
 	C_00E1_04F9();
 	if(D_5044 == 0xd)
-		D_5702.seg = D_5710.seg;
+		D_5702.segment = D_5710.segment;
 	/*draw the vellum*/
 	DRV(3)(&D_5702, D_5702.left, D_5702.top, D_5AD6, 0);
 	D_566D = &box;
@@ -109,10 +101,10 @@ extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 	box2.top = D_5671 + 0xe;
 	if(D_5044 == 0xd) {
 		tmp = box;
-		tmp.seg = D_5710.seg;
-		tmp.ytable = D_5710.ytable;
+		tmp.segment = D_5710.segment;
+		tmp.pScanlines = D_5710.pScanlines;
 		D_566D = &tmp;
-		D_5732.seg = D_5710.seg;
+		D_5732.segment = D_5710.segment;
 	}
 	/*page 1*/
 	C_1288_0002();
@@ -129,7 +121,7 @@ extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 		DRV(0xf)(&D_5732, &D_5710);
-		tmp.seg = D_5710.seg;
+		tmp.segment = D_5710.segment;
 	} else {
 		DRV(0xf)(&D_5702, &D_565F);
 	}
@@ -145,7 +137,7 @@ extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 		DRV(0xf)(&box, &box2);
 	} else {
 		DRV(0x15)(&D_5710);
-		tmp.seg = D_5710.seg;
+		tmp.segment = D_5710.segment;
 	}
 	C_1288_0002();
 	C_12EE_0249("%FArt\n%P%F", 0xc, 0x3d);
@@ -161,7 +153,7 @@ extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 		DRV(0xf)(&box, &box2);
 	} else {
 		DRV(0x15)(&D_5710);
-		tmp.seg = D_5710.seg;
+		tmp.segment = D_5710.segment;
 	}
 	C_1288_0002();
 	C_12EE_0249("%FQuality Assurance\n%P%F", 0xc, 0x3d);
@@ -176,7 +168,7 @@ extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&box, &box2);
 	} else {
-		D_565F.seg = D_5710.seg;
+		D_565F.segment = D_5710.segment;
 		DRV(0x15)(&D_5710);
 	}
 	while(!C_06E9_0351());
@@ -203,7 +195,7 @@ extern void far *C_13BC_000C(char *);/*loads a file in memory*/
 	if(D_5044 != 0xd)
 		C_1277_000C(&D_6072);
 	else
-		D_6072.seg = 0xa600;
+		D_6072.segment = 0xa600;
 	C_0BC1_0079(4);
 	if(D_5044 != 0xd)
 		C_1277_00D8(&D_6072);

@@ -20,20 +20,7 @@
 #include <time.h>
 
 /*a drawing surface (the same as GAME.EXE's mouse.h)*/
-struct tSurface {
-	unsigned seg;/*_00*/
-	int far *lines;/*_02*//*offset of each scanline*/
-	int right, left, top, bottom;/*_06,_08,_0a,_0c*/
-};
 
-/*the music driver (U6xxx.DRV): a far pointer whose offset selects the
-entry (0 init(port), 6 play(song), 9 stop, 0x0c channel(ch, a, b)); its
-entries clean the stack themselves (pascal)*/
-union tMus {
-	void (far pascal *f)();
-	struct { unsigned ofs, seg; } p;
-};
-#define MUS(o) D_58FA.p.ofs = (o); (*D_58FA.f)
 
 extern int D_4A14[][3];/*the 5 main menu highlight colors (r, g, b)*/
 extern int D_4A40[][3];/*VGA palette (r, g, b)*/
@@ -414,7 +401,7 @@ rectangle <rects>; returns its index*/
 				C_13F2_0504(&dst, &src, effect);
 			break;
 			case 0xd:
-				src.seg ^= 0x200;
+				src.segment ^= 0x200;
 				effect = C_06E9_0AF0(0x32, 0x64);
 				C_13F2_01D5(&dst, &src, effect);
 				DRV(0x15)(&D_5710);
@@ -446,7 +433,7 @@ rectangle <rects>; returns its index*/
 	D_58F0 = 0;
 	if(D_5044 == 0xd) {
 		D_5054 = &D_5732;
-		D_5732.seg = D_5710.seg ^ 0x200;
+		D_5732.segment = D_5710.segment ^ 0x200;
 	}
 	C_1339_0000();
 	/*the options' rectangles*/
@@ -629,16 +616,16 @@ until "journey onward" or quit*/
 	D_45BC[6] = 0x12; D_45BC[7] = i;
 	D_45BC[8] = 0xc; D_45BC[9] = i;
 	switch(D_5044) {
-		case 4: case 9: D_5710.seg = 0xb800; break;
-		case 7: D_5710.seg = 0xb000; InitHercules(); break;
-		case 0xd: D_5710.seg = 0xa200; break;
-		case 0x13: D_5710.seg = 0xa000; break;
+		case 4: case 9: D_5710.segment = 0xb800; break;
+		case 7: D_5710.segment = 0xb000; InitHercules(); break;
+		case 0xd: D_5710.segment = 0xa200; break;
+		case 0x13: D_5710.segment = 0xa000; break;
 	}
 	LoadMusicDriver(D_5746, D_5720);
 	if(D_5044 != 7) {
 		DRV(0)(D_575C);
 	}
-	D_5710.lines = D_575C;
+	D_5710.pScanlines = D_575C;
 	D_5710.right = 0x13f;
 	D_5710.left = 0;
 	D_5710.top = 0;

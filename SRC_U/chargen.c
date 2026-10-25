@@ -10,11 +10,6 @@
 #include <stdlib.h>
 
 /*a drawing surface of the graphics driver (GAME.EXE's struct tSurface)*/
-struct tSurface {
-	unsigned segment;/*_00*/
-	unsigned far *pScanlines;/*_02: offset of each line*/
-	int right, left, top, bottom;/*_06,_08,_0a,_0c*/
-};
 
 extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
 extern struct tSurface D_5710;/*the screen*/
@@ -25,7 +20,6 @@ extern struct tSurface D_5748;
 extern struct tSurface D_5980;
 extern struct tSurface D_599C;/*the text window of the name question*/
 extern struct tSurface D_5AE6;/*the area of the gypsy's pattern*/
-extern int D_5AF0;/*= D_5AE6.top*/
 extern struct tSurface D_5AFA;/*EGA: the second page (segment a800)*/
 extern struct tSurface D_5B08;/*EGA: the screen, for the mouse pointer*/
 extern struct tSurface D_6072;/*a 320x56 work surface (the A/B buttons)*/
@@ -279,7 +273,7 @@ between the colors added so far*/
 	int j;
 	int i;
 
-	D_5AF0 -= 4;
+	D_5AE6.top -= 4;
 	D_5B3A[D_5B28++] = c;
 	for(i = 1; i <= D_5B28; i++)
 		for(j = 0; j < 0x10 / D_5B28; j++)
