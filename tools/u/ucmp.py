@@ -89,17 +89,36 @@ def save_learned(new):
             f.write('%s %s\n' % (name, addr))
 
 
-def disasm(blob, origin, start, end):
+def switch_tables(blob, shift=0):
+    """(offset, length) of Turbo C switch jump tables: jmp [cs:bx+T] after a cmp/ja"""
+    out = []
+    for mm in re.finditer(rb'\x2e\xff\xa7(..)', blob, re.S):
+        t = (struct.unpack('<H', mm.group(1))[0] - shift) & 0xFFFF
+        before = blob[max(0, mm.start() - 24):mm.start()]
+        c = list(re.finditer(rb'\x3d(..)[\x77\x76]|\x83\xf8(.)[\x77\x76]', before, re.S))
+        if not c:
+            continue
+        g = c[-1]
+        n = (struct.unpack('<H', g.group(1))[0] if g.group(1) else g.group(2)[0]) + 1
+        if n <= 256 and t + 2 * n <= len(blob):
+            out.append((t, 2 * n))
+    return out
+
+
+def disasm(blob, origin, start, end, skips=()):
     with tempfile.NamedTemporaryFile(suffix='.bin', delete=False) as t:
         t.write(blob)
     try:
-        out = subprocess.run(['ndisasm', '-b16', '-o', str(origin), t.name], capture_output=True, text=True).stdout
+        args = ['ndisasm', '-b16', '-o', str(origin)]
+        for o, n in skips:
+            args += ['-k', '%d,%d' % (o, n)]
+        out = subprocess.run(args + [t.name], capture_output=True, text=True).stdout
     finally:
         os.unlink(t.name)
     lines = []
     for l in out.splitlines():
         a = int(l.split()[0], 16)
-        if start <= a < end:
+        if start <= a < end and 'skipping' not in l:
             lines.append(l)
     return lines
 
@@ -313,8 +332,9 @@ def main():
     # as equal the instructions that differ only under fixups or in a branch displacement
     real = None
     if first is not None:
-        o_all = disasm(img[base:base + cs.length + 16], 0, 0, cs.length + 16)
-        n_all = disasm(bytes(cs.data), 0, 0, cs.length)
+        oblob = img[base:base + cs.length + 16]
+        o_all = disasm(oblob, 0, 0, cs.length + 16, switch_tables(oblob, at))
+        n_all = disasm(bytes(cs.data), 0, 0, cs.length, switch_tables(bytes(cs.data)))
 
         def parse(l):
             p = l.split(None, 2)
