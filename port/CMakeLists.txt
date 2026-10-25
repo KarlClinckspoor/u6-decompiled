@@ -23,6 +23,7 @@ else()
 		set(SDL2_TARGET SDL2::SDL2)
 	else()
 		set(SDL2_TARGET ${SDL2_LIBRARIES})
+		include_directories(${SDL2_INCLUDE_DIRS})
 	endif()
 endif()
 

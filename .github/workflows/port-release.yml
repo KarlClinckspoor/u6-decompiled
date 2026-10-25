@@ -1,0 +1,69 @@
+# Builds the native port (port/) for Linux and Windows. Pushing a tag port-v* publishes
+# the builds as a GitHub release, with port/RELEASE_NOTES.md as its text.
+name: port builds
+
+on:
+  push:
+    tags: ['port-v*']
+    branches: [portable]
+    paths: ['SRC/**', 'port/**', '.github/workflows/port-release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04   # glibc 2.35: runs on most current distributions
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang libsdl2-dev
+      - run: cmake -S port -B build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build
+      - run: |
+          mkdir u6port-linux-x64
+          cp build/u6 u6port-linux-x64/ && strip u6port-linux-x64/u6
+          cp docs/port/PORT.md u6port-linux-x64/README.md
+          tar czf u6port-linux-x64.tar.gz u6port-linux-x64
+      - uses: actions/upload-artifact@v4
+        with: {name: linux, path: u6port-linux-x64.tar.gz}
+
+  windows:
+    runs-on: ubuntu-22.04   # cross-compiled with MinGW-w64 (port/cmake/mingw64.cmake)
+    env:
+      SDL2_VERSION: 2.30.9
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake ninja-build mingw-w64 zip
+      - run: |
+          curl -sSL -o sdl2.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-$SDL2_VERSION/SDL2-devel-$SDL2_VERSION-mingw.tar.gz
+          tar xzf sdl2.tar.gz
+      - run: |
+          cmake -S port -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=$PWD/port/cmake/mingw64.cmake \
+            -DSDL2_DIR=$PWD/SDL2-$SDL2_VERSION/x86_64-w64-mingw32/lib/cmake/SDL2
+          cmake --build build
+      - run: |
+          mkdir u6port-windows-x64
+          cp build/u6.exe u6port-windows-x64/ && x86_64-w64-mingw32-strip u6port-windows-x64/u6.exe
+          cp SDL2-$SDL2_VERSION/x86_64-w64-mingw32/bin/SDL2.dll u6port-windows-x64/
+          cp SDL2-$SDL2_VERSION/LICENSE.txt u6port-windows-x64/SDL2-LICENSE.txt
+          cp docs/port/PORT.md u6port-windows-x64/README.md
+          zip -qr u6port-windows-x64.zip u6port-windows-x64
+      - uses: actions/upload-artifact@v4
+        with: {name: windows, path: u6port-windows-x64.zip}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/port-v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {path: dist, merge-multiple: true}
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --prerelease \
+            --title "Ultima VI native port ${GITHUB_REF_NAME#port-v} (Windows, Linux)" \
+            --notes-file port/RELEASE_NOTES.md
