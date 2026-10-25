@@ -16,5 +16,7 @@ const char *session_home(void);
 const char *session_game_home(void);
 void session_pace_tick(uint32_t tick);
 void session_exec(const char *path, char **argv);
+/* restarts the port with U.EXE (the main menu) */
+void session_restart_menu(void);
 
 #endif

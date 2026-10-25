@@ -128,7 +128,7 @@ typedef struct Row {
 } Row;
 
 enum {
-	R_FULLSCREEN, R_SCALE, R_ASPECT, R_INTEGER, R_SOUND, R_VOLUME, R_FOLDER, R_RECORDING,
+	R_FULLSCREEN, R_SCALE, R_ASPECT, R_INTEGER, R_SOUND, R_VOLUME, R_MUSIC, R_MUSICVOL, R_STARTMENU, R_FOLDER, R_RECORDING,
 	R_ATSTART, R_NEWGAME, R_STATUS, R_SPEED, R_TAKEOVER, R_REC0
 };
 
@@ -147,9 +147,12 @@ static int build_rows(Row *rows)
 		ROW("Whole-number scaling", settings.integer_scale ? "On" : "Off", "Scales by whole multiples only; off scales freely to fit.", 0, R_INTEGER);
 		break;
 	case TAB_SOUND:
-		ROW("Sound effects", settings.sound ? "On" : "Off", "The PC speaker effects. (Music is not ported yet.)", 0, R_SOUND);
+		ROW("Sound effects", settings.sound ? "On" : "Off", "The PC speaker effects.", 0, R_SOUND);
 		snprintf(buf, sizeof buf, "%d", settings.volume);
-		ROW("Volume", buf, "0 to 100.", 0, R_VOLUME);
+		ROW("Effects volume", buf, "0 to 100.", 0, R_VOLUME);
+		ROW("Music", settings.music ? "On" : "Off", "The AdLib music, on an emulated OPL2.", 0, R_MUSIC);
+		snprintf(buf, sizeof buf, "%d", settings.music_volume);
+		ROW("Music volume", buf, "0 to 100.", 0, R_MUSICVOL);
 		break;
 	case TAB_GAME: {
 		const char *d = settings.data[0] ? settings.data : "(not set)";
@@ -158,6 +161,7 @@ static int build_rows(Row *rows)
 		snprintf(tail, sizeof tail, "%s%s", len > 15 ? ".." : "", len > 15 ? d + len - 13 : d);
 		ROW("Game folder", tail, "Your copy of Ultima VI. Change it with --data PATH (next start).", 2, R_FOLDER);
 		ROW("Record sessions", settings.recording ? "On" : "Off", "Each session's inputs go to recordings/ in the home folder (newest five kept). Next start.", 0, R_RECORDING);
+		ROW("Main menu at start", settings.start_menu ? "On" : "Off", "Starts with the title, the main menu and the introduction, as ULTIMA6.EXE does; off goes straight to the game when there is a character. Next start.", 0, R_STARTMENU);
 		ROW("Show this at start", settings.settings_at_start ? "On" : "Off", "Opens this screen before the game starts.", 0, R_ATSTART);
 		if (session_can_start_new_game())
 			ROW("New game", confirm_new ? "Sure? Enter" : ">", "Starts over from the game folder's saved game (a new character if it has none). Yours goes to backups/.", 1, R_NEWGAME);
@@ -194,6 +198,9 @@ static void change(Row *r, int dir)
 	case R_INTEGER: settings.integer_scale = !settings.integer_scale; break;
 	case R_SOUND: settings.sound = !settings.sound; break;
 	case R_VOLUME: settings.volume += (dir ? dir : 1) * 10; if (settings.volume > 100) settings.volume = dir ? 100 : 0; if (settings.volume < 0) settings.volume = 0; break;
+	case R_MUSIC: settings.music = !settings.music; break;
+	case R_MUSICVOL: settings.music_volume += (dir ? dir : 1) * 10; if (settings.music_volume > 100) settings.music_volume = dir ? 100 : 0; if (settings.music_volume < 0) settings.music_volume = 0; break;
+	case R_STARTMENU: settings.start_menu = !settings.start_menu; break;
 	case R_RECORDING: settings.recording = !settings.recording; break;
 	case R_ATSTART: settings.settings_at_start = !settings.settings_at_start; break;
 	case R_SPEED:

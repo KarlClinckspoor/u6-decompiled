@@ -83,7 +83,8 @@ endif()
 
 # ---- the port ----
 file(GLOB PORT_C
-	sys/*.c gfx/*.c replay/*.c ui/*.c u/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c)
+	sys/*.c gfx/*.c replay/*.c ui/*.c u/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c
+	third_party/nuked-opl3/opl3.c)
 add_executable(u6 ${PORT_C} $<TARGET_OBJECTS:u6game> $<TARGET_OBJECTS:u6u>)
 target_include_directories(u6 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/platform)
 target_compile_options(u6 PRIVATE -fsigned-char -fwrapv -fno-strict-aliasing)

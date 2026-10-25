@@ -49,6 +49,7 @@ static SDL_AudioDeviceID audio_dev;
 static volatile uint32_t speaker_hz;
 static double speaker_phase;
 static int audio_rate = 44100;
+static plat_music_fn music_fn;
 
 static FILE *log_file;
 
@@ -110,9 +111,30 @@ static void audio_cb(void *ud, Uint8 *stream, int len)
 			speaker_phase -= (int)speaker_phase;
 		out[i] = (int16_t)(speaker_phase < 0.5 ? amp : -amp);
 	}
+	if (music_fn)
+		music_fn(out, n, audio_rate);
 }
 
 void plat_speaker(uint32_t hz) { speaker_hz = hz; }
+
+void plat_set_music(plat_music_fn fn)
+{
+	plat_audio_lock();
+	music_fn = fn;
+	plat_audio_unlock();
+}
+
+void plat_audio_lock(void)
+{
+	if (audio_dev)
+		SDL_LockAudioDevice(audio_dev);
+}
+
+void plat_audio_unlock(void)
+{
+	if (audio_dev)
+		SDL_UnlockAudioDevice(audio_dev);
+}
 
 /* ---- video ---- */
 static void make_window(void)

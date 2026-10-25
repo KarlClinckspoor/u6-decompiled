@@ -10,6 +10,7 @@
  * and the inputs come from RECORD.U6R.
  */
 #include "session.h"
+#include "adlib.h"
 #include "../replay/replay.h"
 #include "../platform/plat.h"
 #include "../platform/hostfs.h"
@@ -245,6 +246,12 @@ static void restart(const char *opt, const char *val)
 	session_exec(self_path, argv);
 }
 
+/* GAME.EXE ran ULTIMA6.EXE (no character yet): the port starts again with U.EXE */
+void session_restart_menu(void)
+{
+	restart("--menu", 0);
+}
+
 void session_play_recording(const char *name)
 {
 	char arg[1100];
@@ -306,6 +313,7 @@ void session_apply_settings(void)
 	c.volume = settings.sound ? settings.volume : 0;
 	c.title = "Ultima VI";
 	plat_apply_config(&c);
+	adlib_set_volume(settings.music ? settings.music_volume : 0);
 }
 
 /* Replay pacing: called with each timer tick value the replayed game reads; waits so

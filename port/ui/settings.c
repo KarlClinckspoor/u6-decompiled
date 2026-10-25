@@ -16,6 +16,9 @@ void settings_defaults(void)
 	settings.integer_scale = 1;
 	settings.sound = 1;
 	settings.volume = 50;
+	settings.music = 1;
+	settings.music_volume = 70;
+	settings.start_menu = 1;
 	settings.recording = 1;
 	settings.settings_at_start = 0;
 }
@@ -46,6 +49,9 @@ int settings_load(const char *home)
 		else if (!strcmp(line, "integer")) settings.integer_scale = atoi(v) != 0;
 		else if (!strcmp(line, "sound")) settings.sound = atoi(v) != 0;
 		else if (!strcmp(line, "volume")) settings.volume = clampi(atoi(v), 0, 100);
+		else if (!strcmp(line, "music")) settings.music = atoi(v) != 0;
+		else if (!strcmp(line, "music-volume")) settings.music_volume = clampi(atoi(v), 0, 100);
+		else if (!strcmp(line, "start-menu")) settings.start_menu = atoi(v) != 0;
 		else if (!strcmp(line, "recording")) settings.recording = atoi(v) != 0;
 		else if (!strcmp(line, "settings-at-start")) settings.settings_at_start = atoi(v) != 0;
 		else if (!strcmp(line, "data")) snprintf(settings.data, sizeof settings.data, "%s", v);
@@ -63,9 +69,10 @@ void settings_save(void)
 	if (!f)
 		return;
 	fprintf(f, "# Ultima VI port settings (F11 in the game)\n");
-	fprintf(f, "scale=%d\nfullscreen=%d\naspect=%d\ninteger=%d\nsound=%d\nvolume=%d\nrecording=%d\n"
-		"settings-at-start=%d\ndata=%s\n", settings.scale, settings.fullscreen, settings.aspect,
-		settings.integer_scale, settings.sound, settings.volume, settings.recording,
+	fprintf(f, "scale=%d\nfullscreen=%d\naspect=%d\ninteger=%d\nsound=%d\nvolume=%d\nmusic=%d\n"
+		"music-volume=%d\nstart-menu=%d\nrecording=%d\nsettings-at-start=%d\ndata=%s\n",
+		settings.scale, settings.fullscreen, settings.aspect, settings.integer_scale, settings.sound,
+		settings.volume, settings.music, settings.music_volume, settings.start_menu, settings.recording,
 		settings.settings_at_start, settings.data);
 	fclose(f);
 }

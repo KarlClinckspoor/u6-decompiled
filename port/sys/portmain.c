@@ -19,7 +19,10 @@
 #include "../ui/newchar.h"
 #include "../gfx/mcga.h"
 #include "../gfx/vgadac.h"
+#include "../u/urun.h"
+#include "adlib.h"
 
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -79,12 +82,42 @@ static const char *find_game(const char *given)
 	return 0;
 }
 
-/* END.EXE / ULTIMA6.EXE: the endgame and the main menu are other programs, not ported */
+static int same_name(const char *path, const char *name)
+{
+	const char *b = path, *p;
+	for (p = path; *p; p++)
+		if (*p == '/' || *p == '\\' || *p == ':')
+			b = p + 1;
+	for (; *b && *name; b++, name++)
+		if ((*b | 0x20) != (*name | 0x20))
+			return 0;
+	return !*b && !*name;
+}
+
+/* GAME.EXE's execs: ULTIMA6.EXE when the saved game has no character (the port starts
+ * again with U.EXE's menu); END.EXE, the endgame, is not ported */
 static void on_exec(const char *path, int argc, const char *const *argv)
 {
 	(void)argc;
 	(void)argv;
+	if (same_name(path, "ultima6.exe") && rp_mode != RP_REPLAY) {
+		plat_log("the game runs ULTIMA6.EXE: back to the main menu");
+		session_end();
+		session_restart_menu();
+	}
 	plat_log("the game asked to run %s, which is not part of the port: the session ends", path);
+	port_exit(0);
+}
+
+/* U.EXE's exec of GAME.EXE: back to main, which goes on with the game */
+static jmp_buf u_done;
+static void on_exec_u(const char *path, int argc, const char *const *argv)
+{
+	(void)argc;
+	(void)argv;
+	if (same_name(path, "game.exe"))
+		longjmp(u_done, 1);
+	plat_log("U.EXE asked to run %s, which is not part of the port: the session ends", path);
 	port_exit(0);
 }
 
@@ -223,14 +256,17 @@ static void usage(void)
 		"  --keys SCRIPT       type keys at given times (tests): \"1500:up 2000:a\"\n"
 		"  --scale N, --fullscreen, --no-aspect, --no-integer, --no-audio\n"
 		"  --settings          open the settings screen before the game\n"
+		"  --menu, --game      start with the main menu (U.EXE: title, introduction,\n"
+		"                      character creation), or with the game (default: the setting)\n"
 		"  --new-avatar SPEC   when the saved game has no character yet, make one without\n"
-		"                      the creation screen: NAME[,M|F[,PORTRAIT 1-6[,VIRTUE 1-8]]]\n"
+		"                      the gypsy: NAME[,M|F[,PORTRAIT 1-6[,VIRTUE 1-8]]] (tests)\n"
 		"F11 opens the settings screen in the game.\n");
 }
 
 int main(int argc, char **argv)
 {
 	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0;
+	int menu = -1;
 	int recording = -1, speed = -1, audio = 1, settings_now = 0, i;
 	int scale = 0, fullscreen = -1, aspect = -1, integer = -1, first_run;
 	PlatConfig cfg;
@@ -257,6 +293,8 @@ int main(int argc, char **argv)
 		else if (!strcmp(a, "--no-audio")) audio = 0;
 		else if (!strcmp(a, "--settings")) settings_now = 1;
 		else if (!strcmp(a, "--new-avatar")) new_avatar = ARG;
+		else if (!strcmp(a, "--menu")) menu = 1;
+		else if (!strcmp(a, "--game")) menu = 0;
 		else if (!strcmp(a, "--keys")) key_script = ARG;
 		else if (!strcmp(a, "--run-ms")) run_ms = (uint32_t)atol(ARG);
 		else if (!strcmp(a, "--help") || !strcmp(a, "-h")) { usage(); return 0; }
@@ -337,22 +375,31 @@ int main(int argc, char **argv)
 	if (!hidden && (settings_now || ((settings.settings_at_start || first_run) && !replay)))
 		overlay_run_modal();
 
-	/* U.EXE's part: a saved game without a character gets one first (before the session
-	 * starts, so that a recording's copy of the saved game has it) */
-	if (!replay && newchar_needed()) {
-		int r;
-		if (new_avatar)
-			r = newchar_quick(new_avatar);
-		else if (hidden) {
-			fprintf(stderr, "the saved game has no character yet: start with a window, or "
-				"give one with --new-avatar NAME\n");
-			r = -1;
-		} else
-			r = newchar_run(font);
-		if (r != 0) {
+	adlib_set_volume(settings.music ? settings.music_volume : 0);
+
+	/* U.EXE's part (ULTIMA6.EXE runs it first): the title, the main menu, the introduction
+	 * and the gypsy; "Journey onward" (or a new character) goes on with GAME.EXE below. It
+	 * comes before the session starts, so that a recording's copy of the saved game has
+	 * the character. A saved game without a character always starts there, unless
+	 * --new-avatar makes one (tests). */
+	if (!replay && new_avatar && newchar_needed()) {
+		if (newchar_quick(new_avatar) != 0) {
 			plat_shutdown();
-			return r < 0 && plat_quit_requested() ? 0 : 1;
+			return 1;
 		}
+	} else if (!replay && (menu > 0 || (menu < 0 && settings.start_menu) || newchar_needed())) {
+		static char *uargv[] = {"U.EXE", "V", 0};	/* VGA: the port has MCGADRV.BIN only */
+		dosfs_init(settings.data, home);
+		dosmem_init();
+		dos_set_exec_handler(on_exec_u);
+		dos_exit_hook = port_exit;
+		if (!setjmp(u_done)) {
+			u_run(2, uargv);
+			port_exit(0);	/* U's main returned: the player quit */
+		}
+		/* U ran GAME.EXE */
+		MUSDRV_9();
+		plat_speaker(0);
 	}
 
 	if (session_start(home, replay, record, !replay && (recording < 0 ? settings.recording : recording),

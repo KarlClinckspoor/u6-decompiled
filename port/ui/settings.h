@@ -9,6 +9,9 @@ typedef struct Settings {
 	int integer_scale;
 	int sound;              /* PC speaker effects */
 	int volume;             /* 0..100 */
+	int music;              /* the AdLib music */
+	int music_volume;       /* 0..100 */
+	int start_menu;         /* start with U.EXE: the main menu (and the introduction) */
 	int recording;          /* black box: record every session */
 	int settings_at_start;  /* open the overlay before the game starts */
 	char data[1024];        /* the game folder */

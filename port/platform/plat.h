@@ -97,6 +97,13 @@ void plat_mouse_state(int16_t *x, int16_t *y, uint16_t *buttons); /* buttons: 1 
 /* Square wave at hz from now on; 0 silences it. Timed by the host's audio clock. */
 void plat_speaker(uint32_t hz);
 
+/* Music: fn adds frames mono samples at rate Hz into out; it runs in the audio thread
+ * (none without audio). The game's thread changes what it plays under plat_audio_lock. */
+typedef void (*plat_music_fn)(int16_t *out, int frames, int rate);
+void plat_set_music(plat_music_fn fn);
+void plat_audio_lock(void);
+void plat_audio_unlock(void);
+
 /* ---- Hooks the port provides to the backend ---- */
 
 /* Called by plat_pump for each key before it goes to the game; returns 1 to swallow it
