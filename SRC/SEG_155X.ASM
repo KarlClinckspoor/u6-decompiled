@@ -1,9 +1,9 @@
 INCLUDE OSILIB/OSI.INC
 
-PUBLIC D_07CC
+PUBLIC PartyListTop
 
 DSegStart
-D_07CC db 0
+PartyListTop db 0	;D_07CC
 DSegEnd
 
 CSegStart	SEG_155X_TEXT

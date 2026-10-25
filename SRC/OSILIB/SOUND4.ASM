@@ -37,7 +37,7 @@ C_001D_:
 	;--
 	SOUND_FREQ	AX
 	;-- tempo --
-	MOV	AX,D_2FC6
+	MOV	AX,CpuSpeed
 	MOV	CL,4
 	SHR	AX,CL
 	MOV	CX,[BP+0Ah]

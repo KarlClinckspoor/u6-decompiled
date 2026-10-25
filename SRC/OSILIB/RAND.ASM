@@ -65,7 +65,7 @@ CSegEnd	SEG_33C5_TEXT
 CSegStart	SEG_33CA_TEXT
 
 ;generate random seed?
-ProcStart	C_33CA_000E
+ProcStart	OSI_timeSeed
 	MOV	AH,2Ch	;get time
 	INT	21h
 	XOR	AX,AX
@@ -79,7 +79,7 @@ ProcStart	C_33CA_000E
 	ADD	AX,CX
 	XOR	AX,91EBh
 	AND	AX,0FFFh
-ProcEnd	C_33CA_000E
+ProcEnd	OSI_timeSeed
 
 CSegEnd	SEG_33CA_TEXT
 

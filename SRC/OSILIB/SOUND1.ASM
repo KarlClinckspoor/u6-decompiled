@@ -10,7 +10,7 @@ DSegEnd
 CSegStart	SEG_33CD_TEXT
 
 ProcStart	OSI_playWavedNote	;C_33CD_0006
-	MOV	AX,D_2FC6
+	MOV	AX,CpuSpeed
 	CMP	AX,100
 	JGE	C_0018
 	XOR	AX,AX

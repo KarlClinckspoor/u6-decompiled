@@ -1,5 +1,5 @@
 ;========================================
-EXTRN D_2FC6:WORD	;computer speed
+EXTRN CpuSpeed:WORD	;computer speed
 
 EXTRN SoundFlag:WORD
 ;========================================

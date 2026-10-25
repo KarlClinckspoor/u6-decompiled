@@ -10,7 +10,7 @@ DSegEnd
 CSegStart	SEG_33C2
 
 ProcStart	OSI_sDelay	;C_33C2_000A
-	MOV	AX,D_2FC6
+	MOV	AX,CpuSpeed
 	MOV	BX,[BP+08]
 	MOV	CX,D_3066[BX]
 	JCXZ	C_001E

@@ -8,22 +8,22 @@
 
 struct tGr {
 	/*common part*/
-	unsigned char _00[6];
-	void far *_06;/*character data*/
-	unsigned char _0a,_0b;/*text bg/fg color*/
+	unsigned char header[6];/*_00*/
+	void far *font;/*_06*//*character data*/
+	unsigned char textFg,textBg;/*text foreground / background color*/
 	/* */
-	unsigned char _0c;
-	unsigned char _0d;
-	unsigned char _0e;/*tile anim:on/off*/
-	unsigned char _0f;
-	void (*_10)();/*request floppy callback*/
-	unsigned char _14[8];
-	void far *_1c;
-	void far *_20;
-	void (*_24)();/*load file callback*/
-	void (*_28)();/*open callback*/
-	void (*_2c)();/*read callback*/
-	void (*_30)();/*close callback*/
+	unsigned char xorMode;/*1 during flash/noise effects (storm cloak noise, spell flash); likely XOR drawing (low)*/
+	unsigned char unknown0d;/*unused by the game*/
+	unsigned char animOn;/*driver tile animation enabled (0 while time is stopped)*/
+	unsigned char toBackBuffer;/*1: GR_SET_COLOR/09/12 primitives draw into the map back buffer instead of the screen*/
+	void (*pfnDiskConfirm)();/*callback = DISK_confirm*/
+	unsigned char reserved14[8];/*unknown*/
+	void far *pWorkBuf;/*= ScratchBuf (map back buffer / decompress work)*/
+	void far *pDriverMem;/*set by GR_INIT_MEMORY, 0 if not enough memory (tile graphics?)*/
+	void (*pfnLoadFile)();/*callback = LoadFileGr*/
+	void (*pfnOpen)();/*callback = OSI_open*/
+	void (*pfnRead)();/*callback = OSI_read*/
+	void (*pfnClose)();/*callback = OSI_close*/
 };
 
 struct tPixmap/*size:6*/ {
@@ -31,40 +31,48 @@ struct tPixmap/*size:6*/ {
 	unsigned char data[0x1000];/*_04*/
 };
 
-#define GR_00(a)               (D_ECB8.iii.ofs = 0x00, (struct tGr far *)(*D_ECB8.f)(a))
-#define GR_03()                (D_ECB8.iii.ofs = 0x03, (*D_ECB8.f)())
-/*color(c)*/
-#define GR_06(c)               (D_ECB8.iii.ofs = 0x06, (*D_ECB8.f)(c))
-/*point(x,y)*/
-#define GR_09(x,y)             (D_ECB8.iii.ofs = 0x09, (*D_ECB8.f)(x,y))
-/*fillRect(x0,y0,x1,y1)*/
-#define GR_12(x0,y0,x1,y1)     (D_ECB8.iii.ofs = 0x12, (*D_ECB8.f)(x0,y0,x1,y1))
-/*moveRectY(x0,y0,x1,y1,dy)*/
-#define GR_15(x0,y0,x1,y1,dy)  (D_ECB8.iii.ofs = 0x15, (*D_ECB8.f)(x0,y0,x1,y1,dy))
-/*drawPixmap(p,x,y)*/
-#define GR_18(p,x,y)           (D_ECB8.iii.ofs = 0x18, (*D_ECB8.f)(p,x,y))
-/*putchar(ch,x,y)*/
-#define GR_1E(ch,x,y)          (D_ECB8.iii.ofs = 0x1e, (*D_ECB8.f)(ch,x,y))
-#define GR_24()                (D_ECB8.iii.ofs = 0x24, (*D_ECB8.f)())
-/*palette animation related?not VGA?*/
-#define GR_27(a)               (D_ECB8.iii.ofs = 0x27, (*D_ECB8.f)(a))
-/*init resources(size in para)*/
-#define GR_2A(seg,size)        (D_ECB8.iii.ofs = 0x2a, (*D_ECB8.f)(seg,size))
-/*putTile(tile,x,y) onscreen?*/
-#define GR_2D(tile,x,y)        (D_ECB8.iii.ofs = 0x2d, (*D_ECB8.f)(tile,x,y))
-/*define sprite?*/
-#define GR_33(i,a,b,c,d)       (D_ECB8.iii.ofs = 0x33, (*D_ECB8.f)(i,a,b,c,d))
-#define GR_36(i,x,y)           (D_ECB8.iii.ofs = 0x36, (*D_ECB8.f)(i,x,y))
-#define GR_39(i,x,y)           (D_ECB8.iii.ofs = 0x39, (*D_ECB8.f)(i,x,y))
-#define GR_3F()                (D_ECB8.iii.ofs = 0x3f, (*D_ECB8.f)())
-/*putTile(tile,x,y) offscreen?*/
-#define GR_42(tile,x,y)        (D_ECB8.iii.ofs = 0x42, (*D_ECB8.f)(tile,x,y))
-/*backbuffer->screen?*/
-#define GR_45(x0,y0,x1,y1,a,b) (D_ECB8.iii.ofs = 0x45, (*D_ECB8.f)(x0,y0,x1,y1,a,b))
-/*backbuffer->screen+fadein?*/
-#define GR_48(x0,y0,x1,y1)     (D_ECB8.iii.ofs = 0x48, (*D_ECB8.f)(x0,y0,x1,y1))
+/*init driver (video mode or segment + GrDriverOption), returns struct tGr far **/
+#define GR_INIT(a)               (GrDriver.iii.ofs = 0x00, (struct tGr far *)(*GrDriver.f)(a))
+/*restore video mode before exit/exec*/
+#define GR_SHUTDOWN()                (GrDriver.iii.ofs = 0x03, (*GrDriver.f)())
+/*drawing color*/
+#define GR_SET_COLOR(c)               (GrDriver.iii.ofs = 0x06, (*GrDriver.f)(c))
+/*plot point*/
+#define GR_PUT_PIXEL(x,y)             (GrDriver.iii.ofs = 0x09, (*GrDriver.f)(x,y))
+/*fill rectangle x0,y0,x1,y1*/
+#define GR_FILL_RECT(x0,y0,x1,y1)     (GrDriver.iii.ofs = 0x12, (*GrDriver.f)(x0,y0,x1,y1))
+/*move rectangle vertically by dy (text scroll)*/
+#define GR_SCROLL_RECT_Y(x0,y0,x1,y1,dy)  (GrDriver.iii.ofs = 0x15, (*GrDriver.f)(x0,y0,x1,y1,dy))
+/*draw tPixmap at x,y on screen*/
+#define GR_DRAW_PIXMAP(p,x,y)           (GrDriver.iii.ofs = 0x18, (*GrDriver.f)(p,x,y))
+/*8x8 font char with tGr text colors*/
+#define GR_PUT_CHAR(ch,x,y)          (GrDriver.iii.ofs = 0x1e, (*GrDriver.f)(ch,x,y))
+/*non-VGA palette setup*/
+#define GR_INIT_PALETTE()                (GrDriver.iii.ofs = 0x24, (*GrDriver.f)())
+/*non-VGA counterpart of PaletteAnimation*/
+#define GR_CYCLE_PALETTE(a)               (GrDriver.iii.ofs = 0x27, (*GrDriver.f)(a))
+/*give driver memory (segment, paragraphs); it loads its data, result in tGr._20*/
+#define GR_INIT_MEMORY(seg,size)        (GrDriver.iii.ofs = 0x2a, (*GrDriver.f)(seg,size))
+/*draw tile directly on screen*/
+#define GR_PUT_TILE_SCREEN(tile,x,y)        (GrDriver.iii.ofs = 0x2d, (*GrDriver.f)(tile,x,y))
+/*(slot, tile, rotation, pivotX, pivotY) build a rotated sprite*/
+#define GR_DEFINE_SPRITE(i,a,b,c,d)       (GrDriver.iii.ofs = 0x33, (*GrDriver.f)(i,a,b,c,d))
+/*draw sprite slot at x,y in back buffer (also used to put saved background back)*/
+#define GR_DRAW_SPRITE(i,x,y)           (GrDriver.iii.ofs = 0x36, (*GrDriver.f)(i,x,y))
+/*copy back buffer area at x,y into sprite slot (to restore later with GR_DRAW_SPRITE) - medium*/
+#define GR_SAVE_SPRITE_BG(i,x,y)           (GrDriver.iii.ofs = 0x39, (*GrDriver.f)(i,x,y))
+/*low: called every 2nd animation tick, presumably driver-side tile animation*/
+#define GR_ANIMATE_TILES()                (GrDriver.iii.ofs = 0x3f, (*GrDriver.f)())
+/*draw tile into the back buffer*/
+#define GR_PUT_TILE(tile,x,y)        (GrDriver.iii.ofs = 0x42, (*GrDriver.f)(tile,x,y))
+/*copy back buffer rect x0,y0,x1,y1 to screen at x,y*/
+#define GR_COPY_TO_SCREEN(x0,y0,x1,y1,a,b) (GrDriver.iii.ofs = 0x45, (*GrDriver.f)(x0,y0,x1,y1,a,b))
+/*same with fade-in effect (ScreenFade)*/
+#define GR_FADE_TO_SCREEN(x0,y0,x1,y1)     (GrDriver.iii.ofs = 0x48, (*GrDriver.f)(x0,y0,x1,y1))
 
-#define GR_4B(a,b)             (D_ECB8.iii.ofs = 0x4b, (*D_ECB8.f)(a,b))
-#define GR_4E()                (D_ECB8.iii.ofs = 0x4e, (*D_ECB8.f)())
+/*make tile a display frame b (tile animation, sundial)*/
+#define GR_SET_ANIM_FRAME(a,b)             (GrDriver.iii.ofs = 0x4b, (*GrDriver.f)(a,b))
+/*low: only used when the Codex vanishes, some screen transition effect*/
+#define GR_CODEX_EFFECT()                (GrDriver.iii.ofs = 0x4e, (*GrDriver.f)())
 
 #endif

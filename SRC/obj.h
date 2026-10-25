@@ -26,867 +26,867 @@
 /*(0x113|(7<<10)) 7443 - White Potion*/
 
 /*1  - Leather Helm*/
-#define OBJ_001 0x001
+#define OBJ_LEATHER_HELM 0x001
 /*2  - Chain Coif*/
-#define OBJ_002 0x002
+#define OBJ_CHAIN_COIF 0x002
 /*3  - Iron Helm*/
-#define OBJ_003 0x003
+#define OBJ_IRON_HELM 0x003
 /*4  - Spiked Helm*/
-#define OBJ_004 0x004
+#define OBJ_SPIKED_HELM 0x004
 /*5  - Winged Helm*/
-#define OBJ_005 0x005
+#define OBJ_WINGED_HELM 0x005
 /*6  - Brass Helm*/
-#define OBJ_006 0x006
+#define OBJ_BRASS_HELM 0x006
 /*7  - Gargoyle Helm*/
-#define OBJ_007 0x007
+#define OBJ_GARGOYLE_HELM 0x007
 /*8  - Magic Helm*/
-#define OBJ_008 0x008
+#define OBJ_MAGIC_HELM 0x008
 /*9  - Wooden Shield*/
-#define OBJ_009 0x009
+#define OBJ_WOODEN_SHIELD 0x009
 /*10 - Curved Heater*/
-#define OBJ_00A 0x00A
+#define OBJ_CURVED_HEATER 0x00A
 /*11 - Winged Helm*/
-#define OBJ_00B 0x00B
+#define OBJ_WINGED_SHIELD 0x00B
 /*12 - Kite Shield*/
-#define OBJ_00C 0x00C
+#define OBJ_KITE_SHIELD 0x00C
 /*13 - Spiked Shield*/
-#define OBJ_00D 0x00D
+#define OBJ_SPIKED_SHIELD 0x00D
 /*14 - Black Shield*/
-#define OBJ_00E 0x00E
+#define OBJ_BLACK_SHIELD 0x00E
 /*15 - Door Shield*/
-#define OBJ_00F 0x00F
+#define OBJ_DOOR_SHIELD 0x00F
 /*16 - Magic Shield*/
-#define OBJ_010 0x010
+#define OBJ_MAGIC_SHIELD 0x010
 /*17 - Cloth Armor*/
-#define OBJ_011 0x011
+#define OBJ_CLOTH_ARMOR 0x011
 /*18 - Leather Armor*/
-#define OBJ_012 0x012
+#define OBJ_LEATHER_ARMOR 0x012
 /*19 - Ring Mail*/
-#define OBJ_013 0x013
+#define OBJ_RING_MAIL 0x013
 /*20 - Scale Mail*/
-#define OBJ_014 0x014
+#define OBJ_SCALE_MAIL 0x014
 /*21 - Chain Mail*/
-#define OBJ_015 0x015
+#define OBJ_CHAIN_MAIL 0x015
 /*22 - Plate Mail*/
-#define OBJ_016 0x016
+#define OBJ_PLATE_MAIL 0x016
 /*23 - Magic Armor*/
-#define OBJ_017 0x017
+#define OBJ_MAGIC_ARMOR 0x017
 /*24 - Spiked Collar*/
-#define OBJ_018 0x018
+#define OBJ_SPIKED_COLLAR 0x018
 /*25 - Guild Belt*/
-#define OBJ_019 0x019
+#define OBJ_GUILD_BELT 0x019
 /*26 - Gargoyle Belt*/
-#define OBJ_01A 0x01A
+#define OBJ_GARGOYLE_BELT 0x01A
 /*27 - Leather Boots*/
-#define OBJ_01B 0x01B
+#define OBJ_LEATHER_BOOTS 0x01B
 /*28 - Swamp Boots*/
-#define OBJ_01C 0x01C
+#define OBJ_SWAMP_BOOTS 0x01C
 /*29 - Earth (Dirt)*/
-#define OBJ_01D 0x01D
+#define OBJ_EARTH_DIRT 0x01D
 /*30 - Floor (Wood)*/
-#define OBJ_01E 0x01E
+#define OBJ_FLOOR_WOOD 0x01E
 /*31 - Floor (Brick)*/
-#define OBJ_01F 0x01F
+#define OBJ_FLOOR_BRICK 0x01F
 /*32 - Floor (Tile)*/
-#define OBJ_020 0x020
+#define OBJ_FLOOR_TILE 0x020
 /*33 - Sling*/
-#define OBJ_021 0x021
+#define OBJ_SLING 0x021
 /*34 - Club*/
-#define OBJ_022 0x022
+#define OBJ_CLUB 0x022
 /*35 - Main Gauche*/
-#define OBJ_023 0x023
+#define OBJ_MAIN_GAUCHE 0x023
 /*36 - Spear*/
-#define OBJ_024 0x024
+#define OBJ_SPEAR 0x024
 /*37 - Throwing Axe*/
-#define OBJ_025 0x025
+#define OBJ_THROWING_AXE 0x025
 /*38 - Dagger*/
-#define OBJ_026 0x026
+#define OBJ_DAGGER 0x026
 /*39 - Mace*/
-#define OBJ_027 0x027
+#define OBJ_MACE 0x027
 /*40 - Morning Star*/
-#define OBJ_028 0x028
+#define OBJ_MORNING_STAR 0x028
 /*41 - Bow*/
-#define OBJ_029 0x029
+#define OBJ_BOW 0x029
 /*42 - Crossbow*/
-#define OBJ_02A 0x02A
+#define OBJ_CROSSBOW 0x02A
 /*43 - Sword*/
-#define OBJ_02B 0x02B
+#define OBJ_SWORD 0x02B
 /*44 - 2-handed Hammer*/
-#define OBJ_02C 0x02C
+#define OBJ_TWO_HANDED_HAMMER 0x02C
 /*45 - 2-handed Axe*/
-#define OBJ_02D 0x02D
+#define OBJ_TWO_HANDED_AXE 0x02D
 /*46 - 2-handed Sword*/
-#define OBJ_02E 0x02E
+#define OBJ_TWO_HANDED_SWORD 0x02E
 /*47 - Halberd*/
-#define OBJ_02F 0x02F
+#define OBJ_HALBERD 0x02F
 /*48 - Glass Sword*/
-#define OBJ_030 0x030
+#define OBJ_GLASS_SWORD 0x030
 /*49 - Boomerang*/
-#define OBJ_031 0x031
+#define OBJ_BOOMERANG 0x031
 /*50 - Triple Crossbow*/
-#define OBJ_032 0x032
+#define OBJ_TRIPLE_CROSSBOW 0x032
 /*51 - Force Field*/
-#define OBJ_033 0x033
+#define OBJ_FORCE_FIELD 0x033
 /*52 - Wizard's Eye*/
-#define OBJ_034 0x034
+#define OBJ_WIZARDS_EYE 0x034
 /*53 - Web*/
-#define OBJ_035 0x035
+#define OBJ_WEB 0x035
 /*54 - Magic Bow*/
-#define OBJ_036 0x036
+#define OBJ_MAGIC_BOW 0x036
 /*55 - Arrow*/
-#define OBJ_037 0x037
+#define OBJ_ARROW 0x037
 /*56 - Bolt*/
-#define OBJ_038 0x038
+#define OBJ_BOLT 0x038
 /*57 - Spellbook*/
-#define OBJ_039 0x039
+#define OBJ_SPELLBOOK 0x039
 /*58 - Spell*1*/
-#define OBJ_03A 0x03A
+#define OBJ_SPELL 0x03A
 /*59 - Codex*/
-#define OBJ_03B 0x03B
+#define OBJ_CODEX 0x03B
 /*60 - Book of Prophecies*/
-#define OBJ_03C 0x03C
+#define OBJ_BOOK_OF_PROPHECIES 0x03C
 /*61 - Book of Circles*/
-#define OBJ_03D 0x03D
+#define OBJ_BOOK_OF_CIRCLES 0x03D
 /*62  - Vortex Cube*/
-#define OBJ_03E 0x03E
+#define OBJ_VORTEX_CUBE 0x03E
 /*63  - Lockpick*/
-#define OBJ_03F 0x03F
+#define OBJ_LOCKPICK 0x03F
 /*64  - Key*2*/
-#define OBJ_040 0x040
+#define OBJ_KEY 0x040
 /*65  - Black Pearl*3*/
-#define OBJ_041 0x041
+#define OBJ_BLACK_PEARL 0x041
 /*66  - Blood Moss*3*/
-#define OBJ_042 0x042
+#define OBJ_BLOOD_MOSS 0x042
 /*67  - Garlic*3*/
-#define OBJ_043 0x043
+#define OBJ_GARLIC 0x043
 /*68  - Ginseng*3*/
-#define OBJ_044 0x044
+#define OBJ_GINSENG 0x044
 /*69  - Mandrake*3*/
-#define OBJ_045 0x045
+#define OBJ_MANDRAKE 0x045
 /*70  - Nightshade*3*/
-#define OBJ_046 0x046
+#define OBJ_NIGHTSHADE 0x046
 /*71  - Spidersilk*3*/
-#define OBJ_047 0x047
+#define OBJ_SPIDERSILK 0x047
 /*72  - Ash*3*/
-#define OBJ_048 0x048
+#define OBJ_ASH 0x048
 /*73  - Moonstone (new moon)*/
-#define OBJ_049 0x049
+#define OBJ_MOONSTONE 0x049
 /*74  - Ankh Amulet*/
-#define OBJ_04A 0x04A
+#define OBJ_ANKH_AMULET 0x04A
 /*75  - Snake Amulet*/
-#define OBJ_04B 0x04B
+#define OBJ_SNAKE_AMULET 0x04B
 /*76  - Amulet of Submission*/
-#define OBJ_04C 0x04C
+#define OBJ_AMULET_OF_SUBMISSION 0x04C
 /*77  - Gem*/
-#define OBJ_04D 0x04D
+#define OBJ_GEM 0x04D
 /*78  - Staff*/
-#define OBJ_04E 0x04E
+#define OBJ_STAFF 0x04E
 /*79  - Lightning Wand*/
-#define OBJ_04F 0x04F
+#define OBJ_LIGHTNING_WAND 0x04F
 /*80  - Fire Wand*/
-#define OBJ_050 0x050
+#define OBJ_FIRE_WAND 0x050
 /*81  - Storm Cloak*/
-#define OBJ_051 0x051
+#define OBJ_STORM_CLOAK 0x051
 /*82  - Ring*/
-#define OBJ_052 0x052
+#define OBJ_RING 0x052
 /*83  - Flask of Oil*/
-#define OBJ_053 0x053
+#define OBJ_FLASK_OF_OIL 0x053
 /*84  - Red Gate*/
-#define OBJ_054 0x054
+#define OBJ_RED_GATE 0x054
 /*85  - Moongate*/
-#define OBJ_055 0x055
+#define OBJ_MOONGATE 0x055
 /*86  - Gavel*/
-#define OBJ_056 0x056
+#define OBJ_GAVEL 0x056
 /*87  - Orb of the Moons*/
-#define OBJ_057 0x057
+#define OBJ_ORB_OF_THE_MOONS 0x057
 /*88  - Gold*/
-#define OBJ_058 0x058
+#define OBJ_GOLD 0x058
 /*89  - Gold Nugget*/
-#define OBJ_059 0x059
+#define OBJ_GOLD_NUGGET 0x059
 /*90  - Torch*/
-#define OBJ_05A 0x05A
+#define OBJ_TORCH 0x05A
 /*91  - Zu Ylem*/
-#define OBJ_05B 0x05B
+#define OBJ_ZU_YLEM 0x05B
 /*92  - Silver Snake Venom*/
-#define OBJ_05C 0x05C
+#define OBJ_SILVER_SNAKE_VENOM 0x05C
 /*93  - Sextant*/
-#define OBJ_05D 0x05D
+#define OBJ_SEXTANT 0x05D
 /*94  - Spinning Wheel*/
-#define OBJ_05E 0x05E
+#define OBJ_SPINNING_WHEEL 0x05E
 /*95  - Bunch of Grapes*/
-#define OBJ_05F 0x05F
+#define OBJ_BUNCH_OF_GRAPES 0x05F
 /*96  - Butter*/
-#define OBJ_060 0x060
+#define OBJ_BUTTER 0x060
 /*97  - Gargish Vocabulary*/
-#define OBJ_061 0x061
+#define OBJ_GARGISH_VOCABULARY 0x061
 /*98  - Open Chest*/
-#define OBJ_062 0x062
+#define OBJ_OPEN_CHEST 0x062
 /*99  - Backpack*/
-#define OBJ_063 0x063
+#define OBJ_BACKPACK 0x063
 /*100 - Scythe*/
-#define OBJ_064 0x064
+#define OBJ_SCYTHE 0x064
 /*101 - Pitchfork*/
-#define OBJ_065 0x065
+#define OBJ_PITCHFORK 0x065
 /*102 - Rake*/
-#define OBJ_066 0x066
+#define OBJ_RAKE 0x066
 /*103 - Pick*/
-#define OBJ_067 0x067
+#define OBJ_PICK 0x067
 /*104 - Shovel*/
-#define OBJ_068 0x068
+#define OBJ_SHOVEL 0x068
 /*105 - Hoe*/
-#define OBJ_069 0x069
+#define OBJ_HOE 0x069
 /*106 - Wooden Ladder*/
-#define OBJ_06A 0x06A
+#define OBJ_WOODEN_LADDER 0x06A
 /*107 - Yoke*/
-#define OBJ_06B 0x06B
+#define OBJ_YOKE 0x06B
 /*108 - Oven Spatula*/
-#define OBJ_06C 0x06C
+#define OBJ_OVEN_SPATULA 0x06C
 /*109 - Rolling Pin*/
-#define OBJ_06D 0x06D
+#define OBJ_ROLLING_PIN 0x06D
 /*110 - Spatula*/
-#define OBJ_06E 0x06E
+#define OBJ_SPATULA 0x06E
 /*111 - Ladle*/
-#define OBJ_06F 0x06F
+#define OBJ_LADLE 0x06F
 /*112 - Cooking Sheet*/
-#define OBJ_070 0x070
+#define OBJ_COOKING_SHEET 0x070
 /*113 - Cleaver*/
-#define OBJ_071 0x071
+#define OBJ_CLEAVER 0x071
 /*114 - Knife*/
-#define OBJ_072 0x072
+#define OBJ_KNIFE 0x072
 /*115 - Wine*/
-#define OBJ_073 0x073
+#define OBJ_WINE 0x073
 /*116 - Mead*/
-#define OBJ_074 0x074
+#define OBJ_MEAD 0x074
 /*117 - Ale*/
-#define OBJ_075 0x075
+#define OBJ_ALE 0x075
 /*118 - Wineglass*/
-#define OBJ_076 0x076
+#define OBJ_WINEGLASS 0x076
 /*119 - Plate*/
-#define OBJ_077 0x077
+#define OBJ_PLATE 0x077
 /*120 - Mug*/
-#define OBJ_078 0x078
+#define OBJ_MUG 0x078
 /*121 - Silverware*/
-#define OBJ_079 0x079
+#define OBJ_SILVERWARE 0x079
 /*122 - Candle*/
-#define OBJ_07A 0x07A
+#define OBJ_CANDLE 0x07A
 /*123 - Mirror*/
-#define OBJ_07B 0x07B
+#define OBJ_MIRROR 0x07B
 /*124 - Tunic*/
-#define OBJ_07C 0x07C
+#define OBJ_TUNIC 0x07C
 /*125 - Hanger*/
-#define OBJ_07D 0x07D
+#define OBJ_HANGER 0x07D
 /*126 - Dress*/
-#define OBJ_07E 0x07E
+#define OBJ_DRESS 0x07E
 /*127 - Skillet*/
-#define OBJ_07F 0x07F
+#define OBJ_SKILLET 0x07F
 /*128 - Loaf of Bread*/
-#define OBJ_080 0x080
+#define OBJ_LOAF_OF_BREAD 0x080
 /*129 - Portion of Meat*/
-#define OBJ_081 0x081
+#define OBJ_PORTION_OF_MEAT 0x081
 /*130 - Rolls*/
-#define OBJ_082 0x082
+#define OBJ_ROLLS 0x082
 /*131 - Cake*/
-#define OBJ_083 0x083
+#define OBJ_CAKE 0x083
 /*132 - Cheese*/
-#define OBJ_084 0x084
+#define OBJ_CHEESE 0x084
 /*133 - Ham*/
-#define OBJ_085 0x085
+#define OBJ_HAM 0x085
 /*134 - Horse's Carcass*/
-#define OBJ_086 0x086
+#define OBJ_HORSES_CARCASS 0x086
 /*135 - Horse Chops (yum!<G>)*/
-#define OBJ_087 0x087
+#define OBJ_HORSE_CHOPS 0x087
 /*136 - Skewer*/
-#define OBJ_088 0x088
+#define OBJ_SKEWER 0x088
 /*137 - Pants*/
-#define OBJ_089 0x089
+#define OBJ_PANTS 0x089
 /*138 - Plant*/
-#define OBJ_08A 0x08A
+#define OBJ_PLANT 0x08A
 /*139 - Flowers*/
-#define OBJ_08B 0x08B
+#define OBJ_FLOWERS 0x08B
 /*140 - Wall Mount*/
-#define OBJ_08C 0x08C
+#define OBJ_WALL_MOUNT 0x08C
 /*141 - Decorative Sword*/
-#define OBJ_08D 0x08D
+#define OBJ_DECORATIVE_SWORD 0x08D
 /*142 - Decorative Shield*/
-#define OBJ_08E 0x08E
+#define OBJ_DECORATIVE_SHIELD 0x08E
 /*143 - Picture*/
-#define OBJ_08F 0x08F
+#define OBJ_PICTURE 0x08F
 /*144 - Tapestry*/
-#define OBJ_090 0x090
+#define OBJ_TAPESTRY 0x090
 /*145 - Candelabra*/
-#define OBJ_091 0x091
+#define OBJ_CANDELABRA 0x091
 /*146 - Person Sleeping*/
-#define OBJ_092 0x092
+#define OBJ_PERSON_SLEEPING 0x092
 /*147 - Cauldron*/
-#define OBJ_093 0x093
+#define OBJ_CAULDRON 0x093
 /*148 - Cauldron (filled)*/
-#define OBJ_094 0x094
+#define OBJ_CAULDRON_FILLED 0x094
 /*149 - Ship Deep*/
-#define OBJ_095 0x095
+#define OBJ_SHIP_DEED 0x095
 /*150 - Inkwell*/
-#define OBJ_096 0x096
+#define OBJ_INKWELL 0x096
 /*151 - Book*/
-#define OBJ_097 0x097
+#define OBJ_BOOK 0x097
 /*152 - Note*/
-#define OBJ_098 0x098
+#define OBJ_NOTE 0x098
 /*153 - Panpipes*/
-#define OBJ_099 0x099
+#define OBJ_PANPIPES 0x099
 /*154 - Telescope*/
-#define OBJ_09A 0x09A
+#define OBJ_TELESCOPE 0x09A
 /*155 - Crystal Ball*/
-#define OBJ_09B 0x09B
+#define OBJ_CRYSTAL_BALL 0x09B
 /*156 - Harpsichord*/
-#define OBJ_09C 0x09C
+#define OBJ_HARPSICHORD 0x09C
 /*157 - Harp*/
-#define OBJ_09D 0x09D
+#define OBJ_HARP 0x09D
 /*158 - Lute*/
-#define OBJ_09E 0x09E
+#define OBJ_LUTE 0x09E
 /*159 - Clock*/
-#define OBJ_09F 0x09F
+#define OBJ_CLOCK 0x09F
 /*160 - Endtable*/
-#define OBJ_0A0 0x0A0
+#define OBJ_ENDTABLE 0x0A0
 /*161 - Water Vase*/
-#define OBJ_0A1 0x0A1
+#define OBJ_WATER_VASE 0x0A1
 /*162 - Stove*/
-#define OBJ_0A2 0x0A2
+#define OBJ_STOVE 0x0A2
 /*163 - Bed*/
-#define OBJ_0A3 0x0A3
+#define OBJ_BED 0x0A3
 /*164 - Fireplace*/
-#define OBJ_0A4 0x0A4
+#define OBJ_FIREPLACE 0x0A4
 /*165 - Stalagmite*/
-#define OBJ_0A5 0x0A5
+#define OBJ_STALAGMITE 0x0A5
 /*166 - Sack of Grain*/
-#define OBJ_0A6 0x0A6
+#define OBJ_SACK_OF_GRAIN 0x0A6
 /*167 - Sack of Flour*/
-#define OBJ_0A7 0x0A7
+#define OBJ_SACK_OF_FLOUR 0x0A7
 /*168 - Remains*/
-#define OBJ_0A8 0x0A8
+#define OBJ_REMAINS 0x0A8
 /*169 - Rubber Ducky<G>*/
-#define OBJ_0A9 0x0A9
+#define OBJ_RUBBER_DUCKY 0x0A9
 /*170 - Urn of Ashes*/
-#define OBJ_0AA 0x0AA
+#define OBJ_URN_OF_ASHES 0x0AA
 /*171 - Fumarole*/
-#define OBJ_0AB 0x0AB
+#define OBJ_FUMAROLE 0x0AB
 /*172 - Spikes*/
-#define OBJ_0AC 0x0AC
+#define OBJ_SPIKES 0x0AC
 /*173 - Trap*/
-#define OBJ_0AD 0x0AD
+#define OBJ_TRAP 0x0AD
 /*174 - Switch*/
-#define OBJ_0AE 0x0AE
+#define OBJ_SWITCH 0x0AE
 /*175 - Electric Field*/
-#define OBJ_0AF 0x0AF
+#define OBJ_ELECTRIC_FIELD 0x0AF
 /*176 - Chest of Drawers*/
-#define OBJ_0B0 0x0B0
+#define OBJ_CHEST_OF_DRAWERS 0x0B0
 /*177 - Desk*/
-#define OBJ_0B1 0x0B1
+#define OBJ_DESK 0x0B1
 /*178 - Bucket*/
-#define OBJ_0B2 0x0B2
+#define OBJ_BUCKET 0x0B2
 /*179 - Bucket of Water*/
-#define OBJ_0B3 0x0B3
+#define OBJ_BUCKET_OF_WATER 0x0B3
 /*180 - Bucket of Milk*/
-#define OBJ_0B4 0x0B4
+#define OBJ_BUCKET_OF_MILK 0x0B4
 /*181 - Churn*/
-#define OBJ_0B5 0x0B5
+#define OBJ_CHURN 0x0B5
 /*182 - Beehive*/
-#define OBJ_0B6 0x0B6
+#define OBJ_BEEHIVE 0x0B6
 /*183 - Honey Jar*/
-#define OBJ_0B7 0x0B7
+#define OBJ_HONEY_JAR 0x0B7
 /*184 - Jar of Honey*/
-#define OBJ_0B8 0x0B8
+#define OBJ_JAR_OF_HONEY 0x0B8
 /*185 - Cloth*/
-#define OBJ_0B9 0x0B9
+#define OBJ_CLOTH 0x0B9
 /*186 - Open Barrel*/
-#define OBJ_0BA 0x0BA
+#define OBJ_OPEN_BARREL 0x0BA
 /*187 - Jug*/
-#define OBJ_0BB 0x0BB
+#define OBJ_JUG 0x0BB
 /*188 - Bag*/
-#define OBJ_0BC 0x0BC
+#define OBJ_BAG 0x0BC
 /*189 - Cask*/
-#define OBJ_0BD 0x0BD
+#define OBJ_CASK 0x0BD
 /*190 - Bale of Wool*/
-#define OBJ_0BE 0x0BE
+#define OBJ_BALE_OF_WOOL 0x0BE
 /*191 - Basket*/
-#define OBJ_0BF 0x0BF
+#define OBJ_BASKET 0x0BF
 /*192 - Open Crate*/
-#define OBJ_0C0 0x0C0
+#define OBJ_OPEN_CRATE 0x0C0
 /*193 - Small Jug*/
-#define OBJ_0C1 0x0C1
+#define OBJ_SMALL_JUG 0x0C1
 /*194 - Milk Bottle*/
-#define OBJ_0C2 0x0C2
+#define OBJ_MILK_BOTTLE 0x0C2
 /*195 - Wheat*/
-#define OBJ_0C3 0x0C3
+#define OBJ_WHEAT 0x0C3
 /*196 - Vat*/
-#define OBJ_0C4 0x0C4
+#define OBJ_VAT 0x0C4
 /*197 - Wine Cask*/
-#define OBJ_0C5 0x0C5
+#define OBJ_WINE_CASK 0x0C5
 /*198 - Cutting Table*/
-#define OBJ_0C6 0x0C6
+#define OBJ_CUTTING_TABLE 0x0C6
 /*199 - Loom*/
-#define OBJ_0C7 0x0C7
+#define OBJ_LOOM 0x0C7
 /*200 - Hood (for forge)*/
-#define OBJ_0C8 0x0C8
+#define OBJ_HOOD_FOR_FORGE 0x0C8
 /*201 - Fire (from forge)*/
-#define OBJ_0C9 0x0C9
+#define OBJ_FORGE_FIRE 0x0C9
 /*202 - Horseshoes*/
-#define OBJ_0CA 0x0CA
+#define OBJ_HORSESHOES 0x0CA
 /*203 - Pliers*/
-#define OBJ_0CB 0x0CB
+#define OBJ_PLIERS 0x0CB
 /*204 - Hammer*/
-#define OBJ_0CC 0x0CC
+#define OBJ_HAMMER 0x0CC
 /*205 - Water Trough*/
-#define OBJ_0CD 0x0CD
+#define OBJ_WATER_TROUGH 0x0CD
 /*206 - Brazier*/
-#define OBJ_0CE 0x0CE
+#define OBJ_BRAZIER 0x0CE
 /*207 - Rod*/
-#define OBJ_0CF 0x0CF
+#define OBJ_ROD 0x0CF
 /*208 - Hook*/
-#define OBJ_0D0 0x0D0
+#define OBJ_HOOK 0x0D0
 /*209 - Meat (Rib type)*/
-#define OBJ_0D1 0x0D1
+#define OBJ_MEAT_RIB 0x0D1
 /*210 - Ribs*/
-#define OBJ_0D2 0x0D2
+#define OBJ_RIBS 0x0D2
 /*211 - Dead Animal*/
-#define OBJ_0D3 0x0D3
+#define OBJ_DEAD_ANIMAL 0x0D3
 /*212 - Fan*/
-#define OBJ_0D4 0x0D4
+#define OBJ_FAN 0x0D4
 /*213 - Mouse Hole*/
-#define OBJ_0D5 0x0D5
+#define OBJ_MOUSE_HOLE 0x0D5
 /*214 - Wine Press*/
-#define OBJ_0D6 0x0D6
+#define OBJ_WINE_PRESS 0x0D6
 /*215 - Stable*/
-#define OBJ_0D7 0x0D7
+#define OBJ_STABLE 0x0D7
 /*216 - Bookshelf*/
-#define OBJ_0D8 0x0D8
+#define OBJ_BOOKSHELF 0x0D8
 /*217 - Anvil*/
-#define OBJ_0D9 0x0D9
+#define OBJ_ANVIL 0x0D9
 /*218 - Bellows*/
-#define OBJ_0DA 0x0DA
+#define OBJ_BELLOWS 0x0DA
 /*219 - Oven*/
-#define OBJ_0DB 0x0DB
+#define OBJ_OVEN 0x0DB
 /*220 - Flag*/
-#define OBJ_0DC 0x0DC
+#define OBJ_FLAG 0x0DC
 /*221 - Cannon*/
-#define OBJ_0DD 0x0DD
+#define OBJ_CANNON 0x0DD
 /*222 - Cannon Balls*/
-#define OBJ_0DE 0x0DE
+#define OBJ_CANNON_BALLS 0x0DE
 /*223 - Powder Keg*/
-#define OBJ_0DF 0x0DF
+#define OBJ_POWDER_KEG 0x0DF
 /*224 - Foot Rail*/
-#define OBJ_0E0 0x0E0
+#define OBJ_FOOT_RAIL 0x0E0
 /*225 - Spool of Thread*/
-#define OBJ_0E1 0x0E1
+#define OBJ_SPOOL_OF_THREAD 0x0E1
 /*226 - Spool of Silk*/
-#define OBJ_0E2 0x0E2
+#define OBJ_SPOOL_OF_SILK 0x0E2
 /*227 - Pennant*/
-#define OBJ_0E3 0x0E3
+#define OBJ_PENNANT 0x0E3
 /*228 - Table (square corner)*/
-#define OBJ_0E4 0x0E4
+#define OBJ_TABLE_SQUARE_CORNER_0E4 0x0E4
 /*229 - Shadow*/
-#define OBJ_0E5 0x0E5
+#define OBJ_SHADOW_0E5 0x0E5
 /*230 - Table (round corner)*/
-#define OBJ_0E6 0x0E6
+#define OBJ_TABLE_ROUND_CORNER_0E6 0x0E6
 /*231 - Shadow*/
-#define OBJ_0E7 0x0E7
+#define OBJ_SHADOW_0E7 0x0E7
 /*232 - Spittoon*/
-#define OBJ_0E8 0x0E8
+#define OBJ_SPITTOON 0x0E8
 /*233 - Well*/
-#define OBJ_0E9 0x0E9
+#define OBJ_WELL 0x0E9
 /*234 - Fountain*/
-#define OBJ_0EA 0x0EA
+#define OBJ_FOUNTAIN 0x0EA
 /*235 - Sundial*/
-#define OBJ_0EB 0x0EB
+#define OBJ_SUNDIAL 0x0EB
 /*236 - Bell*/
-#define OBJ_0EC 0x0EC
+#define OBJ_BELL 0x0EC
 /*237 - Table (middle)*/
-#define OBJ_0ED 0x0ED
+#define OBJ_TABLE_MIDDLE 0x0ED
 /*238 - Shadow*/
-#define OBJ_0EE 0x0EE
+#define OBJ_SHADOW_0EE 0x0EE
 /*239 - Table (round corner)*/
-#define OBJ_0EF 0x0EF
+#define OBJ_TABLE_ROUND_CORNER_0EF 0x0EF
 /*240 - Shadow*/
-#define OBJ_0F0 0x0F0
+#define OBJ_SHADOW_0F0 0x0F0
 /*241 - Silk Cloth*/
-#define OBJ_0F1 0x0F1
+#define OBJ_SILK_CLOTH 0x0F1
 /*242 - Rune of Honesty*/
-#define OBJ_0F2 0x0F2
+#define OBJ_RUNE_OF_HONESTY 0x0F2
 /*243 - Rune of Compassion*/
-#define OBJ_0F3 0x0F3
+#define OBJ_RUNE_OF_COMPASSION 0x0F3
 /*244 - Rune of Valor*/
-#define OBJ_0F4 0x0F4
+#define OBJ_RUNE_OF_VALOR 0x0F4
 /*245 - Rune of Justice*/
-#define OBJ_0F5 0x0F5
+#define OBJ_RUNE_OF_JUSTICE 0x0F5
 /*246 - Rune of Sacrifice*/
-#define OBJ_0F6 0x0F6
+#define OBJ_RUNE_OF_SACRIFICE 0x0F6
 /*247 - Rune of Honor*/
-#define OBJ_0F7 0x0F7
+#define OBJ_RUNE_OF_HONOR 0x0F7
 /*248 - Rune of Spirituality*/
-#define OBJ_0F8 0x0F8
+#define OBJ_RUNE_OF_SPIRITUALITY 0x0F8
 /*249 - Rune of Humility*/
-#define OBJ_0F9 0x0F9
+#define OBJ_RUNE_OF_HUMILITY 0x0F9
 /*250 - Table (square corner)*/
-#define OBJ_0FA 0x0FA
+#define OBJ_TABLE_SQUARE_CORNER_0FA 0x0FA
 /*251 - Shadow*/
-#define OBJ_0FB 0x0FB
+#define OBJ_SHADOW_0FB 0x0FB
 /*252 - Chair*/
-#define OBJ_0FC 0x0FC
+#define OBJ_CHAIR 0x0FC
 /*253 - Campfire*/
-#define OBJ_0FD 0x0FD
+#define OBJ_CAMPFIRE 0x0FD
 /*254 - Cross*/
-#define OBJ_0FE 0x0FE
+#define OBJ_CROSS 0x0FE
 /*255 - Tombstone*/
-#define OBJ_0FF 0x0FF
+#define OBJ_TOMBSTONE 0x0FF
 /*256 - Protection Ring*/
-#define OBJ_100 0x100
+#define OBJ_PROTECTION_RING 0x100
 /*257 - Regeneration Ring*/
-#define OBJ_101 0x101
+#define OBJ_REGENERATION_RING 0x101
 /*258 - Invisibility Ring*/
-#define OBJ_102 0x102
+#define OBJ_INVISIBILITY_RING 0x102
 /*259 - Table Leg*/
-#define OBJ_103 0x103
+#define OBJ_TABLE_LEG_103 0x103
 /*260 - Shadow*/
-#define OBJ_104 0x104
+#define OBJ_SHADOW_104 0x104
 /*261 - Table Leg*/
-#define OBJ_105 0x105
+#define OBJ_TABLE_LEG_105 0x105
 /*262 - Shadow*/
-#define OBJ_106 0x106
+#define OBJ_SHADOW_106 0x106
 /*263 - Stocks*/
-#define OBJ_107 0x107
+#define OBJ_STOCKS 0x107
 /*264 - Fishing Pole*/
-#define OBJ_108 0x108
+#define OBJ_FISHING_POLE 0x108
 /*265 - Fish*/
-#define OBJ_109 0x109
+#define OBJ_FISH 0x109
 /*266 - Grave*/
-#define OBJ_10A 0x10A
+#define OBJ_GRAVE 0x10A
 /*267 - Guillotine*/
-#define OBJ_10B 0x10B
+#define OBJ_GUILLOTINE 0x10B
 /*268 - Lever*/
-#define OBJ_10C 0x10C
+#define OBJ_LEVER 0x10C
 /*269 - Drawbridge*/
-#define OBJ_10D 0x10D
+#define OBJ_DRAWBRIDGE 0x10D
 /*270 - Balloon Plans*/
-#define OBJ_10E 0x10E
+#define OBJ_BALLOON_PLANS 0x10E
 /*271 - Doorsill*/
-#define OBJ_10F 0x10F
+#define OBJ_DOORSILL 0x10F
 /*272 - Steps*/
-#define OBJ_110 0x110
+#define OBJ_STEPS_110 0x110
 /*273 - Tile*/
-#define OBJ_111 0x111
+#define OBJ_TILE 0x111
 /*274 - Yew Log*/
-#define OBJ_112 0x112
+#define OBJ_YEW_LOG 0x112
 /*275 - [Blue] Potion*/
-#define OBJ_113 0x113
+#define OBJ_POTION 0x113
 /*276 - Steps*/
-#define OBJ_114 0x114
+#define OBJ_STEPS_114 0x114
 /*277 - Yew Board*/
-#define OBJ_115 0x115
+#define OBJ_YEW_BOARD 0x115
 /*278 - Passthrough*/
-#define OBJ_116 0x116
+#define OBJ_PASSTHROUGH_116 0x116
 /*279 - Table*/
-#define OBJ_117 0x117
+#define OBJ_TABLE 0x117
 /*280 - Passthrough*/
-#define OBJ_118 0x118
+#define OBJ_PASSTHROUGH_118 0x118
 /*281 - Fence*/
-#define OBJ_119 0x119
+#define OBJ_FENCE 0x119
 /*282 - Bars*/
-#define OBJ_11A 0x11A
+#define OBJ_BARS 0x11A
 /*283 - Anchor*/
-#define OBJ_11B 0x11B
+#define OBJ_ANCHOR 0x11B
 /*284 - Rope*/
-#define OBJ_11C 0x11C
+#define OBJ_ROPE 0x11C
 /*285 - Pole*/
-#define OBJ_11D 0x11D
+#define OBJ_POLE 0x11D
 /*286 - Walkway*/
-#define OBJ_11E 0x11E
+#define OBJ_WALKWAY 0x11E
 /*287 - Water Wheel*/
-#define OBJ_11F 0x11F
+#define OBJ_WATER_WHEEL 0x11F
 /*288 - Crank*/
-#define OBJ_120 0x120
+#define OBJ_CRANK 0x120
 /*289 - Log Saw*/
-#define OBJ_121 0x121
+#define OBJ_LOG_SAW 0x121
 /*290 - Millstone*/
-#define OBJ_122 0x122
+#define OBJ_MILLSTONE 0x122
 /*291 - Shaft*/
-#define OBJ_123 0x123
+#define OBJ_SHAFT 0x123
 /*292 - Gearwork*/
-#define OBJ_124 0x124
+#define OBJ_GEARWORK 0x124
 /*293 - Chain*/
-#define OBJ_125 0x125
+#define OBJ_CHAIN 0x125
 /*294 - Lightsource*/
-#define OBJ_126 0x126
+#define OBJ_LIGHTSOURCE 0x126
 /*295 - Heatsource*/
-#define OBJ_127 0x127
+#define OBJ_HEATSOURCE 0x127
 /*296 - Xylophone*/
-#define OBJ_128 0x128
+#define OBJ_XYLOPHONE 0x128
 /*297 - Oaken Door*/
-#define OBJ_129 0x129
+#define OBJ_OAKEN_DOOR 0x129
 /*298 - Windowed Door*/
-#define OBJ_12A 0x12A
+#define OBJ_WINDOWED_DOOR 0x12A
 /*299 - Cedar Door*/
-#define OBJ_12B 0x12B
+#define OBJ_CEDAR_DOOR 0x12B
 /*300 - Steel Door*/
-#define OBJ_12C 0x12C
+#define OBJ_STEEL_DOOR 0x12C
 /*301 - Doorway*/
-#define OBJ_12D 0x12D
+#define OBJ_DOORWAY 0x12D
 /*302 - Archway*/
-#define OBJ_12E 0x12E
+#define OBJ_ARCHWAY 0x12E
 /*303 - Carpet*/
-#define OBJ_12F 0x12F
+#define OBJ_CARPET 0x12F
 /*304 - Cook Fire*/
-#define OBJ_130 0x130
+#define OBJ_COOK_FIRE 0x130
 /*305 - Ladder*/
-#define OBJ_131 0x131
+#define OBJ_LADDER 0x131
 /*306 - Trellis*/
-#define OBJ_132 0x132
+#define OBJ_TRELLIS 0x132
 /*307 - Volcano*/
-#define OBJ_133 0x133
+#define OBJ_VOLCANO 0x133
 /*308 - Hole*/
-#define OBJ_134 0x134
+#define OBJ_HOLE 0x134
 /*309 - Bones (archway)*/
-#define OBJ_135 0x135
+#define OBJ_BONES_ARCHWAY 0x135
 /*310 - Portcullis*/
-#define OBJ_136 0x136
+#define OBJ_PORTCULLIS 0x136
 /*311 - Stone Table*/
-#define OBJ_137 0x137
+#define OBJ_STONE_TABLE 0x137
 /*312 - Stone Lion*/
-#define OBJ_138 0x138
+#define OBJ_STONE_LION 0x138
 /*313 - Silver Horn*/
-#define OBJ_139 0x139
+#define OBJ_SILVER_HORN 0x139
 /*314 - Floor (stone)*/
-#define OBJ_13A 0x13A
+#define OBJ_FLOOR_STONE 0x13A
 /*315 - Stone*/
-#define OBJ_13B 0x13B
+#define OBJ_STONE 0x13B
 /*316 - Lamppost*/
-#define OBJ_13C 0x13C
+#define OBJ_LAMPPOST 0x13C
 /*317 - Fire Field*/
-#define OBJ_13D 0x13D
+#define OBJ_FIRE_FIELD 0x13D
 /*318 - Poison Field*/
-#define OBJ_13E 0x13E
+#define OBJ_POISON_FIELD 0x13E
 /*319 - Protection Field*/
-#define OBJ_13F 0x13F
+#define OBJ_PROTECTION_FIELD 0x13F
 /*320 - Sleep Field*/
-#define OBJ_140 0x140
+#define OBJ_SLEEP_FIELD 0x140
 /*321 - Statue*/
-#define OBJ_141 0x141
+#define OBJ_STATUE 0x141
 /*322 - Pool*/
-#define OBJ_142 0x142
+#define OBJ_POOL 0x142
 /*323 - Monolith*/
-#define OBJ_143 0x143
+#define OBJ_MONOLITH 0x143
 /*324 - Pillar*/
-#define OBJ_144 0x144
+#define OBJ_PILLAR 0x144
 /*325 - Bookstand*/
-#define OBJ_145 0x145
+#define OBJ_BOOKSTAND 0x145
 /*326 - Mine Shaft*/
-#define OBJ_146 0x146
+#define OBJ_MINE_SHAFT 0x146
 /*327 - Throne*/
-#define OBJ_147 0x147
+#define OBJ_THRONE 0x147
 /*328 - Altar*/
-#define OBJ_148 0x148
+#define OBJ_ALTAR 0x148
 /*329 - Altar of Spirituality*/
-#define OBJ_149 0x149
+#define OBJ_ALTAR_OF_SPIRITUALITY 0x149
 /*330 - Mat*/
-#define OBJ_14A 0x14A
+#define OBJ_MAT 0x14A
 /*331 - Government Sign*/
-#define OBJ_14B 0x14B
+#define OBJ_GOVERNMENT_SIGN 0x14B
 /*332 - Sign*/
-#define OBJ_14C 0x14C
+#define OBJ_SIGN 0x14C
 /*333 - Gargoyle Sign*/
-#define OBJ_14D 0x14D
+#define OBJ_GARGOYLE_SIGN 0x14D
 /*334 - Secret Door*/
-#define OBJ_14E 0x14E
+#define OBJ_SECRET_DOOR 0x14E
 /*335 - Egg*/
-#define OBJ_14F 0x14F
+#define OBJ_EGG 0x14F
 /*336 - Charge*/
-#define OBJ_150 0x150
+#define OBJ_CHARGE 0x150
 /*337 - Effect*/
-#define OBJ_151 0x151
+#define OBJ_EFFECT 0x151
 /*338 - Blood*/
-#define OBJ_152 0x152
+#define OBJ_BLOOD 0x152
 /*339 - Dead Body*/
-#define OBJ_153 0x153
+#define OBJ_DEAD_BODY 0x153
 /*340 - Dead Cyclops*/
-#define OBJ_154 0x154
+#define OBJ_DEAD_CYCLOPS 0x154
 /*341 - Dead Gargoyle*/
-#define OBJ_155 0x155
+#define OBJ_DEAD_GARGOYLE 0x155
 /*342 - Giant Rat*/
-#define OBJ_156 0x156
+#define OBJ_GIANT_RAT 0x156
 /*343 - Insects*/
-#define OBJ_157 0x157
+#define OBJ_INSECTS 0x157
 /*344 - Giant Bat*/
-#define OBJ_158 0x158
+#define OBJ_GIANT_BAT 0x158
 /*345 - Giant Squid*/
-#define OBJ_159 0x159
+#define OBJ_GIANT_SQUID 0x159
 /*346 - Sea Serpent*/
-#define OBJ_15A 0x15A
+#define OBJ_SEA_SERPENT 0x15A
 /*347 - Reaper*/
-#define OBJ_15B 0x15B
+#define OBJ_REAPER 0x15B
 /*348 - Sheep*/
-#define OBJ_15C 0x15C
+#define OBJ_SHEEP 0x15C
 /*349 - Dog*/
-#define OBJ_15D 0x15D
+#define OBJ_DOG 0x15D
 /*350 - Deer*/
-#define OBJ_15E 0x15E
+#define OBJ_DEER 0x15E
 /*351 - Wolf*/
-#define OBJ_15F 0x15F
+#define OBJ_WOLF 0x15F
 /*352 - Ghost*/
-#define OBJ_160 0x160
+#define OBJ_GHOST 0x160
 /*353 - Gremlin*/
-#define OBJ_161 0x161
+#define OBJ_GREMLIN 0x161
 /*354 - Mouse*/
-#define OBJ_162 0x162
+#define OBJ_MOUSE 0x162
 /*355 - Gazer*/
-#define OBJ_163 0x163
+#define OBJ_GAZER 0x163
 /*356 - Bird*/
-#define OBJ_164 0x164
+#define OBJ_BIRD 0x164
 /*357 - Corpser*/
-#define OBJ_165 0x165
+#define OBJ_CORPSER 0x165
 /*358 - Snake*/
-#define OBJ_166 0x166
+#define OBJ_SNAKE 0x166
 /*359 - Rabbit*/
-#define OBJ_167 0x167
+#define OBJ_RABBIT 0x167
 /*360 - Rot Worms*/
-#define OBJ_168 0x168
+#define OBJ_ROT_WORMS 0x168
 /*361 - Giant Spider*/
-#define OBJ_169 0x169
+#define OBJ_GIANT_SPIDER 0x169
 /*362 - Winged Gargoyle*/
-#define OBJ_16A 0x16A
+#define OBJ_WINGED_GARGOYLE 0x16A
 /*363 - Gargoyle*/
-#define OBJ_16B 0x16B
+#define OBJ_GARGOYLE 0x16B
 /*364 - Acid Slug*/
-#define OBJ_16C 0x16C
+#define OBJ_ACID_SLUG 0x16C
 /*365 - Tangle Vine (pod)*/
-#define OBJ_16D 0x16D
+#define OBJ_TANGLE_VINE_POD 0x16D
 /*366 - Tangle Vine (vine)*/
-#define OBJ_16E 0x16E
+#define OBJ_TANGLE_VINE_VINE 0x16E
 /*367 - Daemon*/
-#define OBJ_16F 0x16F
+#define OBJ_DAEMON 0x16F
 /*368 - Skeleton*/
-#define OBJ_170 0x170
+#define OBJ_SKELETON 0x170
 /*369 - Drake*/
-#define OBJ_171 0x171
+#define OBJ_DRAKE 0x171
 /*370 - Headless*/
-#define OBJ_172 0x172
+#define OBJ_HEADLESS 0x172
 /*371 - Troll*/
-#define OBJ_173 0x173
+#define OBJ_TROLL 0x173
 /*372 - Mongbat*/
-#define OBJ_174 0x174
+#define OBJ_MONGBAT 0x174
 /*373 - Wisp*/
-#define OBJ_175 0x175
+#define OBJ_WISP 0x175
 /*374 - Hydra*/
-#define OBJ_176 0x176
+#define OBJ_HYDRA 0x176
 /*375 - Slime*/
-#define OBJ_177 0x177
+#define OBJ_SLIME 0x177
 /*376 - Fighter*/
-#define OBJ_178 0x178
+#define OBJ_FIGHTER 0x178
 /*377 - Swashbuckler*/
-#define OBJ_179 0x179
+#define OBJ_SWASHBUCKLER 0x179
 /*378 - Mage*/
-#define OBJ_17A 0x17A
+#define OBJ_MAGE 0x17A
 /*379 - Villager*/
-#define OBJ_17B 0x17B
+#define OBJ_VILLAGER 0x17B
 /*380 - Merchant*/
-#define OBJ_17C 0x17C
+#define OBJ_MERCHANT 0x17C
 /*381 - Child*/
-#define OBJ_17D 0x17D
+#define OBJ_CHILD 0x17D
 /*382 - Guard*/
-#define OBJ_17E 0x17E
+#define OBJ_GUARD 0x17E
 /*383 - Jester*/
-#define OBJ_17F 0x17F
+#define OBJ_JESTER 0x17F
 /*384 - Peasant*/
-#define OBJ_180 0x180
+#define OBJ_PEASANT 0x180
 /*385 - Farmer*/
-#define OBJ_181 0x181
+#define OBJ_FARMER 0x181
 /*386 - Musician (long cape)*/
-#define OBJ_182 0x182
+#define OBJ_MUSICIAN_LONG_CAPE 0x182
 /*387 - Woman*/
-#define OBJ_183 0x183
+#define OBJ_WOMAN 0x183
 /*388 - Cat*/
-#define OBJ_184 0x184
+#define OBJ_CAT 0x184
 /*389 - Silver Tablet*/
-#define OBJ_185 0x185
+#define OBJ_SILVER_TABLET 0x185
 /*390 - Silver Fragment*/
-#define OBJ_186 0x186
+#define OBJ_SILVER_FRAGMENT 0x186
 /*391 - Farmer*/
-#define OBJ_187 0x187
+#define OBJ_FARMER_2 0x187
 /*392 - Musician (short cape)*/
-#define OBJ_188 0x188
+#define OBJ_MUSICIAN_SHORT_CAPE 0x188
 /*393 - Shrine*/
-#define OBJ_189 0x189
+#define OBJ_SHRINE 0x189
 /*394 - Britannia Lens (blue)*/
-#define OBJ_18A 0x18A
+#define OBJ_BRITANNIA_LENS_BLUE 0x18A
 /*395 - Broken Lens (violet)*/
-#define OBJ_18B 0x18B
+#define OBJ_BROKEN_LENS_VIOLET 0x18B
 /*396 - Gargoyle Lens (violet)*/
-#define OBJ_18C 0x18C
+#define OBJ_GARGOYLE_LENS_VIOLET 0x18C
 /*397 - Statue of Mondain*/
-#define OBJ_18D 0x18D
+#define OBJ_STATUE_OF_MONDAIN 0x18D
 /*398 - Statue of Minax*/
-#define OBJ_18E 0x18E
+#define OBJ_STATUE_OF_MINAX 0x18E
 /*399 - Statue of Exodus*/
-#define OBJ_18F 0x18F
+#define OBJ_STATUE_OF_EXODUS 0x18F
 /*400 - Map Part one*/
-#define OBJ_190 0x190
+#define OBJ_MAP_PART_ONE 0x190
 /*401 - Map Part two*/
-#define OBJ_191 0x191
+#define OBJ_MAP_PART_TWO 0x191
 /*402 - Map Part three*/
-#define OBJ_192 0x192
+#define OBJ_MAP_PART_THREE 0x192
 /*403 - Map Part four*/
-#define OBJ_193 0x193
+#define OBJ_MAP_PART_FOUR 0x193
 /*404 - Map Part five*/
-#define OBJ_194 0x194
+#define OBJ_MAP_PART_FIVE 0x194
 /*405 - Map Part six*/
-#define OBJ_195 0x195
+#define OBJ_MAP_PART_SIX 0x195
 /*406 - Map Part seven*/
-#define OBJ_196 0x196
+#define OBJ_MAP_PART_SEVEN 0x196
 /*407 - Map Part eight*/
-#define OBJ_197 0x197
+#define OBJ_MAP_PART_EIGHT 0x197
 /*408  - Map Part nine*/
-#define OBJ_198 0x198
+#define OBJ_MAP_PART_NINE 0x198
 /*409  - Lord British*/
-#define OBJ_199 0x199
+#define OBJ_LORD_BRITISH 0x199
 /*410  - Avatar*/
-#define OBJ_19A 0x19A
+#define OBJ_AVATAR 0x19A
 /*411  - Dragon*/
-#define OBJ_19B 0x19B
+#define OBJ_DRAGON 0x19B
 /*412  - Ship*/
-#define OBJ_19C 0x19C
+#define OBJ_SHIP 0x19C
 /*413  - Silver Serpent*/
-#define OBJ_19D 0x19D
+#define OBJ_SILVER_SERPENT 0x19D
 /*414  - Skiff*/
-#define OBJ_19E 0x19E
+#define OBJ_SKIFF 0x19E
 /*415  - Raft*/
-#define OBJ_19F 0x19F
+#define OBJ_RAFT 0x19F
 /*416  - Nothing (REALLY!) - guardians of the codex?*/
-#define OBJ_1A0 0x1A0
+#define OBJ_NOTHING 0x1A0
 /*417  - Dragon Egg*/
-#define OBJ_1A1 0x1A1
+#define OBJ_DRAGON_EGG 0x1A1
 /*418  - Hatched Dragon Egg*/
-#define OBJ_1A2 0x1A2
+#define OBJ_HATCHED_DRAGON_EGG 0x1A2
 /*419  - Pull Chain*/
-#define OBJ_1A3 0x1A3
+#define OBJ_PULL_CHAIN 0x1A3
 /*420  - Balloon (deflated)*/
-#define OBJ_1A4 0x1A4
+#define OBJ_BALLOON_DEFLATED 0x1A4
 /*421  - Mammoth Silk Bag*/
-#define OBJ_1A5 0x1A5
+#define OBJ_MAMMOTH_SILK_BAG 0x1A5
 /*422  - Balloon Basket*/
-#define OBJ_1A6 0x1A6
+#define OBJ_BALLOON_BASKET 0x1A6
 /*423  - Balloon (inflated)*/
-#define OBJ_1A7 0x1A7
+#define OBJ_BALLOON_INFLATED 0x1A7
 /*424  - Cyclops*/
-#define OBJ_1A8 0x1A8
+#define OBJ_CYCLOPS 0x1A8
 /*425  - Hydra*/
-#define OBJ_1A9 0x1A9
+#define OBJ_HYDRA_BODY 0x1A9
 /*426  - Giant Scorpion*/
-#define OBJ_1AA 0x1AA
+#define OBJ_GIANT_SCORPION 0x1AA
 /*427  - Giant Ant*/
-#define OBJ_1AB 0x1AB
+#define OBJ_GIANT_ANT 0x1AB
 /*428  - Cow*/
-#define OBJ_1AC 0x1AC
+#define OBJ_COW 0x1AC
 /*429  - Alligator*/
-#define OBJ_1AD 0x1AD
+#define OBJ_ALLIGATOR 0x1AD
 /*430  - Horse*/
-#define OBJ_1AE 0x1AE
+#define OBJ_HORSE 0x1AE
 /*431 - (mounted horse)?*/
-#define OBJ_1AF 0x1AF
+#define OBJ_MOUNTED_HORSE 0x1AF
 
 /*
 #define OBJ_1B0 0x1B0
