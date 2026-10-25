@@ -114,6 +114,8 @@ struct McgaInfo {
  * palette into vga_palette), resets the driver to the state of a freshly loaded image and
  * returns the struct tGr. The argument (13h for MCGA) is not used. */
 void *GRDRV_00(int16_t mode);
+/* the palette the VGA BIOS loads for mode 13h, into vga_palette (U.EXE's driver too) */
+void mcga_bios_palette(void);
 void GRDRV_03(void);
 void GRDRV_06(int16_t color);
 void GRDRV_09(int16_t x, int16_t y);

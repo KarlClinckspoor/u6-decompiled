@@ -9,6 +9,9 @@
 #include "../sys/dosmem.h"
 #include "../sys/osi.h"
 #include "../platform/plat.h"
+#include "../gfx/mcga.h"
+#include "../gfx/vgadac.h"
+#include "ugfx.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -113,8 +116,18 @@ static void load_image(void)
 	}
 }
 
+/* MCGADRV.BIN's entry 0 sets mode 13h: the screen is A000:0000 of the arena, with the
+ * BIOS's palette */
+static void mode_set(void)
+{
+	mcga_bios_palette();
+	plat_video_source(dos_mk_fp(0xA000, 0), vga_palette);
+	plat_video_dirty();
+}
+
 int u_run(int argc, char **argv)
 {
+	ugfx_set_mode_hook(mode_set);
 	load_image();
 	return U_main(argc, argv);
 }

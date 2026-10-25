@@ -234,7 +234,7 @@ uint8_t *mcga_screen(void) { return vram; }
 uint8_t *mcga_segment(void) { return drv; }
 
 /* The palette int 10h AH=0 loads for mode 13h (IBM VGA BIOS; same in DOSBox). */
-static void bios_palette(void)
+void mcga_bios_palette(void)
 {
 	static const uint8_t ega[16][3] = {
 		{0,0,0},{0,0,42},{0,42,0},{0,42,42},{42,0,0},{42,0,42},{42,21,0},{42,42,42},
@@ -287,7 +287,7 @@ void *GRDRV_00(int16_t mode)
 	drv[O_SAVEDMODE] = 3;
 	/* int 10h AX=0013h: clears the video memory, default palette */
 	memset(vram, 0, sizeof vram);
-	bios_palette();
+	mcga_bios_palette();
 	vdirty = 0;
 	plat_video_source(vram, vga_palette);
 	plat_video_dirty();
