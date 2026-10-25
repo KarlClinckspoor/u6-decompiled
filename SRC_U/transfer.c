@@ -61,14 +61,17 @@ extern struct t14 D_5702;
 extern int D_575A;
 extern struct t14 D_6072;
 
-extern char D_03CA[];/*"a:\party.sav": [0] is the drive letter*/
-extern char D_03D7[];/*"a:\saved.gam"*/
-extern char D_03E4[];/*"a:\ultima\saved.gam"*/
-extern char D_03F8[];/*"a:\ultima\party.sav"*/
-extern char D_040C[][9];/*the names of the classes: "Mage", "Bard", ..., "Avatar"*/
-extern char D_0454[];/*"Avatar"*/
-extern char D_045D[];/*"NSCA\x1b": keys of the character screen's buttons*/
-extern char D_0463[];/*"SPTA\x1b": keys of the portrait screen's buttons ([2] 'T' or 'C')*/
+/*0263's initialised data*/
+/*03CA*/char D_03CA[] = "a:\\party.sav";/*Ultima IV's save file; [0]: the drive letter*/
+/*03D7*/char D_03D7[] = "a:\\saved.gam";/*Ultima V's*/
+/*03E4*/char D_03E4[] = "a:\\ultima\\saved.gam";
+/*03F8*/char D_03F8[] = "a:\\ultima\\party.sav";
+/*040C*/char D_040C[][9] = {/*the names of the classes*/
+	"Mage", "Bard", "Fighter", "Druid", "Tinker", "Paladin", "Ranger", "Shepherd",
+	"Avatar"
+};
+/*045D*/char D_045D[] = "NSCA\x1b";/*keys of the character sheet's buttons: Name, Sex, Continue, Abort, Escape*/
+/*0463*/char D_0463[] = "SPTA\x1b";/*keys of the portrait screen's: Sex, Portrait, Transfer (or Create), Abort, Escape*/
 
 /*the character read from the old game*/
 extern char D_5944[];/*name*/
@@ -180,7 +183,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	strcpy(D_595A, (p->sex == 0xb)?"Male":"Female");
 	D_5972 = 'G';
 	D_5973 = 1;
-	strcpy(D_5962, D_0454);
+	strcpy(D_5962, D_040C[8]);
 	D_5974 = p->xp;
 	D_5976 = p->level;
 	D_5978 = p->hp;
@@ -209,7 +212,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_5A42 = ConvertU4Stat(D_5956);
 	D_5A44 = ConvertU4Stat(D_5958);
 	strcpy(D_5A46, D_595A);
-	strcpy(D_5A4E, D_0454);
+	strcpy(D_5A4E, D_040C[8]);
 	D_5A5E = 'G';
 	D_5A60 = D_5974 / 10;
 	/*level: one more for each doubling of the experience above 1000*/
@@ -230,7 +233,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_5A42 = D_5956;
 	D_5A44 = D_5958;
 	strcpy(D_5A46, D_595A);
-	strcpy(D_5A4E, D_0454);
+	strcpy(D_5A4E, D_040C[8]);
 	D_5A5E = 'G';
 	D_5A5F = 1;
 	D_5A60 = D_5974 / 10;
