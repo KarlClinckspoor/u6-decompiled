@@ -68,6 +68,8 @@ usual GOG folders.
   goes to the game. With the setting "Main menu at start" off (or `--game`), the port goes
   straight to the game when the saved game has a character. A saved game without one
   always starts with the menu, as `GAME.EXE` sends you back there in DOS.
+  To transfer a character, put Ultima IV's `PARTY.SAV` or Ultima V's `SAVED.GAM` in the
+  home folder and choose drive C (the port's only drive).
 - **Music**: the AdLib music, in the menu and the introduction and in the game
   (`port/sys/adlib.c`: the U6ADLIB.DRV driver in C on an emulated OPL2, Nuked OPL3).
 - **F11**: the settings screen; the game is paused while it is open.

@@ -1390,13 +1390,19 @@ def test_timer(c, rep):
     clk.set(clk.ms() + 1000)
     lib.kbhit()
     want = lib.osi_ticks_live() - start_tick
+    # one tick a poll: U waits for exact counts (TIM_calibrate), which go up one at a time
+    if calls[0] != 1 or ticks.value != 1:
+        errs.append('1 s then a poll: %d callbacks, timerTicks %d (1 wanted)' % (calls[0], ticks.value))
+    for i in range(want + 3):
+        lib.kbhit()
     if calls[0] != want or ticks.value != want:
-        errs.append('1 s then a poll: %d callbacks, timerTicks %d, %d ticks' % (calls[0], ticks.value, want))
+        errs.append('1 s then polls: %d callbacks, timerTicks %d, %d ticks' % (calls[0], ticks.value, want))
     calls[0] = 0
     clk.set(clk.ms() + 100000)
     lib.U_MOUSE_SERVE()   # (no mouse struct: polls nothing)
-    lib.kbhit()
-    if calls[0] != 18:
+    for i in range(40):
+        lib.kbhit()
+    if not 18 <= calls[0] <= 19:   # (+1: the polls' own idle time can make a tick)
         errs.append('100 s stall: %d callbacks (18 wanted)' % calls[0])
     calls[0] = 0
     t0 = clk.ms()

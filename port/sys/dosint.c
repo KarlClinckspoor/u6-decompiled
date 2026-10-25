@@ -332,7 +332,7 @@ int dos_execl_list(int n, const char *const *args)
 			snprintf(line + l, sizeof line - l, ", \"%s\"", args[i]);
 		}
 		l = strlen(line);
-		snprintf(line + l, sizeof line - l, "): cannot run DOS programs, failing as DOS would");
+		snprintf(line + l, sizeof line - l, ")%s", exec_handler ? "" : ": cannot run DOS programs, failing as DOS would");
 		plat_log("%s", line);
 		if (exec_handler)
 			exec_handler(args[0], argc, args + 1);

@@ -7,7 +7,7 @@ on:
   push:
     tags: ['port-v*']
     branches: [portable]
-    paths: ['SRC/**', 'port/**', '.github/workflows/port-release.yml']
+    paths: ['SRC/**', 'SRC_U/**', 'port/**', '.github/workflows/port-release.yml']
   workflow_dispatch:
     inputs:
       release_tag:
@@ -30,6 +30,7 @@ jobs:
           mkdir u6port-linux-x64
           cp build/u6 u6port-linux-x64/ && strip u6port-linux-x64/u6
           cp docs/port/PORT.md u6port-linux-x64/README.md
+          cp port/third_party/nuked-opl3/LICENSE u6port-linux-x64/NUKED-OPL3-LICENSE.txt
           tar czf u6port-linux-x64.tar.gz u6port-linux-x64
       - uses: actions/upload-artifact@v4
         with: {name: linux, path: u6port-linux-x64.tar.gz}
@@ -55,6 +56,7 @@ jobs:
           cp SDL2-$SDL2_VERSION/x86_64-w64-mingw32/bin/SDL2.dll u6port-windows-x64/
           cp SDL2-$SDL2_VERSION/LICENSE.txt u6port-windows-x64/SDL2-LICENSE.txt
           cp docs/port/PORT.md u6port-windows-x64/README.md
+          cp port/third_party/nuked-opl3/LICENSE u6port-windows-x64/NUKED-OPL3-LICENSE.txt
           zip -qr u6port-windows-x64.zip u6port-windows-x64
       - uses: actions/upload-artifact@v4
         with: {name: windows, path: u6port-windows-x64.zip}
