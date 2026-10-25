@@ -250,7 +250,7 @@ C_022A:
 ProcEnd	DRW_lineFunc
 
 ;the color of a pixel, -1 outside the window: DRW_getPixel(struct tSurface *s, int x, int y)
-ProcStart	DRW_getPixel	;12B7:022F
+ProcStart	_DRW_getPixel	;12B7:022F
 	MOV	AX,-1
 	MOV	BX,[BP+06]
 	MOV	DI,[BP+0Ah]
@@ -271,7 +271,7 @@ ProcStart	DRW_getPixel	;12B7:022F
 	MOV	AL,[SI]
 	MOV	AH,0
 C_0264:
-ProcEnd	DRW_getPixel
+ProcEnd	_DRW_getPixel
 
 CSegEnd	DRAW_TEXT
 

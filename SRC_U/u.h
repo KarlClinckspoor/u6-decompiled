@@ -8,10 +8,10 @@
 #include <dos.h>
 
 /*OSI file library (assembly, pascal convention), the same as GAME.EXE's OSI_FILE.ASM*/
-int pascal C_0000_09F3(char *name);/*OSI_open*/
-int pascal C_0000_0A32(int fd);/*OSI_close*/
-long pascal C_0000_0AE4(int fd, long offset, long length, void far *buf);/*OSI_read*/
-long pascal C_0000_0BCA(int fd, long offset, long length, void far *buf);/*OSI_write*/
+int pascal OSI_open(char *name);/*OSI_open*/
+int pascal OSI_close(int fd);/*OSI_close*/
+long pascal OSI_read(int fd, long offset, long length, void far *buf);/*OSI_read*/
+long pascal OSI_write(int fd, long offset, long length, void far *buf);/*OSI_write*/
 
 /*a surface the graphics driver draws on: the screen, a page or an off-screen buffer
   (GAME.EXE's struct tSurface)*/

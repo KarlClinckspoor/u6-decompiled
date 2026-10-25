@@ -18,7 +18,7 @@ CRITERR_TEXT	SEGMENT PUBLIC WORD 'CODE'
 
 ;C_0F15_0006: install both handlers (they live in this code segment)
 PUBLIC	_SetDosHandlers
-_SetDosHandlers	PROC FAR
+_SetDosHandlers	PROC FAR	;0F15:0006
 	PUSH	BP
 	MOV	BP,SP
 	PUSH	DI

@@ -164,16 +164,16 @@ extern int D_5B2A[];/*virtues*/
 extern int D_5B3A[];/*colors of the pattern*/
 extern char D_5B7A[];/*pattern*/
 
-char far *C_1463_0002();/*load a whole file into far memory*/
-int C_13F2_01B9(void far *, void far *, int);/*far copy (from, to, size)*/
-int C_12EE_0249(char far *, ...);/*printf in the text window*/
-char far *C_13BC_000C();/*load an image file*/
+char far *LOAD_far();/*load a whole file into far memory*/
+int DIS_farcpy(void far *, void far *, int);/*far copy (from, to, size)*/
+int TXT_sprintf(char far *, ...);/*printf in the text window*/
+char far *LZW_load();/*load an image file*/
 
 /*C_0406_0006*/int WriteNewCharacter() {
 	char far *buf;
 	int fd;
 
-	buf = C_1463_0002("savegame\\objlist");
+	buf = LOAD_far("savegame\\objlist");
 	if(buf[0x1c72])
 		return 1;
 	buf[0x901] = D_5A40;
@@ -182,7 +182,7 @@ char far *C_13BC_000C();/*load an image file*/
 	buf[0x13f2] = D_5A44 * 2;
 	buf[0x1c71] = D_5A46 == 'F';
 	buf[0x1bf9] = D_0692;
-	C_13F2_01B9(D_5A30, buf + 0xf00, 0xe);
+	DIS_farcpy(D_5A30, buf + 0xf00, 0xe);
 	buf[0xc02] = D_5A60 % 0x100;
 	buf[0xc03] = D_5A60 / 0x100;
 	if(D_5A64 > 0xff)
@@ -190,9 +190,9 @@ char far *C_13BC_000C();/*load an image file*/
 	buf[0xe01] = D_5A64;
 	buf[0xff2] = D_5A62;
 	buf[0x1c72] = D_5A6A + 1;
-	fd = C_0000_09F3("savegame\\objlist");
-	C_0000_0BCA(fd, 0L, 0x1c73L, buf);
-	C_0000_0A32(fd);
+	fd = OSI_open("savegame\\objlist");
+	OSI_write(fd, 0L, 0x1c73L, buf);
+	OSI_close(fd);
 	farfree(buf);
 	return 0;
 }
@@ -232,38 +232,38 @@ char far *C_13BC_000C();/*load an image file*/
 	if(D_5044 == 0xd)
 		win.segment = D_5710.segment;
 	D_566D = &win;
-	C_1288_0002();
+	TXT_clear();
 	D_567D = 2;
-	C_12EE_0249("By what name shalt thou be called?\n\n%P");
+	TXT_sprintf("By what name shalt thou be called?\n\n%P");
 	if(D_59B8 == 0 && D_5044 == 0x13)
-		C_136D_014D(&D_5702, &D_565F);
+		FADE_in(&D_5702, &D_565F);
 	else if(D_5044 != 0xd) {
 		DRV(0xf)(&D_5702, &D_565F);
 	}
 	D_59B8 = 1;
-	C_12EA_000A(&D_5710, &win, 0);
+	SURF_share(&D_5710, &win, 0);
 	y = D_5671;
 	do {
 		D_566F = D_566D->left;
 		D_5671 = y;
-		C_1288_0024();
+		TXT_clearEos();
 		D_566F = 0x35;
-		if(!C_00E1_028A(D_5A30, 0xd))
+		if(!InputString(D_5A30, 0xd))
 			return 0;
 		D_566F = D_566D->left;
-		C_10E1_000A();
+		clreol();
 		D_567D = 2;
-		C_12EE_0249("%s\n\n%P", D_5A30);
-		C_12EE_0249("And art thou Male, or Female?\n\n%P");
+		TXT_sprintf("%s\n\n%P", D_5A30);
+		TXT_sprintf("And art thou Male, or Female?\n\n%P");
 		do {
 			D_566F = 0x9d;
-			C_10E1_000A();
-			ok = C_00E1_028A(&D_5A46, 1);
+			clreol();
+			ok = InputString(&D_5A46, 1);
 			D_5A46 = toupper(D_5A46);
 		} while(D_5A46 != 'M' && D_5A46 != 'F' && ok);
 	} while(!ok);
-	C_0263_055F();
-	C_0263_055F();
+	ToggleSex();
+	ToggleSex();
 	return 1;
 }
 
@@ -499,12 +499,12 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 	if(D_5044 == 0xd) {
 		D_5054 = &D_5B08;
 		D_5B08.segment = D_5710.segment;
-		C_1339_005C();
-		C_1339_0038();
+		MOUSE_SAVE_BG();
+		MOUSE_DRAW();
 	} else {
 		D_5054 = &D_5732;
-		C_1339_005C();
-		C_1339_0038();
+		MOUSE_SAVE_BG();
+		MOUSE_DRAW();
 		D_5054 = &D_5710;
 	}
 }
@@ -551,7 +551,7 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 	if(D_5044 == 0xd) {
 		D_565F.segment = D_5732.segment = D_5710.segment;
 		D_5710.segment = D_5AFA.segment;
-		C_09A0_21C5();
+		DisplayPassage();
 		D_5710.segment = D_565F.segment;
 	}
 	while(!got) {
@@ -561,12 +561,12 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 		} else {
 			DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
 		}
-		C_132C_0008();
+		MOUSE_SERVE();
 		DrawGypsyStep(0, 0, 1);
-		C_132C_0008();
+		MOUSE_SERVE();
 		if(D_5044 != 0xd)
-			C_09A0_21C5();
-		C_132C_0008();
+			DisplayPassage();
+		MOUSE_SERVE();
 		if(mouse)
 			DrawMouseOnBackBuffer();
 		if(D_5044 == 0xd) {
@@ -578,13 +578,13 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 		} else {
 			DRV(0xf)(&D_5732, &D_5710);
 		}
-		C_132C_0008();
+		MOUSE_SERVE();
 		if(D_5046 || D_5047) {
 			while(D_5046 || D_5047)
-				C_132C_0008();
-			if(C_1344_00A7(&cardA))
+				MOUSE_SERVE();
+			if(MOUSE_IN_RECT(&cardA))
 				key = 'A';
-			else if(C_1344_00A7(&cardB))
+			else if(MOUSE_IN_RECT(&cardB))
 				key = 'B';
 			else
 				key = 1;
@@ -627,32 +627,32 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 	D_5A44 += D_07C7[v];
 	if(v == 7)
 		D_0692 += 3;
-	count = C_06E9_0AF0(3, 0);
-	C_132C_0008();
+	count = ScaleSpeed(3, 0);
+	MOUSE_SERVE();
 	if(D_5044 == 0xd) {
 		D_565F.segment = D_5732.segment = D_5710.segment;
 		DRV(0xf)(&D_5AFA, &D_5710);
 		D_5710.segment = D_5AFA.segment;
-		C_09A0_21C5();
+		DisplayPassage();
 		D_5710.segment = D_565F.segment;
 	} else {
 		DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
 	}
-	C_132C_0008();
+	MOUSE_SERVE();
 	for(step = 0; step < 0x11; step++) {
 		if(!DrawGypsyStep(v, step, 0))
 			continue;
-		C_132C_0008();
+		MOUSE_SERVE();
 		if(D_5044 != 0xd)
-			C_09A0_21C5();
-		C_132C_0008();
+			DisplayPassage();
+		MOUSE_SERVE();
 		DrawMouseOnBackBuffer();
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_5732, &D_5710);
 		} else {
 			DRV(0x15)(&D_5710);
 		}
-		C_132C_0008();
+		MOUSE_SERVE();
 		for(i = 0; i < count; i++) {
 			if(D_5044 == 0xd) {
 				D_5732.segment = D_5710.segment;
@@ -660,19 +660,19 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 			} else {
 				DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
 			}
-			C_132C_0008();
+			MOUSE_SERVE();
 			DrawGypsyStep(v, step, 1);
-			C_132C_0008();
+			MOUSE_SERVE();
 			if(D_5044 != 0xd)
-				C_09A0_21C5();
-			C_132C_0008();
+				DisplayPassage();
+			MOUSE_SERVE();
 			DrawMouseOnBackBuffer();
 			if(D_5044 != 0xd) {
 				DRV(0xf)(&D_5732, &D_5710);
 			} else {
 				DRV(0x15)(&D_5710);
 			}
-			C_132C_0008();
+			MOUSE_SERVE();
 		}
 		if(D_5044 == 0xd) {
 			D_5732.segment = D_5710.segment;
@@ -680,7 +680,7 @@ pouring itself is not taken into account); 0 when the step is the last one*/
 		} else {
 			DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
 		}
-		C_132C_0008();
+		MOUSE_SERVE();
 	}
 }
 
@@ -711,7 +711,7 @@ gypsy and her questions, then write the character into savegame\objlist;
 	D_599C.top = D_5980.top = 0x57;
 	D_599C.bottom = D_5980.bottom = 0xbd;
 	D_5702 = D_565F;
-	C_12EA_000A(&D_5732, &D_5702, 0);
+	SURF_share(&D_5732, &D_5702, 0);
 	if(D_5044 != 0xd) {
 		DRV(0xc)(&D_5702, 0);
 	}
@@ -719,30 +719,30 @@ gypsy and her questions, then write the character into savegame\objlist;
 	D_6072.right = 0x13f;
 	D_6072.bottom = 0x37;
 	if(D_5044 != 0xd)
-		C_1277_000C(&D_6072);
+		SURF_alloc(&D_6072);
 	else
 		D_6072.segment = D_5710.segment;
 	save.right = D_565F.right - D_565F.left;
 	save.bottom = D_565F.bottom - D_565F.top;
 	save.left = save.top = 0;
-	C_1277_000C(&save);
+	SURF_alloc(&save);
 	/*the vellum*/
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	switch(D_5044) {
 		case 4:
-			D_5AD6 = C_13BC_000C("vellum1.cga");
+			D_5AD6 = LZW_load("vellum1.cga");
 			D_06A7[3] = D_06A7[1] = D_06A7[6] = 3;
 			D_06A7[0] = D_06A7[2] = D_06A7[4] = D_06A7[5] = 2;
 			D_06A7[7] = 1;
 			break;
 		case 7:
-			D_5AD6 = C_13BC_000C("vellum1.hrc");
+			D_5AD6 = LZW_load("vellum1.hrc");
 			D_06A7[3] = D_06A7[1] = D_06A7[6] = 3;
 			D_06A7[0] = D_06A7[2] = D_06A7[4] = D_06A7[5] = 2;
 			D_06A7[7] = 1;
 			break;
 		case 9:
-			D_5AD6 = C_13BC_000C("vellum1.tga");
+			D_5AD6 = LZW_load("vellum1.tga");
 			D_06A7[0] = 9;
 			D_06A7[2] = 4;
 			D_06A7[3] = 0xa;
@@ -750,7 +750,7 @@ gypsy and her questions, then write the character into savegame\objlist;
 			D_06A7[7] = 7;
 			break;
 		case 0xd:
-			D_5AD6 = C_13BC_000C("vellum1.ega");
+			D_5AD6 = LZW_load("vellum1.ega");
 			D_06A7[0] = 9;
 			D_06A7[2] = 4;
 			D_06A7[3] = 0xa;
@@ -758,37 +758,37 @@ gypsy and her questions, then write the character into savegame\objlist;
 			D_06A7[7] = 7;
 			break;
 		case 0x13:
-			D_5AD6 = C_13BC_000C("vellum1.shp");
+			D_5AD6 = LZW_load("vellum1.shp");
 			break;
 	}
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	switch(D_5044) {
-		case 4: D_5AD2 = C_13BC_000C("montage.cga"); break;
-		case 7: D_5AD2 = C_13BC_000C("montage.hrc"); break;
-		case 9: D_5AD2 = C_13BC_000C("montage.tga"); break;
-		case 0xd: D_5AD2 = C_13BC_000C("montage.ega"); break;
-		case 0x13: D_5AD2 = C_13BC_000C("montage.shp"); break;
+		case 4: D_5AD2 = LZW_load("montage.cga"); break;
+		case 7: D_5AD2 = LZW_load("montage.hrc"); break;
+		case 9: D_5AD2 = LZW_load("montage.tga"); break;
+		case 0xd: D_5AD2 = LZW_load("montage.ega"); break;
+		case 0x13: D_5AD2 = LZW_load("montage.shp"); break;
 	}
 	DRV(0xf)(&D_565F, &save);
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_565F, 0);
+		FADE_out(&D_565F, 0);
 	if(D_5044 == 0xd)
 		D_5702.segment = D_565F.segment = D_5710.segment;
 	DRV(0xc)(&D_565F, 0);
-	C_00E1_04F9();
+	SetPalette();
 	DRV(3)(&D_5702, D_5702.left, D_5702.top, D_5AD6, 0);
 	D_5A2E = D_59B8 = 0;
-	C_1339_0000();
-	C_00E1_178A(4);
+	MOUSE_SHOW();
+	PlayMusic(4);
 	D_575A = 0;
 	do {
-		C_1339_0016();
+		MOUSE_HIDE();
 		if(!AskNameAndSex()) {
 			D_575A = 1;
 			break;
 		}
-		C_1339_0000();
-	} while(!C_0263_0987(0));
+		MOUSE_SHOW();
+	} while(!PortraitScreen(0));
 	if(D_575A) {
 		/*given up*/
 		if(D_5044 == 0xd) {
@@ -798,39 +798,39 @@ gypsy and her questions, then write the character into savegame\objlist;
 		farfree(D_5AD2);
 		farfree(D_5AD6);
 		if(D_5044 == 0x13)
-			C_136D_0346(&D_565F, 0);
+			FADE_out(&D_565F, 0);
 		DRV(0xc)(&D_565F, 0);
-		C_00E1_04F9();
+		SetPalette();
 		if(D_5044 == 0x13) {
-			C_136D_014D(&save, &D_565F);
+			FADE_in(&save, &D_565F);
 		} else if(D_5044 == 0xd) {
 			DRV(0xf)(&save, &D_565F);
 			DRV(0x15)(&D_5710);
 		} else {
 			DRV(0xf)(&save, &D_565F);
 		}
-		C_1277_00D8(&save);
+		SURF_free(&save);
 		if(D_5044 != 0xd)
-			C_1277_00D8(&D_6072);
-		C_00E1_178A(0);
+			SURF_free(&D_6072);
+		PlayMusic(0);
 		return 1;
 	}
-	C_1339_0016();
+	MOUSE_HIDE();
 	farfree(D_5AD2);
 	farfree(D_5AD6);
-	C_1277_00D8(&save);
-	C_1482_00BE();
+	SURF_free(&save);
+	TIM_calibrate();
 	/*the woods*/
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	switch(D_5044) {
-		case 4: D_5ADC = C_13BC_000C("woods.cga"); break;
-		case 7: D_5ADC = C_13BC_000C("woods.hrc"); break;
-		case 9: D_5ADC = C_13BC_000C("woods.tga"); break;
-		case 0xd: D_5ADC = C_13BC_000C("woods.ega"); break;
-		case 0x13: D_5ADC = C_13BC_000C("woods.shp"); break;
+		case 4: D_5ADC = LZW_load("woods.cga"); break;
+		case 7: D_5ADC = LZW_load("woods.hrc"); break;
+		case 9: D_5ADC = LZW_load("woods.tga"); break;
+		case 0xd: D_5ADC = LZW_load("woods.ega"); break;
+		case 0x13: D_5ADC = LZW_load("woods.shp"); break;
 	}
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	if(D_5044 != 0xd) {
 		DRV(0xc)(&D_5732, 0);
@@ -838,12 +838,12 @@ gypsy and her questions, then write the character into savegame\objlist;
 	if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 	}
-	C_0BC1_03D2(4);
+	LoadPalette(4);
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
 	DRV(3)(&D_5732, 0, 0, D_5ADC, 0);
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 	} else {
@@ -851,19 +851,19 @@ gypsy and her questions, then write the character into savegame\objlist;
 	}
 	if(D_5044 == 0xd)
 		D_6072.segment = 0xa600;
-	C_09A0_000B(100);
+	ShowPassage(100);
 	do {
 		if(D_5044 == 0xd)
 			D_5732.segment = D_5710.segment;
 		DRV(3)(&D_5732, 0, 0, D_5ADC, 0);
-		C_09A0_21C5();
+		DisplayPassage();
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_5732, &D_5710);
 		} else {
 			DRV(0x15)(&D_5710);
 		}
-	} while(!C_06E9_0351());
-	speed = C_06E9_0AF0(2, 10);
+	} while(!PollInput());
+	speed = ScaleSpeed(2, 10);
 	i = 0;
 	done = 0;
 	/*the woods scroll by; one more round once i reaches 0xbf (the constant
@@ -874,43 +874,43 @@ gypsy and her questions, then write the character into savegame\objlist;
 		DRV(3)(&D_5732, D_5732.left - i, 0, D_5ADC, 0);
 		DRV(3)(&D_5732, D_5732.left + 0x140 - i, 0, D_5ADC, 1);
 		if(D_5044 == 0x13)
-			C_1368_0015();
+			VID_waitRetrace();
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_5732, &D_5710);
 		} else {
 			DRV(0x15)(&D_5710);
 		}
-		if(C_06E9_0351())
+		if(PollInput())
 			i = 0xbf - speed;
 		i += speed;
 		i += (0xbf - i) * (i >= 0xbf);
 	}
-	C_09A0_000B(0x65);
+	ShowPassage(0x65);
 	do {
 		if(D_5044 == 0xd)
 			D_5732.segment = D_5710.segment;
 		DRV(3)(&D_5732, D_5732.left - 0xbf, 0, D_5ADC, 0);
 		DRV(3)(&D_5732, D_5732.left + 0x81, 0, D_5ADC, 1);
-		C_09A0_21C5();
+		DisplayPassage();
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_5732, &D_5710);
 		} else {
 			DRV(0x15)(&D_5710);
 		}
-	} while(!C_06E9_0351());
-	C_09A0_000B(0x66);
+	} while(!PollInput());
+	ShowPassage(0x66);
 	do {
 		if(D_5044 == 0xd)
 			D_5732.segment = D_5710.segment;
 		DRV(3)(&D_5732, D_5732.left - 0xbf, 0, D_5ADC, 0);
 		DRV(3)(&D_5732, D_5732.left + 0x81, 0, D_5ADC, 1);
-		C_09A0_21C5();
+		DisplayPassage();
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_5732, &D_5710);
 		} else {
 			DRV(0x15)(&D_5710);
 		}
-	} while(!C_06E9_0351());
+	} while(!PollInput());
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
 	DRV(3)(&D_5732, D_5732.left - 0xbf, 0, D_5ADC, 0);
@@ -922,7 +922,7 @@ gypsy and her questions, then write the character into savegame\objlist;
 	}
 	farfree(D_5ADC);
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	D_575A = 0;
 	DRV(0xc)(&D_5710, 0);
 	if(D_5044 != 0xd) {
@@ -932,14 +932,14 @@ gypsy and her questions, then write the character into savegame\objlist;
 		DRV(0xc)(&D_5710, 0);
 	}
 	/*the gypsy*/
-	C_0BC1_0079(2);
-	C_0BC1_03D2(5);
+	AskForDisk(2);
+	LoadPalette(5);
 	switch(D_5044) {
-		case 4: D_5ADC = C_13BC_000C("gypsy.cga"); break;
-		case 7: D_5ADC = C_13BC_000C("gypsy.hrc"); break;
-		case 9: D_5ADC = C_13BC_000C("gypsy.tga"); break;
-		case 0xd: D_5ADC = C_13BC_000C("gypsy.ega"); break;
-		case 0x13: D_5ADC = C_13BC_000C("gypsy.shp"); break;
+		case 4: D_5ADC = LZW_load("gypsy.cga"); break;
+		case 7: D_5ADC = LZW_load("gypsy.hrc"); break;
+		case 9: D_5ADC = LZW_load("gypsy.tga"); break;
+		case 0xd: D_5ADC = LZW_load("gypsy.ega"); break;
+		case 0x13: D_5ADC = LZW_load("gypsy.shp"); break;
 	}
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
@@ -956,7 +956,7 @@ gypsy and her questions, then write the character into savegame\objlist;
 	D_5AE6.right = 0xac;
 	D_5AE6.left = 0x93;
 	D_5AE6.bottom = D_5AE6.top = D_06A5 + 0x7f;
-	C_12EA_000A(&D_5732, &D_5AE6, 0);
+	SURF_share(&D_5732, &D_5AE6, 0);
 	DRV(3)(&D_5732, 0, D_06A5, D_5ADC, 0);
 	if(D_5044 == 0xd) {
 		D_5AFA = D_5710;
@@ -965,22 +965,22 @@ gypsy and her questions, then write the character into savegame\objlist;
 	}
 	DrawGypsyStep(0, 0, 1);
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 	} else {
 		DRV(0xf)(&D_5732, &D_5710);
 	}
-	C_09A0_000B(0x67);
+	ShowPassage(0x67);
 	WaitForAnswer(0);
-	C_09A0_000B(0x68);
+	ShowPassage(0x68);
 	WaitForAnswer(0);
-	C_1339_0000();
+	MOUSE_SHOW();
 	/*the questions: the 8 virtues in pairs, then the 4 winners, then the 2 last*/
 	Shuffle(D_5B2A, 8);
 	for(i = 0; i < 4; i++) {
 		q = D_06B7[D_5B2A[i * 2]][D_5B2A[i * 2 + 1]];
-		C_09A0_000B(q);
+		ShowPassage(q);
 		virtue = AskQuestion(q);
 		ChooseVirtue(virtue);
 		D_5B2A[i] = virtue;
@@ -988,26 +988,26 @@ gypsy and her questions, then write the character into savegame\objlist;
 	Shuffle(D_5B2A, 4);
 	for(i = 0; i < 2; i++) {
 		q = D_06B7[D_5B2A[i * 2]][D_5B2A[i * 2 + 1]];
-		C_09A0_000B(q);
+		ShowPassage(q);
 		virtue = AskQuestion(q);
 		ChooseVirtue(virtue);
 		D_5B2A[i] = virtue;
 	}
 	q = D_06B7[D_5B2A[0]][D_5B2A[1]];
-	C_09A0_000B(q);
+	ShowPassage(q);
 	virtue = AskQuestion(q);
 	ChooseVirtue(virtue);
-	C_1339_0016();
-	C_09A0_000B(0x85);
+	MOUSE_HIDE();
+	ShowPassage(0x85);
 	WaitForAnswer(0);
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 	}
 	/*the gypsy's pattern*/
-	C_0BC1_03D2(6);
+	LoadPalette(6);
 	D_5AE6.right = 0xcb;
 	D_5AE6.left = 0x74;
 	D_5AE6.top = 0x23;
@@ -1016,9 +1016,9 @@ gypsy and her questions, then write the character into savegame\objlist;
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
 	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc6);
-	C_09A0_000B(0x86);
+	ShowPassage(0x86);
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 	} else {
@@ -1029,13 +1029,13 @@ gypsy and her questions, then write the character into savegame\objlist;
 			D_5732.segment = D_5710.segment;
 		DrawPattern();
 		DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc6);
-		C_09A0_21C5();
+		DisplayPassage();
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_5732, &D_5710);
 		} else {
 			DRV(0x15)(&D_5710);
 		}
-	} while(!C_06E9_0351());
+	} while(!PollInput());
 	DrawPattern();
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
@@ -1046,25 +1046,25 @@ gypsy and her questions, then write the character into savegame\objlist;
 		DRV(0x15)(&D_5710);
 	}
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0x75);
+		FADE_out(&D_5710, 0x75);
 	switch(D_5044) {
 		case 4:
 		case 7:
 			DRV(0xc)(&D_5732, 1);
-			ret = C_06E9_0AF0(600, 800);
-			C_13F2_037A(&D_5732, &D_5710, ret);
+			ret = ScaleSpeed(600, 800);
+			DIS_dissolveCGA(&D_5732, &D_5710, ret);
 			break;
 		case 9:
 			DRV(0xc)(&D_5732, 0xb);
-			ret = C_06E9_0AF0(800, 1200);
-			C_13F2_0504(&D_5732, &D_5710, ret);
+			ret = ScaleSpeed(800, 1200);
+			DIS_dissolveTDY(&D_5732, &D_5710, ret);
 			break;
 		case 0xd:
 			D_5732.segment = D_5710.segment;
 			DRV(0xc)(&D_5710, 0xb);
 			D_5710.segment ^= 0x200;
-			ret = C_06E9_0AF0(300, 400);
-			C_13F2_01D5(&D_5732, &D_5710, ret);
+			ret = ScaleSpeed(300, 400);
+			DIS_dissolveEGA(&D_5732, &D_5710, ret);
 			D_5710.segment ^= 0x200;
 			DRV(0x15)(&D_5710);
 			break;
@@ -1072,58 +1072,58 @@ gypsy and her questions, then write the character into savegame\objlist;
 			DRV(0xc)(&D_5710, 0x75);
 			break;
 	}
-	C_0BC1_03D2(6);
+	LoadPalette(6);
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
 	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
-	C_09A0_000B(0x87);
+	ShowPassage(0x87);
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		D_5710.segment ^= 0x200;
-		ret = C_06E9_0AF0(300, 400);
-		C_13F2_01D5(&D_5732, &D_5710, ret);
+		ret = ScaleSpeed(300, 400);
+		DIS_dissolveEGA(&D_5732, &D_5710, ret);
 		D_5710.segment ^= 0x200;
 		DRV(0x15)(&D_5710);
 	} else if(D_5044 == 9) {
-		ret = C_06E9_0AF0(400, 600);
-		C_13F2_0504(&D_5732, &D_5710, ret);
+		ret = ScaleSpeed(400, 600);
+		DIS_dissolveTDY(&D_5732, &D_5710, ret);
 	} else {
-		ret = C_06E9_0AF0(300, 400);
-		C_13F2_037A(&D_5732, &D_5710, ret);
+		ret = ScaleSpeed(300, 400);
+		DIS_dissolveCGA(&D_5732, &D_5710, ret);
 	}
-	C_1482_0113(2000);
+	TIM_delay(2000);
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
-	C_09A0_21C5();
+	DisplayPassage();
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&D_5732, &D_5710);
 	} else {
 		DRV(0x15)(&D_5710);
 	}
-	C_09A0_000B(0x88);
-	while(!C_06E9_0351());
-	if(D_5044 == 0xd)
-		D_5732.segment = D_5710.segment;
-	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
-	C_09A0_21C5();
-	if(D_5044 != 0xd) {
-		DRV(0xf)(&D_5732, &D_5710);
-	} else {
-		DRV(0x15)(&D_5710);
-	}
-	C_09A0_000B(0x89);
-	while(!C_06E9_0351());
+	ShowPassage(0x88);
+	while(!PollInput());
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
 	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
-	C_09A0_21C5();
+	DisplayPassage();
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&D_5732, &D_5710);
 	} else {
 		DRV(0x15)(&D_5710);
 	}
-	while(!C_06E9_0351());
+	ShowPassage(0x89);
+	while(!PollInput());
+	if(D_5044 == 0xd)
+		D_5732.segment = D_5710.segment;
+	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
+	DisplayPassage();
+	if(D_5044 != 0xd) {
+		DRV(0xf)(&D_5732, &D_5710);
+	} else {
+		DRV(0x15)(&D_5710);
+	}
+	while(!PollInput());
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
 	DRV(3)(&D_5732, 0, 0, D_5ADC, 0xc7);
@@ -1134,7 +1134,7 @@ gypsy and her questions, then write the character into savegame\objlist;
 	}
 	farfree(D_5ADC);
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	if(D_5044 != 0xd) {
 		DRV(0xc)(&D_5732, 0);
@@ -1143,11 +1143,11 @@ gypsy and her questions, then write the character into savegame\objlist;
 		DRV(0xc)(&D_5710, 0);
 		D_5732 = D_5710;
 	}
-	C_00E1_04F9();
+	SetPalette();
 	/*the new character*/
-	C_0BC1_0079(8);
+	AskForDisk(8);
 	if(D_5044 != 0xd)
-		C_1277_00D8(&D_6072);
+		SURF_free(&D_6072);
 	D_5A60 = 0x172;
 	D_5A64 = 0x5a;
 	D_5A62 = 3;
@@ -1155,14 +1155,14 @@ gypsy and her questions, then write the character into savegame\objlist;
 	D_6072.right = 0x13f;
 	D_6072.bottom = 0x37;
 	if(D_5044 != 0xd)
-		C_1277_000C(&D_6072);
+		SURF_alloc(&D_6072);
 	else
 		D_6072.segment = 0xa600;
 	ret = 0;
 	if(WriteNewCharacter()) {
 		/*the disk already holds a character*/
-		C_09A0_000B(0x3e6);
-		C_09A0_21C5();
+		ShowPassage(0x3e6);
+		DisplayPassage();
 		ret = 1;
 		if(D_5044 == 0xd) {
 			DRV(0x15)(&D_5710);
@@ -1170,7 +1170,7 @@ gypsy and her questions, then write the character into savegame\objlist;
 		} else {
 			DRV(0xf)(&D_5732, &D_5710);
 		}
-		while(!C_06E9_0351());
+		while(!PollInput());
 		DRV(0xc)(&D_5732, 0);
 		if(D_5044 == 0xd) {
 			DRV(0x15)(&D_5710);
@@ -1180,9 +1180,9 @@ gypsy and her questions, then write the character into savegame\objlist;
 			DRV(0xf)(&D_5732, &D_5710);
 		}
 	}
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	if(D_5044 != 0xd)
-		C_1277_00D8(&D_6072);
-	C_00E1_178A(0);
+		SURF_free(&D_6072);
+	PlayMusic(0);
 	return ret;
 }

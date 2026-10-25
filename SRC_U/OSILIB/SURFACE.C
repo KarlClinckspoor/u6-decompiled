@@ -7,7 +7,7 @@
 #include <dos.h>
 #include "OSILIB.H"
 
-extern C_12EE_0229(char far *fmt, ...);/*TXT_printf*/
+extern TXT_printf(char far *fmt, ...);/*TXT_printf*/
 
 /*allocate the pixels of a surface (the size of its window) and its scanline table*/
 /*C_1277_000C*/SURF_alloc(struct tSurface *s) {
@@ -21,14 +21,14 @@ extern C_12EE_0229(char far *fmt, ...);/*TXT_printf*/
 	width = s->right - s->left + 1;
 	p = farcalloc(1, (long)height * width);
 	if(p == 0) {
-		C_12EE_0229(" << No far memory! >> ");
+		TXT_printf(" << No far memory! >> ");
 		getch();
 	}
 	s->segment = FP_SEG(p);
 	ofs = FP_OFF(p);
 	s->scanlines = farmalloc((long)height * 2);
 	if(s->scanlines == 0) {
-		C_12EE_0229(" << No ytable memory! >> ");
+		TXT_printf(" << No ytable memory! >> ");
 		getch();
 	}
 	for(i = 0; i < height; i++) {

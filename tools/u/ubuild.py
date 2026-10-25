@@ -17,12 +17,15 @@ import argparse, hashlib, os, shutil, struct, subprocess, sys, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import tcc  # noqa: E402
+import omf  # noqa: E402
+import tasmorder  # noqa: E402
 from ucmp import find_uexe  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(HERE))
 SRC = os.path.join(ROOT, 'SRC_U')
 FLAGS = '-mm -c -O -G'
 LIBFLAGS = '-mm -c -G'   # the library's C was compiled without -O
+CM_REPLACED = ['CLREOL', 'GOTOXY']
 
 
 def crlf(path, dst):
@@ -66,11 +69,40 @@ def main():
         lines = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S\\L']
         for m in libmods:
             base = m.upper()
-            if os.path.exists(os.path.join(SRC, 'OSILIB', m + '.c')) or os.path.exists(os.path.join(SRC, 'OSILIB', m + '.C')):
+            src = next((os.path.join(SRC, 'OSILIB', m + e) for e in ('.c', '.C')
+                        if os.path.exists(os.path.join(SRC, 'OSILIB', m + e))), None)
+            if src and tcc.has_inline_asm(src):
+                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s -S %s.C >> \\BUILD.LOG' % (LIBFLAGS.replace('-c ', ''), base))
+                lines.append('\\TOOLS\\MASM /Mx %s.ASM; >> \\BUILD.LOG' % base)
+            elif src:
                 lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s %s.C >> \\BUILD.LOG' % (LIBFLAGS, base))
             else:
                 lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % base)
-        lines.append('TLIB OSILIB.LIB %s >> \\BUILD.LOG' % ' '.join('+' + m.upper() for m in libmods))
+        link = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S\\L']
+        # (a response file: DOS command lines stop at 127 characters)
+        rsp = []
+        for i in range(0, len(libmods), 8):
+            rsp.append(' '.join('+' + x.upper() for x in libmods[i:i + 8]) + (' &' if i + 8 < len(libmods) else ''))
+        open(os.path.join(s, 'L', 'OSILIB.RSP'), 'w', newline='').write('\r\n'.join(rsp) + '\r\n')
+        link.append('TLIB OSILIB.LIB @OSILIB.RSP >> \\BUILD.LOG')
+        # Origin's CM.LIB: Turbo C's, with CLREOL and GOTOXY replaced by OSI versions in
+        # their places (TLINK lays library modules out in library order)
+        for m in CM_REPLACED:
+            lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % m)
+        cmmods = [x.name for x in omf.parse_lib(os.path.join(tools, 'turboc20', 'LIB', 'CM.LIB'))]
+        os.makedirs(os.path.join(s, 'L', 'CM'))
+        link.append('cd CM')
+        link.append('copy \\TOOLS\\TURBOC20\\LIB\\CM.LIB CM.LIB > NUL')
+        ext = [x for x in cmmods if x not in CM_REPLACED]
+        for i in range(0, len(ext), 12):
+            link.append('TLIB CM.LIB %s >> \\BUILD.LOG' % ' '.join('*' + x for x in ext[i:i + 12]))
+        for x in CM_REPLACED:
+            link.append('copy ..\\%s.OBJ %s.OBJ > NUL' % (x, x))
+        rsp = []
+        for i in range(0, len(cmmods), 8):
+            rsp.append(' '.join('+' + x for x in cmmods[i:i + 8]) + (' &' if i + 8 < len(cmmods) else ''))
+        open(os.path.join(s, 'L', 'CM', 'CMU.RSP'), 'w', newline='').write('\r\n'.join(rsp) + '\r\n')
+        link.append('TLIB CMU.LIB @CMU.RSP >> \\BUILD.LOG')
         lines.append('cd \\S')
         for o in objs:
             base = o.upper()
@@ -83,17 +115,31 @@ def main():
                 lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % base)
         open(os.path.join(s, 'U.RSP'), 'w', newline='').write(
             '\\TOOLS\\TURBOC20\\LIB\\C0M ' + ' '.join(o.upper() for o in objs) +
-            ',U.EXE,U.MAP,\\TOOLS\\TURBOC20\\LIB\\CM L\\OSILIB\r\n')
-        lines.append('TLINK /m @U.RSP >> \\BUILD.LOG')
-        open(os.path.join(c, 'BUILD.BAT'), 'w', newline='').write('\r\n'.join(lines) + '\r\n')
-        conf = os.path.join(tmp, 'dosbox.conf')
-        open(conf, 'w').write('[sdl]\noutput=surface\n[dosbox]\nmemsize=16\n[cpu]\ncycles=max\n'
-                              '[autoexec]\nmount c "%s"\nc:\ncall \\BUILD.BAT\nexit\n' % c)
-        env = dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy')
-        db = tcc.dosbox()
-        args = [db, '-conf', conf, '-noconsole'] if 'dosbox-x' not in os.path.basename(db).lower() \
-            else [db, '-conf', conf, '-nogui', '-exit']
-        subprocess.run(args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1800)
+            ',U.EXE,U.MAP,L\\CM\\CMU L\\OSILIB\r\n')
+        link.append('cd \\S')
+        link.append('TLINK /m @U.RSP >> \\BUILD.LOG')
+
+        def run(batch):
+            open(os.path.join(c, 'BUILD.BAT'), 'w', newline='').write('\r\n'.join(batch) + '\r\n')
+            conf = os.path.join(tmp, 'dosbox.conf')
+            open(conf, 'w').write('[sdl]\noutput=surface\n[dosbox]\nmemsize=16\n[cpu]\ncycles=max\n'
+                                  '[autoexec]\nmount c "%s"\nc:\ncall \\BUILD.BAT\nexit\n' % c)
+            env = dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy')
+            db = tcc.dosbox()
+            args = [db, '-conf', conf, '-noconsole'] if 'dosbox-x' not in os.path.basename(db).lower() \
+                else [db, '-conf', conf, '-nogui', '-exit']
+            subprocess.run(args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1800)
+        run(lines)
+        # the hand-written assembly was assembled with TASM: its fixups in TASM's order
+        for m in libmods + CM_REPLACED:
+            for e in ('.ASM', '.asm'):
+                if os.path.exists(os.path.join(SRC, 'OSILIB', m + e)):
+                    tasmorder.fix(os.path.join(SRC, 'OSILIB', m + e), os.path.join(s, 'L', m.upper() + '.OBJ'))
+        for o in objs:
+            for e in ('.ASM', '.asm'):
+                if os.path.exists(os.path.join(SRC, o + e)):
+                    tasmorder.fix(os.path.join(SRC, o + e), os.path.join(s, o.upper() + '.OBJ'))
+        run(link)
         log = open(os.path.join(c, 'BUILD.LOG'), encoding='latin-1').read() if os.path.exists(os.path.join(c, 'BUILD.LOG')) else ''
         if a.log:
             print(log)

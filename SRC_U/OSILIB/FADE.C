@@ -8,6 +8,8 @@
  * save SI and DI (the assembly uses them), and the volatile locals stay on the stack
  * (Turbo C makes no register variables of its own in a function with assembly).
  */
+/*the library was compiled through the assembler (tcc -B): this does the same*/
+#pragma inline
 #include <dos.h>
 #include <stdlib.h>
 #include "OSILIB.H"
@@ -26,7 +28,7 @@ union tDrv {
 extern union tDrv D_4A34;
 #define DRV(o) D_4A34.p.ofs = (o); (*D_4A34.f)
 
-extern int D_45E2;/*1: the next FADE_step starts a fade (this module's _DATA: = 1)*/
+/*45E2*/int D_45E2 = 1;/*1: the next FADE_step starts a fade*/
 /*this module's _BSS*/
 extern int *D_681C;/*FADE_step: error term of each value*/
 extern int *D_681E;/*  its distance to go*/
@@ -36,10 +38,10 @@ extern int D_6824;/*  the steps left*/
 extern char *D_6826;/*FADE_in: the colors used by the picture*/
 extern char *D_6828;/*FADE_out: the same*/
 
-extern C_12B7_022F(struct tSurface *s, int x, int y);/*DRW_getPixel*/
-extern C_1368_0015(void);/*wait for the vertical retrace*/
-extern C_1475_0099(int index, struct tRGB *rgb);/*PAL_set*/
-extern C_1475_00B8(int index, struct tRGB *rgb);/*PAL_get*/
+extern DRW_getPixel(struct tSurface *s, int x, int y);/*DRW_getPixel*/
+extern VID_waitRetrace(void);/*wait for the vertical retrace*/
+extern PAL_set(int index, struct tRGB *rgb);/*PAL_set*/
+extern PAL_get(int index, struct tRGB *rgb);/*PAL_get*/
 
 /*move each of the n values of cur one step towards target (all of them arrive in the
   same number of steps, as the points of Bresenham's lines): 0 when they have arrived*/
@@ -150,18 +152,18 @@ extern C_1475_00B8(int index, struct tRGB *rgb);/*PAL_get*/
 	free(D_6826);
 	cur = calloc(count, sizeof(struct tRGB));
 	target = calloc(count, sizeof(struct tRGB));
-	C_1475_00B8(C_12B7_022F(dst, dst->left, dst->top), &rgb);
-	C_1368_0015();
+	PAL_get(DRW_getPixel(dst, dst->left, dst->top), &rgb);
+	VID_waitRetrace();
 	for(i = 0; i < count; i++) {
-		C_1475_00B8(list[i], &cur[i]);
-		C_1475_0099(list[i], &rgb);
+		PAL_get(list[i], &cur[i]);
+		PAL_set(list[i], &rgb);
 		target[i] = rgb;
 	}
 	DRV(0xf)(src, dst);
 	while(FADE_step((int *)target, (int *)cur, count * 3)) {
-		C_1368_0015();
+		VID_waitRetrace();
 		for(i = 0; i < count; i++)
-			C_1475_0099(list[i], &target[i]);
+			PAL_set(list[i], &target[i]);
 	}
 	free(target);
 	free(cur);
@@ -228,16 +230,16 @@ extern C_1475_00B8(int index, struct tRGB *rgb);/*PAL_get*/
 	free(D_6828);
 	cur = calloc(count, sizeof(struct tRGB));
 	target = calloc(count, sizeof(struct tRGB));
-	C_1475_00B8(color, &rgb);
-	C_1368_0015();
+	PAL_get(color, &rgb);
+	VID_waitRetrace();
 	for(i = 0; i < count; i++) {
-		C_1475_00B8(list[i], &cur[i]);
+		PAL_get(list[i], &cur[i]);
 		target[i] = rgb;
 	}
 	while(FADE_step((int *)cur, (int *)target, count * 3)) {
-		C_1368_0015();
+		VID_waitRetrace();
 		for(i = 0; i < count; i++)
-			C_1475_0099(list[i], &cur[i]);
+			PAL_set(list[i], &cur[i]);
 	}
 	free(target);
 	free(cur);

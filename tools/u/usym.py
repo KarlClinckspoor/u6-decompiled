@@ -50,7 +50,7 @@ def table():
             for m in re.finditer(r'/\*([0-9A-F]{4})\*/\s*(?:static\s+)?[\w\s\*]+?\b(D_[0-9A-F]{4}|\w+)\s*[\[=;]', s):
                 t.setdefault(('D', int(m.group(1), 16)), (m.group(2), fn, 'c', False))
         else:
-            for m in re.finditer(r'^FProc\s+(\w+)\s*;\s*([0-9A-F]{4}):([0-9A-F]{4})', s, re.M):
+            for m in re.finditer(r'^(?:FProc|ProcStart|NProc)\s+(\w+)\s*;\s*([0-9A-F]{4}):([0-9A-F]{4})', s, re.M):
                 t[('C', int(m.group(2), 16), int(m.group(3), 16))] = (m.group(1), fn, 'asm', False)
             for m in re.finditer(r'^(\w+)\s+PROC\s+\w+\s*;\s*([0-9A-F]{4}):([0-9A-F]{4})', s, re.M):
                 t[('C', int(m.group(2), 16), int(m.group(3), 16))] = (m.group(1), fn, 'asm', False)

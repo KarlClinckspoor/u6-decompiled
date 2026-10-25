@@ -159,6 +159,16 @@ def main():
         path = obj
     img, relocs = load_image(find_uexe())
     syms, dsyms = load_syms()
+    try:  # the names the decompilation gave (tools/u/usym.py)
+        import usym
+        for k, (name, fn, lang, static) in usym.table().items():
+            link = '_' + name if lang == 'c' else (name.upper() if lang == 'pascal' else name)
+            if k[0] == 'C':
+                syms[link] = (k[1], k[2])
+            else:
+                dsyms[link] = k[1]
+    except Exception as e:  # noqa: BLE001
+        print('Warning usym table: %s' % e)
     addr2name = {v: k for k, v in syms.items()}
     syms = AddrNames(syms, r'_?C_([0-9A-F]{4})_([0-9A-F]{4})', lambda mm: (int(mm.group(1), 16), int(mm.group(2), 16)))
     dsyms = AddrNames(dsyms, r'_?D_([0-9A-F]{4})', lambda mm: int(mm.group(1), 16))

@@ -34,35 +34,35 @@ extern int D_66BC[];/*the hands: x0,y0, x1,y1*/
 extern int D_66C4[];/*where the moving shapes go*/
 extern int D_66D4[];/*the moving shapes: x,y each*/
 
-extern C_00E1_04F9();
-extern C_00E1_052D();
-extern C_00E1_0561();
-extern C_00E1_178A(int);
-extern C_06E9_033A();/*nonzero when a key (or the mouse) was pressed*/
-extern C_06E9_0AF0(int, int);/*a random number between the two*/
-extern C_06E9_2AF6();/*waits for the next frame*/
-extern C_06E9_2B34(int);/*waits n ticks*/
-extern C_09A0_000B(int);/*writes text n*/
-extern C_09A0_21C5();
-extern C_0BC1_03D2(int);
-extern C_1277_000C(struct tSurface *);/*gives a surface an off-screen buffer*/
-extern C_1277_00D8(struct tSurface *);/*frees it*/
-extern C_1368_0015();
-extern C_136D_0004(int *, int *, int);/*moves n coordinates one step towards their targets: 0 when all are there*/
-extern C_136D_014D(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
-extern C_136D_0346(struct tSurface *, int);/*MCGA: palette fade out*/
-extern void far *C_13BC_000C(char *);/*loads a file in memory*/
-extern C_13F2_000C(struct tSurface *, struct tSurface *, int);/*MCGA: dissolve*/
-extern C_13F2_01D5(struct tSurface *, struct tSurface *, int);/*EGA: dissolve*/
-extern C_13F2_037A(struct tSurface *, struct tSurface *, int);/*CGA, Hercules: dissolve*/
-extern C_13F2_0504(struct tSurface *, struct tSurface *, int);/*Tandy: dissolve*/
-extern C_1475_0099(int, char *);/*MCGA: sets a palette entry*/
-extern C_1475_00B8(int, char *);/*MCGA: gets a palette entry*/
-extern C_1482_000F(void (far *)());/*installs a timer routine*/
-extern C_1482_001F();
-extern C_1482_0055();
-extern C_1482_009C();
-extern C_1482_00BE();
+extern SetPalette();
+extern RestorePalette();
+extern SavePalette();
+extern PlayMusic(int);
+extern CheckInput();/*nonzero when a key (or the mouse) was pressed*/
+extern ScaleSpeed(int, int);/*a random number between the two*/
+extern ShowFrame();/*waits for the next frame*/
+extern Delay(int);/*waits n ticks*/
+extern ShowPassage(int);/*writes text n*/
+extern DisplayPassage();
+extern LoadPalette(int);
+extern SURF_alloc(struct tSurface *);/*gives a surface an off-screen buffer*/
+extern SURF_free(struct tSurface *);/*frees it*/
+extern VID_waitRetrace();
+extern FADE_step(int *, int *, int);/*moves n coordinates one step towards their targets: 0 when all are there*/
+extern FADE_in(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
+extern FADE_out(struct tSurface *, int);/*MCGA: palette fade out*/
+extern void far *LZW_load(char *);/*loads a file in memory*/
+extern DIS_dissolve(struct tSurface *, struct tSurface *, int);/*MCGA: dissolve*/
+extern DIS_dissolveEGA(struct tSurface *, struct tSurface *, int);/*EGA: dissolve*/
+extern DIS_dissolveCGA(struct tSurface *, struct tSurface *, int);/*CGA, Hercules: dissolve*/
+extern DIS_dissolveTDY(struct tSurface *, struct tSurface *, int);/*Tandy: dissolve*/
+extern PAL_set(int, char *);/*MCGA: sets a palette entry*/
+extern PAL_get(int, char *);/*MCGA: gets a palette entry*/
+extern TIM_setCallback(void (far *)());/*installs a timer routine*/
+extern TIM_resetCallback();
+extern TIM_install();
+extern TIM_remove();
+extern TIM_calibrate();
 
 /*40C4*/int D_40C4[4] = {-8, 0x4d, 0xb6, 0x4f};/*where the hands come to rest: x0,y0, x1,y1*/
 /*40CC*/int D_40CC = 0;/*twinkle: toggles every tick (MCGA palette cycling every other tick)*/
@@ -82,7 +82,7 @@ KeyPressed();
 /*shows the page that was drawn*/
 #define SHOW_PAGE() \
 	if(D_5044 == 0x13) { \
-		C_136D_014D(&D_5732, &D_5710); \
+		FADE_in(&D_5732, &D_5710); \
 	} else if(D_5044 == 0xd) { \
 		DRV(0x15)(&D_5710); \
 		D_5732.segment = D_5710.segment; \
@@ -119,13 +119,13 @@ KeyPressed();
 	if(D_5044 == 0x13) {
 		/*cycle the palette entries 0xe8-0xef, every other tick*/
 		if(D_40CC == 0) {
-			C_1368_0015();
-			C_1475_00B8(0xef, D_609E);
+			VID_waitRetrace();
+			PAL_get(0xef, D_609E);
 			for(D_6096 = 0xee; D_6096 >= 0xe8; D_6096--) {
-				C_1475_00B8(D_6096, D_6098);
-				C_1475_0099(D_6096 + 1, D_6098);
+				PAL_get(D_6096, D_6098);
+				PAL_set(D_6096 + 1, D_6098);
 			}
-			C_1475_0099(0xe8, D_609E);
+			PAL_set(0xe8, D_609E);
 		}
 		D_40CC = !D_40CC;
 		if(!(D_40CE & 3)) {
@@ -190,7 +190,7 @@ KeyPressed();
 	int i;
 
 	for(i = n; i; i--) {
-		C_06E9_2B34(1);
+		Delay(1);
 		if(KeyPressed())
 			break;
 	}
@@ -223,7 +223,7 @@ KeyPressed();
 }
 
 /*the introduction: the night sky with its twinkling stars, then the scene with the hands and
- the stones; texts 0xc8-0xdb (C_09A0_000B) are told along it. A key goes on to the
+ the stones; texts 0xc8-0xdb (ShowPassage) are told along it. A key goes on to the
  next part, Escape (D_58F0) leaves it.
  (the locals' order and which ones are declared after which matter for the stack
  layout and the si/di choice: found by trying)*/
@@ -247,34 +247,34 @@ KeyPressed();
 	D_6072.right = 0x13f;
 	D_6072.bottom = 0x37;
 	if(D_5044 != 0xd) {
-		C_1277_000C(&D_6072);
+		SURF_alloc(&D_6072);
 	} else {
 		D_6072.segment = 0xa600;
 		D_5732 = D_5710;
 	}
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	DRV(0xc)(&D_5732, 0);
-	C_1482_00BE();
-	frames = C_06E9_0AF0(0xf, 0x28);
+	TIM_calibrate();
+	frames = ScaleSpeed(0xf, 0x28);
 	switch(D_5044) {
-		case 4: D_5ADC = C_13BC_000C("intro.cga"); break;
-		case 7: D_5ADC = C_13BC_000C("intro.hrc"); break;
-		case 9: D_5ADC = C_13BC_000C("intro.tga"); break;
-		case 0xd: D_5ADC = C_13BC_000C("intro.ega"); break;
-		case 0x13: D_5ADC = C_13BC_000C("intro.shp"); break;
+		case 4: D_5ADC = LZW_load("intro.cga"); break;
+		case 7: D_5ADC = LZW_load("intro.hrc"); break;
+		case 9: D_5ADC = LZW_load("intro.tga"); break;
+		case 0xd: D_5ADC = LZW_load("intro.ega"); break;
+		case 0x13: D_5ADC = LZW_load("intro.shp"); break;
 	}
 	/*the stars: 200 x, 200 y, 200 colours (16 bits each)*/
-	D_60AA = C_13BC_000C("starpos.dat");
+	D_60AA = LZW_load("starpos.dat");
 	for(i = 0; i < 0x190; i += 2) {
 		D_62BC[i / 2] = (D_60AA[i] & 0xff) + ((D_60AA[i + 1] & 0xff) << 8);
 		D_64BC[i / 2] = (D_60AA[i + 0x190] & 0xff) + ((D_60AA[i + 0x191] & 0xff) << 8);
 		D_60BC[i / 2] = (D_60AA[i + 0x320] & 0xff) + ((D_60AA[i + 0x321] & 0xff) << 8);
 	}
-	C_0BC1_03D2(7);
-	C_00E1_0561();
-	C_00E1_178A(3);
+	LoadPalette(7);
+	SavePalette();
+	PlayMusic(3);
 	SHAPE(0, 0, 6);
 	SHAPE(0, 0x70, 5);
 	SHOW_PAGE();
@@ -313,29 +313,29 @@ KeyPressed();
 		if(D_5044 == 0xd)
 			D_5710.segment ^= 0x200;
 	}
-	C_1482_0055();
-	C_1482_000F(Twinkle);
-	C_09A0_000B(0xc8);
+	TIM_install();
+	TIM_setCallback(Twinkle);
+	ShowPassage(0xc8);
 	WaitTicks(10);
 	if(D_5044 == 0xd)
 		D_5710.segment ^= 0x200;
-	C_09A0_21C5();
+	DisplayPassage();
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&D_5732, &D_5710);
 	}
 	FlushKeys();
-	while(!C_06E9_033A());
+	while(!CheckInput());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xc9);
-	C_09A0_21C5();
+	ShowPassage(0xc9);
+	DisplayPassage();
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&D_5732, &D_5710);
 	} else {
 		D_5710.segment ^= 0x200;
 	}
 	FlushKeys();
-	while(!C_06E9_033A());
+	while(!CheckInput());
 	if(D_58F0)
 		goto end;
 	/*the hands come in from the sides*/
@@ -345,56 +345,56 @@ KeyPressed();
 	D_66BC[3] = 0xc8;
 	if(D_5044 == 0xd)
 		D_5732 = D_5710;
-	speed = C_06E9_0AF0(1, 4);
+	speed = ScaleSpeed(1, 4);
 	done = 0;
 	FlushKeys();
 	do {
 		if(KeyPressed()) {
-			while(C_136D_0004(D_66BC, D_40C4, 4));
+			while(FADE_step(D_66BC, D_40C4, 4));
 			done = 1;
 		}
 		if(D_58F0)
 			goto end;
 		for(i = 0; i < speed && !done; i++)
-			done = !C_136D_0004(D_66BC, D_40C4, 4);
+			done = !FADE_step(D_66BC, D_40C4, 4);
 		SHAPE(0, 0, 6);
 		SHAPE(D_66BC[0], D_66BC[1], 3);
 		SHAPE(D_66BC[2], D_66BC[3], 4);
 		SHAPE(0, 0x70, 5);
-		C_06E9_2AF6();
+		ShowFrame();
 	} while(!done);
-	C_09A0_000B(0xca);
-	C_09A0_21C5();
-	C_06E9_2AF6();
+	ShowPassage(0xca);
+	DisplayPassage();
+	ShowFrame();
 	SHAPE(0, 0, 6);
 	DrawHands(0, 0, 0);
 	SHAPE(0, 0x70, 5);
-	C_09A0_000B(0xcb);
-	C_09A0_21C5();
+	ShowPassage(0xcb);
+	DisplayPassage();
 	FlushKeys();
 	while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_06E9_2AF6();
+	ShowFrame();
 	SHAPE(0, 0, 6);
 	DrawHands(0, 0, 0);
 	SHAPE(0x31, 0x44, 9);
 	SHAPE(0, 0x70, 5);
 	SHAPE(0xd2, 0x84, 0xc);
-	C_09A0_000B(0xcc);
-	C_09A0_21C5();
+	ShowPassage(0xcc);
+	DisplayPassage();
 	FlushKeys();
 	while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_06E9_2AF6();
+	ShowFrame();
 	FlushKeys();
 	while(!KeyPressed());
 	if(D_58F0)
 		goto end;
 	/*the moongate rises*/
-	C_09A0_000B(0xcd);
-	speed = C_06E9_0AF0(2, 5);
+	ShowPassage(0xcd);
+	speed = ScaleSpeed(2, 5);
 	FlushKeys();
 	ofs = 0x46;
 	i = 0x8d;
@@ -411,7 +411,7 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_06E9_2AF6();
+		ShowFrame();
 		if(ofs) {
 			ofs -= speed;
 			if(ofs < 0)
@@ -436,13 +436,13 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xce);
+	ShowPassage(0xce);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
@@ -452,13 +452,13 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xcf);
+	ShowPassage(0xcf);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
@@ -468,14 +468,14 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xd0);
-	speed = C_06E9_0AF0(2, 5);
+	ShowPassage(0xd0);
+	speed = ScaleSpeed(2, 5);
 	FlushKeys();
 	i = 0x86;
 	done = 0;
@@ -489,8 +489,8 @@ KeyPressed();
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
 		DrawGlow();
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(3);
 		if(KeyPressed())
 			i = speed + 0x3a;
@@ -511,82 +511,82 @@ KeyPressed();
 	SHAPE(0, 0x70, 5);
 	SHAPE(0xd2, 0x84, 0xc);
 	DrawGlow();
-	C_06E9_2AF6();
+	ShowFrame();
 	switch(D_5044) {
 		case 4:
 		case 7:
-			ofs = C_06E9_0AF0(0xfa, 0x12c);
+			ofs = ScaleSpeed(0xfa, 0x12c);
 			DRV(0xc)(&D_5732, 0);
-			C_13F2_037A(&D_5732, &D_5710, ofs);
+			DIS_dissolveCGA(&D_5732, &D_5710, ofs);
 			break;
 		case 9:
-			ofs = C_06E9_0AF0(0x12c, 0x1f4);
+			ofs = ScaleSpeed(0x12c, 0x1f4);
 			DRV(0xc)(&D_5732, 0);
-			C_13F2_0504(&D_5732, &D_5710, ofs);
+			DIS_dissolveTDY(&D_5732, &D_5710, ofs);
 			break;
 		case 0xd:
 			D_5732.segment = 0xa600;
 			DRV(0xc)(&D_5732, 0);
 			D_5710.segment ^= 0x200;
-			ofs = C_06E9_0AF0(0xc8, 0x12c);
-			C_13F2_01D5(&D_5732, &D_5710, ofs);
+			ofs = ScaleSpeed(0xc8, 0x12c);
+			DIS_dissolveEGA(&D_5732, &D_5710, ofs);
 			DRV(0x15)(&D_5710);
 			D_5732 = D_5710;
 			DRV(0xc)(&D_5732, 0);
 			break;
 		case 0x13:
 			DRV(0xc)(&D_5732, 0);
-			C_13F2_000C(&D_5732, &D_5710, 0);
+			DIS_dissolve(&D_5732, &D_5710, 0);
 			break;
 	}
-	C_09A0_000B(0xd1);
-	C_09A0_21C5();
+	ShowPassage(0xd1);
+	DisplayPassage();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
 	if(D_58F0)
 		goto end;
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
-	C_00E1_052D();
-	C_09A0_000B(0xd2);
-	C_09A0_21C5();
+	RestorePalette();
+	ShowPassage(0xd2);
+	DisplayPassage();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
 	if(D_58F0)
 		goto end;
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
-	C_00E1_052D();
-	C_09A0_000B(0xd3);
-	C_09A0_21C5();
+	RestorePalette();
+	ShowPassage(0xd3);
+	DisplayPassage();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
 	if(D_58F0)
 		goto end;
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
-	C_00E1_052D();
-	C_09A0_000B(0xd4);
-	C_09A0_21C5();
+	RestorePalette();
+	ShowPassage(0xd4);
+	DisplayPassage();
 	SHOW_PAGE();
 	FlushKeys();
 	while(!KeyPressed());
 	if(D_58F0)
 		goto end;
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 		D_5732 = D_5710;
 	}
-	C_00E1_052D();
+	RestorePalette();
 	SHAPE(0, 0, 6);
 	SHAPE(0x78, 0x3a, 7);
 	DrawHands(0, 0, 4);
@@ -599,21 +599,21 @@ KeyPressed();
 	switch(D_5044) {
 		case 4:
 		case 7:
-			ofs = C_06E9_0AF0(0xc8, 0x12c);
-			C_13F2_037A(&D_5732, &D_5710, ofs);
+			ofs = ScaleSpeed(0xc8, 0x12c);
+			DIS_dissolveCGA(&D_5732, &D_5710, ofs);
 			break;
 		case 9:
-			ofs = C_06E9_0AF0(0x12c, 0x1f4);
-			C_13F2_0504(&D_5732, &D_5710, ofs);
+			ofs = ScaleSpeed(0x12c, 0x1f4);
+			DIS_dissolveTDY(&D_5732, &D_5710, ofs);
 			break;
 		case 0xd:
 			D_5710.segment ^= 0x200;
-			ofs = C_06E9_0AF0(0xc8, 0x12c);
-			C_13F2_01D5(&D_5732, &D_5710, ofs);
+			ofs = ScaleSpeed(0xc8, 0x12c);
+			DIS_dissolveEGA(&D_5732, &D_5710, ofs);
 			D_5710.segment ^= 0x200;
 			break;
 		case 0x13:
-			C_13F2_000C(&D_5732, &D_5710, 0);
+			DIS_dissolve(&D_5732, &D_5710, 0);
 			break;
 	}
 	FlushKeys();
@@ -627,7 +627,7 @@ KeyPressed();
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
 		DrawGlow();
-		C_06E9_2AF6();
+		ShowFrame();
 		TREMBLE(3);
 		if(KeyPressed())
 			break;
@@ -644,8 +644,8 @@ KeyPressed();
 	SHAPE(0xd2, 0x84, 0xc);
 	DrawGlow();
 	for(i = 0; i <= frames / 2; i++)
-		C_06E9_2AF6();
-	C_09A0_000B(0xd5);
+		ShowFrame();
+	ShowPassage(0xd5);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
@@ -656,13 +656,13 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(3);
 	} while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	speed = C_06E9_0AF0(4, 0xa);
+	speed = ScaleSpeed(4, 0xa);
 	FlushKeys();
 	ofs = 0;
 	i = 0x1e;
@@ -677,7 +677,7 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_06E9_2AF6();
+		ShowFrame();
 		TREMBLE(4);
 		if(KeyPressed())
 			i = 0x8d - speed;
@@ -698,18 +698,18 @@ KeyPressed();
 	D_66C4[3] = 0x35;
 	D_66C4[4] = 0xf0;
 	D_66C4[5] = 0x3e;
-	speed = C_06E9_0AF0(3, 9);
+	speed = ScaleSpeed(3, 9);
 	done = 0;
 	FlushKeys();
 	do {
 		if(KeyPressed()) {
-			while(C_136D_0004(D_66D4, D_66C4, 6));
+			while(FADE_step(D_66D4, D_66C4, 6));
 			done = 1;
 		}
 		if(D_58F0)
 			goto end;
 		for(i = 0; i < speed && !done; i++)
-			done = !C_136D_0004(D_66D4, D_66C4, 6);
+			done = !FADE_step(D_66D4, D_66C4, 6);
 		SHAPE(0, 0, 6);
 		SHAPE(0x78, 0x3a, 7);
 		DrawHands(left, right, 6 - rand() % 4);
@@ -719,10 +719,10 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_06E9_2AF6();
+		ShowFrame();
 		TREMBLE(4);
 	} while(!done);
-	C_09A0_000B(0xd6);
+	ShowPassage(0xd6);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
@@ -734,8 +734,8 @@ KeyPressed();
 		SHAPE(0x31, 0x44, 9);
 		SHAPE(0, 0x70, 5);
 		SHAPE(0xd2, 0x84, 0xc);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
 	if(D_58F0)
@@ -760,13 +760,13 @@ KeyPressed();
 	FlushKeys();
 	do {
 		if(KeyPressed()) {
-			while(C_136D_0004(D_66D4, D_66C4, 8));
+			while(FADE_step(D_66D4, D_66C4, 8));
 			done = 1;
 		}
 		if(D_58F0)
 			goto end;
 		for(i = 0; i < speed && !done; i++)
-			done = !C_136D_0004(D_66D4, D_66C4, 8);
+			done = !FADE_step(D_66D4, D_66C4, 8);
 		SHAPE(0, 0, 6);
 		SHAPE(0x78, 0x3a, 7);
 		DrawHands(left, right, 6 - rand() % 4);
@@ -775,37 +775,37 @@ KeyPressed();
 		SHAPE(D_66D4[4], D_66D4[5], 1);
 		SHAPE(D_66D4[6], D_66D4[7], 9);
 		SHAPE(0, 0x70, 5);
-		C_06E9_2AF6();
+		ShowFrame();
 		TREMBLE(4);
 	} while(!done);
-	C_09A0_000B(0xd7);
+	ShowPassage(0xd7);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
 		SHAPE(0x78, 0x3a, 7);
 		DrawHands(left, right, 6 - rand() % 4);
 		SHAPE(0, 0x70, 5);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xd8);
+	ShowPassage(0xd8);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
 		SHAPE(0x78, 0x3a, 7);
 		DrawHands(left, right, 6 - rand() % 4);
 		SHAPE(0, 0x70, 5);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xd9);
-	speed = C_06E9_0AF0(1, 3);
+	ShowPassage(0xd9);
+	speed = ScaleSpeed(1, 3);
 	FlushKeys();
 	i = 0x3a;
 	done = 0;
@@ -814,8 +814,8 @@ KeyPressed();
 		SHAPE(0x78, i, 7);
 		DrawHands(left, right, 6 - rand() % 4);
 		SHAPE(0, 0x70, 5);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(4);
 		if(KeyPressed())
 			i = 0x86 - speed;
@@ -824,26 +824,26 @@ KeyPressed();
 		i += speed;
 		i += (0x86 - i) * (i >= 0x86);
 	}
-	C_09A0_000B(0xda);
+	ShowPassage(0xda);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
 		DrawHands(left, right, 6 - rand() % 4);
 		SHAPE(0, 0x70, 5);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xdb);
+	ShowPassage(0xdb);
 	FlushKeys();
 	do {
 		SHAPE(0, 0, 6);
 		DrawHands(left, right, 6 - rand() % 4);
 		SHAPE(0, 0x70, 5);
-		C_09A0_21C5();
-		C_06E9_2AF6();
+		DisplayPassage();
+		ShowFrame();
 		TREMBLE(4);
 	} while(!KeyPressed());
 	if(D_58F0)
@@ -853,7 +853,7 @@ KeyPressed();
 		SHAPE(0, 0, 6);
 		DrawHands(left, right, 6 - rand() % 4);
 		SHAPE(0, 0x70, 5);
-		C_06E9_2AF6();
+		ShowFrame();
 		TREMBLE(4);
 		if(KeyPressed())
 			break;
@@ -861,19 +861,19 @@ KeyPressed();
 			break;
 	}
 end:
-	C_1482_009C();
-	C_1482_001F();
+	TIM_remove();
+	TIM_resetCallback();
 	farfree(D_5ADC);
 	farfree(D_60AA);
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	DRV(0xc)(&D_5732, 0);
-	C_00E1_04F9();
+	SetPalette();
 	if(D_5044 != 0xd)
-		C_1277_00D8(&D_6072);
+		SURF_free(&D_6072);
 	D_575A = D_58F0 = 0;
-	C_00E1_178A(0);
+	PlayMusic(0);
 }
 
 /*whether a key was pressed; also updates the surface the twinkling stars are drawn
@@ -884,6 +884,6 @@ end:
 	D_5BAE = D_5710;
 	if(D_5044 == 0xd)
 		D_5BAE.segment ^= 0x200;
-	ret = C_06E9_033A();
+	ret = CheckInput();
 	return ret;
 }

@@ -11,10 +11,10 @@ DSegEnd
 CSegStart	TXTPORT_TEXT
 
 ;TXT_select(struct tText *t)
-ProcStart	TXT_select	;132B:0006
+ProcStart	_TXT_select	;132B:0006
 	MOV	AX,[BP+06]
 	MOV	_pText,AX
-ProcEnd	TXT_select
+ProcEnd	_TXT_select
 
 CSegEnd	TXTPORT_TEXT
 

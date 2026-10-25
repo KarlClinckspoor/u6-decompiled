@@ -4,8 +4,8 @@
 INCLUDE OSI.INC
 
 DSegStart
-EXTRN D_45B2:WORD	;struct tText *: the current text window
-EXTRN D_45CC:DWORD	;driver: fill a rectangle (struct tSurface *s, int color)
+EXTRN _pText:WORD	;struct tText *: the current text window
+EXTRN drvFillRect:DWORD	;driver: fill a rectangle (struct tSurface *s, int color)
 
 lineRect	tSurface <0,0,0,0,0,0>	;D_45A4 the rectangle cleared by TXT_clearLine
 DSegEnd
@@ -39,7 +39,7 @@ ProcEnd	TXT_scrollDown
 
 ;scroll up by one line of text, and clear the line at the bottom
 FProc	TXT_scrollUp1	;1317:003C
-	MOV	BX,D_45B2
+	MOV	BX,_pText
 	MOV	SI,[BX].surface
 	LES	DI,[BX].font
 	MOV	AX,[SI].top
@@ -56,7 +56,7 @@ C_004E:
 	INC	AX
 	JMP	SHORT C_004E
 C_005F:
-	MOV	BX,D_45B2
+	MOV	BX,_pText
 	MOV	SI,[BX].surface
 	MOV	AX,[SI].bottom
 	LES	DI,[BX].font
@@ -69,7 +69,7 @@ TXT_scrollUp1	ENDP
 
 ;scroll down by one line of text, and clear the line at the top
 FProc	TXT_scrollDown1	;1317:0078
-	MOV	BX,D_45B2
+	MOV	BX,_pText
 	LES	DI,[BX].font
 	MOV	SI,[BX].surface
 	MOV	AX,[SI].bottom
@@ -88,7 +88,7 @@ C_008A:
 	DEC	AX
 	JMP	SHORT C_008A
 C_009F:
-	MOV	BX,D_45B2
+	MOV	BX,_pText
 	MOV	SI,[BX].surface
 	MOV	AX,[SI].top
 	MOV	DX,[SI].left
@@ -99,7 +99,7 @@ TXT_scrollDown1	ENDP
 ;clear a line of text from (DX,AX) to the right of the window, in the background color
 FProc	TXT_clearLine	;1317:00B1
 	PUSH	BX
-	MOV	SI,D_45B2
+	MOV	SI,_pText
 	MOV	DI,[SI].surface
 	MOV	SI,OFFSET DGROUP:lineRect
 	MOV	BX,[DI].segment_
@@ -112,7 +112,7 @@ FProc	TXT_clearLine	;1317:00B1
 	MOV	[SI].left,DX
 	MOV	CX,[DI].right
 	MOV	[SI].right,CX
-	MOV	DI,D_45B2
+	MOV	DI,_pText
 	MOV	AL,[DI].bgColor
 	XOR	AH,AH
 	PUSH	AX
@@ -121,7 +121,7 @@ FProc	TXT_clearLine	;1317:00B1
 	ADD	DX,[SI].top
 	MOV	[SI].bottom,DX
 	PUSH	SI
-	CALL	D_45CC
+	CALL	drvFillRect
 	ADD	SP,4
 	POP	BX
 	RET
@@ -133,7 +133,7 @@ TXT_copyLine	PROC FAR
 C_00F7:
 	PUSH	DX
 	CLD
-	MOV	SI,D_45B2
+	MOV	SI,_pText
 	MOV	DI,[SI].surface
 	MOV	ES,[DI].segment_
 	MOV	CX,[DI].right
@@ -160,7 +160,7 @@ C_00F7:
 	RCL	CX,1
 	REP	MOVSB
 	MOV	DS,CS:C_000A
-	MOV	BX,D_45B2
+	MOV	BX,_pText
 	LES	DI,[BX].font
 	POP	DX
 	RET

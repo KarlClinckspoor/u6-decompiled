@@ -52,6 +52,11 @@ _noErr_:
 ENDM
 
 
+;an empty code segment of its own, word aligned: in U.EXE it leaves the pad byte
+;between VSYNC_TEXT and FADE_TEXT (the modules on each side of it in the library)
+OSI_FILE_TEXT	SEGMENT PUBLIC WORD 'CODE'
+OSI_FILE_TEXT	ENDS
+
 _TEXT	SEGMENT PUBLIC BYTE 'CODE'
 	ASSUME CS:_TEXT,DS:DGROUP
 

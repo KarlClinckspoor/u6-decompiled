@@ -2,6 +2,8 @@
  * Ultima VI - The False Prophet: U.EXE
  * the OSI library: surfaces sharing a bitmap
  */
+/*the library was compiled through the assembler (tcc -B): this does the same*/
+#pragma inline
 #include <stdarg.h>
 #include "OSILIB.H"
 

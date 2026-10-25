@@ -13,11 +13,11 @@ ProcStart	VID_getMode	;1336:000C
 ProcEnd	VID_getMode
 
 ;VID_setMode(int mode)
-ProcStart	VID_setMode	;1336:001E
+ProcStart	_VID_setMode	;1336:001E
 	MOV	AX,[BP+06]
 	MOV	AH,0	;set video mode
 	INT	10h
-ProcEnd	VID_setMode
+ProcEnd	_VID_setMode
 
 CSegEnd	VMODE_TEXT
 

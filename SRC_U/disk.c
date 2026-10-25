@@ -27,9 +27,9 @@ extern struct tSurface D_5710, D_5732;
 	int fd;
 
 	D_4071[3] = n + '0';
-	fd = C_0000_09F3(D_4071);
+	fd = OSI_open(D_4071);
 	if(fd != -1)
-		C_0000_0A32(fd);
+		OSI_close(fd);
 	return fd != -1;
 }
 
@@ -56,9 +56,9 @@ extern struct tSurface D_5710, D_5732;
 			D_5732 = D_5710;
 		DRV(0xc)(&D_5732, 0);
 		D_575A = 0;
-		C_09A0_000B(999);
-		C_09A0_21C5();
-		C_00E1_04F9();
+		ShowPassage(999);
+		DisplayPassage();
+		SetPalette();
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_5732, &D_5710);
 		} else {
@@ -67,7 +67,7 @@ extern struct tSurface D_5710, D_5732;
 		}
 		i = 0;
 		while(!i) {
-			C_132C_0008();
+			MOUSE_SERVE();
 			if(D_5046 || D_5047) {
 				if(!D_4076) {
 					D_4076 = D_4077 = 1;
@@ -170,13 +170,13 @@ extern struct tSurface D_5710, D_5732;
 
 	if(D_5044 == 0x13) {
 		buf = farmalloc(0x300L);
-		fd = C_0000_09F3("palettes.int");
+		fd = OSI_open("palettes.int");
 		if(fd >= 0) {
 			ofs = n;
 			ofs <<= 6;
 			ofs += ofs << 3;
-			C_0000_0AE4(fd, ofs, 0x240L, buf);
-			C_0000_0A32(fd);
+			OSI_read(fd, ofs, 0x240L, buf);
+			OSI_close(fd);
 			for(i = 0xbf; i >= 0; i--) {
 				j = i * 3;
 				k = i * 4;
@@ -191,8 +191,8 @@ extern struct tSurface D_5710, D_5732;
 				rgb[1] = *p++;
 				rgb[2] = *p++;
 				if(!(i & 0xf))
-					C_1368_0015();
-				C_1475_0099(i, rgb);
+					VID_waitRetrace();
+				PAL_set(i, rgb);
 			}
 		}
 		farfree(buf);

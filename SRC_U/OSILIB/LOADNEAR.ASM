@@ -15,7 +15,7 @@ CSegStart	LOADNEAR_TEXT
 
 ;load a whole file (smaller than 64K) into memory it mallocs: LOAD_near(char *name),
 ;returns the buffer (NULL on error)
-ProcStart	LOAD_near	;145A:0006
+ProcStart	_LOAD_near	;145A:0006
 	MOV	AX,3D00h	;open file (read)
 	MOV	DX,[BP+06]
 	INT	21h
@@ -66,7 +66,7 @@ C_0082:
 C_008A:
 	MOV	AX,0
 C_008D:
-ProcEnd	LOAD_near
+ProcEnd	_LOAD_near
 
 CSegEnd	LOADNEAR_TEXT
 

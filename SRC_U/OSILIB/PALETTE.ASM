@@ -7,7 +7,7 @@ DSegStart
 palHandle	dw 0	;D_49FA
 DSegEnd
 
-EXTRN C_1368_0015:FAR	;wait for the vertical retrace
+EXTRN _VID_waitRetrace:FAR	;wait for the vertical retrace
 
 CSegStart	PALETTE_TEXT
 
@@ -52,7 +52,7 @@ C_0055:	;-- 16 colors each vertical retrace
 	PUSH	BX
 	PUSH	DX
 	PUSH	ES
-	CALL	C_1368_0015
+	CALL	_VID_waitRetrace
 	POP	ES
 	POP	DX
 	POP	BX
@@ -83,7 +83,7 @@ C_0094:
 ProcEnd	PAL_load
 
 ;set a color: PAL_set(int index, int *rgb)
-ProcStart	PAL_set	;1475:0099
+ProcStart	_PAL_set	;1475:0099
 	MOV	DX,3C8h
 	PUSHF
 	CLI
@@ -98,10 +98,10 @@ ProcStart	PAL_set	;1475:0099
 	LODSW
 	OUT	DX,AL
 	POPF
-ProcEnd	PAL_set
+ProcEnd	_PAL_set
 
 ;get a color: PAL_get(int index, int *rgb)
-ProcStart	PAL_get	;1475:00B8
+ProcStart	_PAL_get	;1475:00B8
 	PUSH	DS
 	POP	ES
 	CLD
@@ -120,7 +120,7 @@ ProcStart	PAL_get	;1475:00B8
 	IN	AL,DX
 	STOSW
 	POPF
-ProcEnd	PAL_get
+ProcEnd	_PAL_get
 
 CSegEnd	PALETTE_TEXT
 

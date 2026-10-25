@@ -101,28 +101,27 @@ extern struct tSurface D_599C;
 extern struct tSurface D_59AA;/*the title*/
 extern struct tSurface D_5A20;/*the character sheet*/
 
-extern C_00E1_028A(char *, int);/*text input*/
-extern C_00E1_041B(struct tSurface *, char *);/*waits for a button or key: index in the keys*/
-extern C_00E1_04F9();
-extern C_00E1_178A(int);
-extern C_0406_0006();
-extern C_06E9_0351();/*nonzero when the player wants to go on (key or time)*/
-extern C_09A0_000B(int);
-extern C_09A0_21C5();
-extern C_0BC1_0079(int);/*AskForDisk*/
-extern C_10E1_000A();
-extern C_1277_000C(struct tSurface *);/*gives a surface an off-screen buffer*/
-extern C_1277_00D8(struct tSurface *);/*frees it*/
-extern C_12EA_000A(struct tSurface *, ...);
-extern C_12EE_0229(char far *);/*console puts*/
-extern C_12EE_0249(char far *, ...);/*console printf*/
-extern C_12EE_0277(char far *, ...);/*console printf*/
-extern C_1339_0000();/*mouse cursor on*/
-extern C_1339_0016();/*mouse cursor off*/
-extern C_136D_014D(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
-extern C_136D_0346(struct tSurface *, int);/*MCGA: palette fade out*/
-extern void far *C_13BC_000C(char *);/*loads a file in memory*/
-extern char *C_145A_0006(char *);/*loads a file in memory*/
+extern InputString(char *, int);/*text input*/
+extern MenuSelect(struct tSurface *, char *);/*waits for a button or key: index in the keys*/
+extern SetPalette();
+extern PlayMusic(int);
+extern WriteNewCharacter();
+extern PollInput();/*nonzero when the player wants to go on (key or time)*/
+extern ShowPassage(int);
+extern DisplayPassage();
+extern AskForDisk(int);/*AskForDisk*/
+extern SURF_alloc(struct tSurface *);/*gives a surface an off-screen buffer*/
+extern SURF_free(struct tSurface *);/*frees it*/
+extern SURF_share(struct tSurface *, ...);
+extern TXT_printf(char far *);/*console puts*/
+extern TXT_sprintf(char far *, ...);/*console printf*/
+extern TXT_sappend(char far *, ...);/*console printf*/
+extern MOUSE_SHOW();/*mouse cursor on*/
+extern MOUSE_HIDE();/*mouse cursor off*/
+extern FADE_in(struct tSurface *, struct tSurface *);/*MCGA: palette fade in*/
+extern FADE_out(struct tSurface *, int);/*MCGA: palette fade out*/
+extern void far *LZW_load(char *);/*loads a file in memory*/
+extern char *LOAD_near(char *);/*loads a file in memory*/
 
 /*reads the first character of Ultima IV's PARTY.SAV (in D_5ADA); nonzero if it looks wrong*/
 /*C_0263_0000*/ReadU4Character() {
@@ -257,8 +256,8 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_566F = D_5A20.left;
 	D_5671 = D_5A20.top + 2;
 	D_567D = 0;
-	C_12EE_0249("%s\n%s\n%s\n", D_5944, D_595A, D_5962);
-	C_12EE_0277("%d\n%d\n%d\n%d\n%d\n%d%P", D_5954, D_5956, D_5958, D_597C, D_5974, D_5976);
+	TXT_sprintf("%s\n%s\n%s\n", D_5944, D_595A, D_5962);
+	TXT_sappend("%d\n%d\n%d\n%d\n%d\n%d%P", D_5954, D_5956, D_5958, D_597C, D_5974, D_5976);
 	D_5A20.left += 0x20;
 	D_5A20.left += 0x31;
 	/*the new one*/
@@ -268,8 +267,8 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 		D_5677 = 0;
 	D_566F = D_5A20.left;
 	D_5671 = D_5A20.top + 2;
-	C_12EE_0249("%s\n%s\n%s\n", D_5A30, D_5A46, D_5A4E);
-	C_12EE_0277("%d\n%d\n%d\n%d\n%d\n%d%P", D_5A40, D_5A42, D_5A44, D_5A68, D_5A60, D_5A62);
+	TXT_sprintf("%s\n%s\n%s\n", D_5A30, D_5A46, D_5A4E);
+	TXT_sappend("%d\n%d\n%d\n%d\n%d\n%d%P", D_5A40, D_5A42, D_5A44, D_5A68, D_5A60, D_5A62);
 	D_5A20.left -= 0x86;
 	/*the buttons*/
 	if(D_5044 == 0xd)
@@ -296,7 +295,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 
 	if(D_5044 == 0xd)
 		D_599C.segment = D_5710.segment;
-	C_1339_0016();
+	MOUSE_HIDE();
 	D_59AA.right = D_5A20.right = 0x123;
 	D_59AA.left = D_5A20.left = 0x1e;
 	D_59AA.top = 0x57;
@@ -314,7 +313,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_58FE[2].right = 0xdb;
 	D_58FE[3].right = 0x124;
 	D_58FE[4] = D_58FE[3];
-	C_12EA_000A(&D_5732, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
+	SURF_share(&D_5732, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
 	bottom = D_5A20.bottom;
 	if(D_5044 == 0xd) {
 		D_59AA.segment = D_5A20.segment = D_5710.segment;
@@ -347,33 +346,33 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_566D = &D_59AA;
 	D_566F = D_59AA.left + 0x35;
 	D_5671 = D_59AA.top + 2;
-	C_12EE_0229("Ultima ");
+	TXT_printf("Ultima ");
 	if(D_59B8 == 4)
-		C_12EE_0229("IV");
+		TXT_printf("IV");
 	else
-		C_12EE_0229("V");
+		TXT_printf("V");
 	D_566F = D_59AA.left + 0x86;
-	C_12EE_0229("Ultima VI");
+	TXT_printf("Ultima VI");
 	/*the labels*/
 	D_5A20.right -= 0xd6;
 	D_566D = &D_5A20;
 	D_566F = D_5A20.left;
 	D_5671 = D_5A20.top + 2;
 	D_567D = 1;
-	C_12EE_0249("Name\nSex\nClass\n");
-	C_12EE_0277("Str\nDex\nInt\nMagic\nExp\nLevel%P");
+	TXT_sprintf("Name\nSex\nClass\n");
+	TXT_sappend("Str\nDex\nInt\nMagic\nExp\nLevel%P");
 	D_5A20.right += 0xd6;
 	DrawSheet();
-	C_12EA_000A(&D_5710, &D_5980, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
+	SURF_share(&D_5710, &D_5980, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
 	if(D_5044 != 0xd) {
 		DRV(0xf)(&D_599C, &D_5980);
 	} else {
 		D_5732 = D_5710;
 	}
-	C_1339_0000();
+	MOUSE_SHOW();
 	done = 0;
 	while(!done) {
-		key = D_045D[C_00E1_041B(D_58FE, D_045D)];
+		key = D_045D[MenuSelect(D_58FE, D_045D)];
 		switch(key) {
 			case 'C':
 				done = 1;
@@ -385,31 +384,31 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 				D_5677 = 0;
 				D_566F = D_5A20.left + 0x86;
 				D_5671 = D_5A20.top + 2;
-				C_1339_0016();
-				C_10E1_000A();
-				C_00E1_028A(D_5A30, 0xd);
-				C_12EA_000A(&D_5732, &D_5A20, 0);
+				MOUSE_HIDE();
+				clreol();
+				InputString(D_5A30, 0xd);
+				SURF_share(&D_5732, &D_5A20, 0);
 				if(D_5044 == 0xd)
 					D_5A20.segment = D_5710.segment;
 				DrawSheet();
-				C_12EA_000A(&D_5710, &D_5A20, 0);
+				SURF_share(&D_5710, &D_5A20, 0);
 				if(D_5044 != 0xd) {
 					DRV(0xf)(&D_599C, &D_5980);
 				}
-				C_1339_0000();
+				MOUSE_SHOW();
 				break;
 			case 'S':
-				C_1339_0016();
+				MOUSE_HIDE();
 				ToggleSex();
-				C_12EA_000A(&D_5732, &D_5A20, 0);
+				SURF_share(&D_5732, &D_5A20, 0);
 				if(D_5044 == 0xd)
 					D_5A20.segment = D_5710.segment;
 				DrawSheet();
-				C_12EA_000A(&D_5710, &D_5A20, 0);
+				SURF_share(&D_5710, &D_5A20, 0);
 				if(D_5044 != 0xd) {
 					DRV(0xf)(&D_599C, &D_5980);
 				}
-				C_1339_0000();
+				MOUSE_SHOW();
 				break;
 			case 0x1b: case 'A':
 				done = 1;
@@ -440,7 +439,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	}
 	if(D_5044 == 0xd) {
 		D_599C.segment = portrait.segment = D_5710.segment;
-		C_1339_0016();
+		MOUSE_HIDE();
 	}
 	portrait.right = 0x102;
 	portrait.left = 0xc3;
@@ -468,7 +467,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_58FE[4] = D_58FE[3];
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
-	C_12EA_000A(&D_5732, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
+	SURF_share(&D_5732, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
 	switch(D_5044) {
 		case 4: case 7: DRV(0xc)(&D_599C, 3); break;
 		case 9: case 0xd: DRV(0xc)(&D_599C, 0xe); break;
@@ -504,17 +503,17 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_566F = D_59AA.left;
 	D_5671 = D_59AA.top + 2;
 	D_567D = 2;
-	C_12EE_0249("%s%P", D_5A30);
+	TXT_sprintf("%s%P", D_5A30);
 	/*the buttons*/
 	DRV(3)(&D_599C, D_58FE[0].left, D_58FE[0].top, D_5AD6, 3);
 	DRV(3)(&D_599C, D_58FE[1].left, D_58FE[1].top, D_5AD6, 0x12);
 	DRV(3)(&D_599C, D_58FE[2].left, D_58FE[2].top, D_5AD6, frame);
 	DRV(3)(&D_599C, D_58FE[3].left, D_58FE[3].top, D_5AD6, 4);
-	C_12EA_000A(&D_5710, &D_5980, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
+	SURF_share(&D_5710, &D_5980, &D_59AA, &D_5A20, &D_58FE[0], &D_58FE[1], &D_58FE[2], &D_58FE[3], &D_58FE[4], 0);
 	done = 0;
 	while(!done) {
 		/*the portrait*/
-		C_1339_0016();
+		MOUSE_HIDE();
 		switch(D_5044) {
 			case 4: case 7: DRV(0xc)(&portrait, 3); break;
 			case 9: case 0xd: DRV(0xc)(&portrait, 0xe); break;
@@ -525,8 +524,8 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 		if(D_5044 != 0xd) {
 			DRV(0xf)(&D_599C, &D_5980);
 		}
-		C_1339_0000();
-		key = D_0463[C_00E1_041B(D_58FE, D_0463)];
+		MOUSE_SHOW();
+		key = D_0463[MenuSelect(D_58FE, D_0463)];
 		switch(key) {
 			case 'S':
 				ToggleSex();
@@ -564,7 +563,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	if(D_5044 == 0xd)
 		D_5732.segment = D_5710.segment;
 	for(i = 0; i < 27; i++) {
-		C_12EA_000A(&D_5732, &buttons[i], 0);
+		SURF_share(&D_5732, &buttons[i], 0);
 		buttons[i].top = 0xae;
 		buttons[i].bottom = 0xbd;
 	}
@@ -576,7 +575,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	text.bottom = 0xae;
 	bar.top = 0xae;
 	bar.bottom = 0xbd;
-	C_12EA_000A(&D_5732, &title, &text, &bar, 0);
+	SURF_share(&D_5732, &title, &text, &bar, 0);
 	switch(D_5044) {
 		case 4: case 7:
 			DRV(0xc)(&D_599C, 3);
@@ -595,7 +594,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_566F = title.left;
 	D_5671 = title.top;
 	D_567D = 2;
-	C_12EE_0249("TRANSFER A CHARACTER%P");
+	TXT_sprintf("TRANSFER A CHARACTER%P");
 	if(D_5044 == 0xd) {
 		text.segment = D_5710.segment;
 		text.pScanlines = D_5710.pScanlines;
@@ -610,8 +609,8 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	else
 		color = 3;
 	DRV(0xc)(&text, color);
-	C_12EE_0249("Enter the letter of the\nfloppy/hard drive containing your\n");
-	C_12EE_0277("Ultima V Britannia\nor Ultima IV Player disk....%P");
+	TXT_sprintf("Enter the letter of the\nfloppy/hard drive containing your\n");
+	TXT_sappend("Ultima V Britannia\nor Ultima IV Player disk....%P");
 	/*a line between the text and the drive buttons*/
 	if(D_5044 == 0xd)
 		line = D_5710;
@@ -639,12 +638,12 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	buttons[i].right = 0x124;
 	buttons[i].left = 0xdd;
 	DRV(3)(&bar, buttons[i].left, buttons[i].top, D_5AD6, 4);
-	C_12EA_000A(&D_5710, &title, &text, &bar, 0);
+	SURF_share(&D_5710, &title, &text, &bar, 0);
 	for(i = 0; i < 27; i++)
-		C_12EA_000A(&D_5710, &buttons[i], 0);
+		SURF_share(&D_5710, &buttons[i], 0);
 	if(D_5044 == 0x13) {
 		if(D_59B8 == 0) {
-			C_136D_014D(&D_5702, &D_565F);
+			FADE_in(&D_5702, &D_565F);
 		} else {
 			DRV(0xf)(&D_5702, &D_565F);
 		}
@@ -653,23 +652,23 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	} else {
 		DRV(0xf)(&D_5702, &D_565F);
 	}
-	C_1339_0000();
+	MOUSE_SHOW();
 	found = 0;
 	D_59B8 = 0;
 	while(!found) {
-		key = keys[C_00E1_041B(buttons, keys)];
+		key = keys[MenuSelect(buttons, keys)];
 		if(key == 0x1b)
 			return 0;
 		D_03CA[0] = D_03D7[0] = D_03E4[0] = D_03F8[0] = key;
-		if((D_5ADA = C_145A_0006(D_03CA)) != 0 || (D_5ADA = C_145A_0006(D_03F8)) != 0)
+		if((D_5ADA = LOAD_near(D_03CA)) != 0 || (D_5ADA = LOAD_near(D_03F8)) != 0)
 			D_59B8 = 4;
-		else if((D_5ADA = C_145A_0006(D_03D7)) != 0 || (D_5ADA = C_145A_0006(D_03E4)) != 0)
+		else if((D_5ADA = LOAD_near(D_03D7)) != 0 || (D_5ADA = LOAD_near(D_03E4)) != 0)
 			D_59B8 = 5;
 		if(D_59B8) {
 			found = 1;
 		} else {
 			putchar(7);
-			C_1339_0016();
+			MOUSE_HIDE();
 			D_566F = text.left;
 			D_5671 = title.top + 0x20;
 			text.bottom = 0xbd;
@@ -680,13 +679,13 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 			else
 				color = 3;
 			DRV(0xc)(&text, color);
-			C_12EE_0249("No character found!  If you wish to transfer a ");
-			C_12EE_0277("character from a hard disk it must be saved in a subdirectory called \"\\ULTIMA\".%P");
-			while(!C_06E9_0351());
+			TXT_sprintf("No character found!  If you wish to transfer a ");
+			TXT_sappend("character from a hard disk it must be saved in a subdirectory called \"\\ULTIMA\".%P");
+			while(!PollInput());
 			break;
 		}
 	}
-	C_1339_0016();
+	MOUSE_HIDE();
 	return D_59B8;
 }
 
@@ -695,7 +694,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	struct tSurface save;
 	int ret;
 
-	C_00E1_178A(4);
+	PlayMusic(4);
 	if(D_5044 == 0xd) {
 		D_5732.segment = D_5710.segment ^ 0x200;
 		DRV(0xf)(&D_5732, &D_5710);
@@ -705,12 +704,12 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_6072.right = 0x13f;
 	D_6072.bottom = 0x37;
 	if(D_5044 != 0xd)
-		C_1277_000C(&D_6072);
+		SURF_alloc(&D_6072);
 	else
 		D_6072.segment = 0xa600;
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	if(D_5044 != 0xd)
-		C_1277_00D8(&D_6072);
+		SURF_free(&D_6072);
 	D_599C = D_5732;
 	D_5980 = D_5710;
 	D_599C.right = D_5980.right = 0x124;
@@ -718,36 +717,36 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 	D_599C.top = D_5980.top = 0x57;
 	D_599C.bottom = D_5980.bottom = 0xbd;
 	D_5702 = D_565F;
-	C_12EA_000A(&D_5732, &D_5702, 0);
+	SURF_share(&D_5732, &D_5702, 0);
 	DRV(0xc)(&D_5702, 0);
 	/*save the screen*/
 	save.right = D_565F.right - D_565F.left;
 	save.bottom = D_565F.bottom - D_565F.top;
 	save.left = save.top = 0;
-	C_1277_000C(&save);
+	SURF_alloc(&save);
 	switch(D_5044) {
-		case 4: D_5AD6 = C_13BC_000C("vellum1.cga"); break;
-		case 7: D_5AD6 = C_13BC_000C("vellum1.hrc"); break;
-		case 9: D_5AD6 = C_13BC_000C("vellum1.tga"); break;
-		case 0xd: D_5AD6 = C_13BC_000C("vellum1.ega"); break;
-		case 0x13: D_5AD6 = C_13BC_000C("vellum1.shp"); break;
+		case 4: D_5AD6 = LZW_load("vellum1.cga"); break;
+		case 7: D_5AD6 = LZW_load("vellum1.hrc"); break;
+		case 9: D_5AD6 = LZW_load("vellum1.tga"); break;
+		case 0xd: D_5AD6 = LZW_load("vellum1.ega"); break;
+		case 0x13: D_5AD6 = LZW_load("vellum1.shp"); break;
 	}
 	switch(D_5044) {
-		case 4: D_5AD2 = C_13BC_000C("montage.cga"); break;
-		case 7: D_5AD2 = C_13BC_000C("montage.hrc"); break;
-		case 9: D_5AD2 = C_13BC_000C("montage.tga"); break;
-		case 0xd: D_5AD2 = C_13BC_000C("montage.ega"); break;
-		case 0x13: D_5AD2 = C_13BC_000C("montage.shp"); break;
+		case 4: D_5AD2 = LZW_load("montage.cga"); break;
+		case 7: D_5AD2 = LZW_load("montage.hrc"); break;
+		case 9: D_5AD2 = LZW_load("montage.tga"); break;
+		case 0xd: D_5AD2 = LZW_load("montage.ega"); break;
+		case 0x13: D_5AD2 = LZW_load("montage.shp"); break;
 	}
 	if(D_5044 == 0xd)
 		D_565F.segment = D_5710.segment ^ 0x200;
 	DRV(0xf)(&D_565F, &save);
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_565F, 0);
+		FADE_out(&D_565F, 0);
 	if(D_5044 == 0xd)
 		D_5702.segment = D_565F.segment = D_5710.segment;
 	DRV(0xc)(&D_565F, 0);
-	C_00E1_04F9();
+	SetPalette();
 	/*the vellum*/
 	DRV(3)(&D_5702, D_5702.left, D_5702.top, D_5AD6, 0);
 	D_59B8 = D_5A2E = 0;
@@ -783,19 +782,19 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 			D_5710.segment ^= 0x200;
 		if(ret)
 			break;
-		C_1339_0016();
+		MOUSE_HIDE();
 	}
-	C_1339_0016();
+	MOUSE_HIDE();
 	if(ret) {
 		D_6072.left = D_6072.top = 0;
 		D_6072.right = 0x13f;
 		D_6072.bottom = 0x1f;
 		if(D_5044 != 0xd)
-			C_1277_000C(&D_6072);
+			SURF_alloc(&D_6072);
 		else
 			D_6072.segment = 0xa600;
-		C_0BC1_0079(8);
-		if(C_0406_0006()) {
+		AskForDisk(8);
+		if(WriteNewCharacter()) {
 			if(D_5044 == 0xd)
 				D_5732 = D_5710;
 			DRV(0xc)(&D_5732, 0);
@@ -807,8 +806,8 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 			}
 			D_575A = 0;
 			DRV(0xc)(&D_5732, 0);
-			C_09A0_000B(998);
-			C_09A0_21C5();
+			ShowPassage(998);
+			DisplayPassage();
 			ret = 0;
 			if(D_5044 == 0xd) {
 				DRV(0x15)(&D_5710);
@@ -816,7 +815,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 			} else {
 				DRV(0xf)(&D_5732, &D_5710);
 			}
-			while(!C_06E9_0351());
+			while(!PollInput());
 			DRV(0xc)(&D_5732, 0);
 			if(D_5044 == 0xd) {
 				DRV(0x15)(&D_5710);
@@ -827,7 +826,7 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 			}
 		}
 		if(D_5044 != 0xd)
-			C_1277_00D8(&D_6072);
+			SURF_free(&D_6072);
 	}
 	farfree(D_5AD2);
 	farfree(D_5AD6);
@@ -837,10 +836,10 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 		D_565F.pScanlines = D_5710.pScanlines;
 	}
 	DRV(0xc)(&D_565F, 0);
-	C_00E1_04F9();
+	SetPalette();
 	if(D_575A) {
 		if(D_5044 == 0x13) {
-			C_136D_014D(&save, &D_565F);
+			FADE_in(&save, &D_565F);
 		} else {
 			DRV(0xf)(&save, &D_565F);
 		}
@@ -848,17 +847,17 @@ extern char *C_145A_0006(char *);/*loads a file in memory*/
 			DRV(0x15)(&D_5710);
 		}
 	}
-	C_1277_00D8(&save);
+	SURF_free(&save);
 	D_6072.left = D_6072.top = 0;
 	D_6072.right = 0x13f;
 	D_6072.bottom = 0x37;
 	if(D_5044 != 0xd)
-		C_1277_000C(&D_6072);
+		SURF_alloc(&D_6072);
 	else
 		D_6072.segment = 0xa600;
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	if(D_5044 != 0xd)
-		C_1277_00D8(&D_6072);
-	C_00E1_178A(0);
+		SURF_free(&D_6072);
+	PlayMusic(0);
 	return ret;
 }

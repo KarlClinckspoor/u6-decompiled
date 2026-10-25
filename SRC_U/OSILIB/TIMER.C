@@ -2,12 +2,14 @@
  * Ultima VI - The False Prophet: U.EXE
  * the OSI library: the timer tick (int 1Ch) and a calibrated delay loop
  */
+/*the library was compiled through the assembler (tcc -B): this does the same*/
+#pragma inline
 #include <dos.h>
 
 /*this module's variables: its _DATA (int D_49FC = 0;) and its _BSS, in this order
   (Turbo C puts the _BSS variables in the order of its hash of their names: the sum of
   their characters, it seems; these names would give 6832 6836 682A 683A 682E)*/
-extern int D_49FC;/*installed*/
+/*49FC*/int D_49FC = 0;/*installed*/
 extern long D_682A;/*ticks counted since TIM_install*/
 extern void (*D_682E)(void);/*called each tick*/
 extern void interrupt (*D_6832)(void);/*the previous int 1Ch handler*/

@@ -1,6 +1,7 @@
 ;----------------------------------------
 ;OSI library (U.EXE): loading an LZW compressed file (as GAME.EXE's INFLATE.ASM)
 ;----------------------------------------
+;TASM fixup order: 0046 000D 002A   (TASM wrote these fixups in this order: tools/u/tasmorder.py)
 INCLUDE OSI.INC
 
 DSegStart
@@ -33,7 +34,7 @@ CSegStart	LZW_TEXT
 
 ;load an LZW compressed file into memory it allocates: LZW_load(char *name),
 ;returns the data (NULL on error)
-ProcStart	LZW_load	;13BC:000C
+ProcStart	_LZW_load	;13BC:000C
 	MOV	AX,3010h
 	PUSH	AX
 	CALL	_malloc
@@ -77,7 +78,7 @@ C_0072:
 	ADD	SP,2
 	MOV	DX,0
 	MOV	AX,0
-ProcEnd	LZW_load
+ProcEnd	_LZW_load
 
 INCLUDE LZ.INC
 

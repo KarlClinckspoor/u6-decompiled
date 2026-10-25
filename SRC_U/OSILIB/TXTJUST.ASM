@@ -1,10 +1,11 @@
 ;----------------------------------------
 ;OSI library (U.EXE): text window, printing a string word-wrapped and justified
 ;----------------------------------------
+;TASM fixup order: 011D 019D 01CE 000C 00E6 00ED 00F4 00FB   (TASM wrote these fixups in this order: tools/u/tasmorder.py)
 INCLUDE OSI.INC
 
 DSegStart
-EXTRN D_45B2:WORD	;struct tText *: the current text window
+EXTRN _pText:WORD	;struct tText *: the current text window
 
 pStr	dd 0	;D_457C the string
 strPos	dw 0	;D_4580 index of the next line
@@ -19,16 +20,16 @@ winLeft	dw 0	;D_458E the window's left
 mode	db 0	;D_4590 the justification (tText.justify)
 DSegEnd
 
-EXTRN C_135A_0040:FAR	;print the character AL
-EXTRN C_135A_00BF:FAR	;new line
+EXTRN TXT_putcAL:FAR	;print the character AL
+EXTRN TXT_newLine:FAR	;new line
 
 CSegStart	TXTJUST_TEXT
 
 ;print a string: TXT_puts(char far *s)
-ProcStart	TXT_puts	;128D:000C
+ProcStart	_TXT_puts	;128D:000C
 	LES	DI,[BP+06]
 	CALL	FAR PTR TXT_putsES
-ProcEnd	TXT_puts
+ProcEnd	_TXT_puts
 
 ;print the string at ES:DI, a line at a time: each line gets the words that fit in
 ;the window, and is printed in the window's justification
@@ -36,7 +37,7 @@ FProc	TXT_putsES	;128D:001F
 	MOV	WORD PTR pStr,DI
 	MOV	WORD PTR pStr+2,ES
 	MOV	strPos,0
-	MOV	BP,D_45B2
+	MOV	BP,_pText
 	MOV	AL,DS:[BP].justify
 	MOV	mode,AL
 	MOV	BX,DS:[BP].surface
@@ -130,7 +131,7 @@ C_0104:
 C_0109:	;-- the next line
 	MOV	SI,lineEnd
 	LES	BX,pStr
-	MOV	BP,D_45B2
+	MOV	BP,_pText
 	MOV	strPos,SI
 	MOV	AL,ES:[BX+SI-01]
 	CMP	AL,0
@@ -138,7 +139,7 @@ C_0109:	;-- the next line
 	CMP	AL,0Ah
 	JZ	C_0141
 	PUSH	AX
-	CALL	C_135A_00BF
+	CALL	TXT_newLine
 	LES	BX,pStr
 	MOV	SI,strPos
 C_0133:	;-- skip the spaces
@@ -203,7 +204,7 @@ C_0194:
 	CMP	AL,0
 	JZ	C_01AF
 	PUSH	SI
-	CALL	C_135A_0040
+	CALL	TXT_putcAL
 	POP	SI
 	INC	SI
 	JMP	SHORT C_0194
@@ -227,8 +228,8 @@ C_01CB:	;-- the leading spaces as they are
 	CMP	BYTE PTR ES:[BX+SI],' '
 	JNZ	C_01F8
 	MOV	AL,' '
-	CALL	C_135A_0040
-	MOV	BP,D_45B2
+	CALL	TXT_putcAL
+	MOV	BP,_pText
 	LES	DI,DS:[BP].font
 	MOV	AL,ES:[DI+04+' ']
 	LES	BX,pStr
@@ -242,10 +243,10 @@ C_01F8:	;-- the first word
 	CMP	AL,' '
 	JZ	C_0228
 	PUSH	AX
-	CALL	C_135A_0040
+	CALL	TXT_putcAL
 	POP	BX
 	MOV	BH,0
-	MOV	BP,D_45B2
+	MOV	BP,_pText
 	LES	DI,DS:[BP].font
 	MOV	AL,ES:[BX+DI+04]
 	LES	BX,pStr
@@ -288,11 +289,11 @@ C_0263:
 	JZ	C_02A0
 	PUSH	SI
 	PUSH	AX
-	CALL	C_135A_0040
+	CALL	TXT_putcAL
 	POP	AX
 	CMP	AL,' '
 	JNZ	C_029C
-	MOV	BP,D_45B2
+	MOV	BP,_pText
 	MOV	AL,spaceAdd
 	MOV	AH,0
 	ADD	DS:[BP].curX,AX

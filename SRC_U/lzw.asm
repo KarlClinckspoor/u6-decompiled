@@ -7,6 +7,7 @@
 ; file name, opens the file itself and allocates the memory for the result.
 ; The file: a 4-byte length of the decompressed data, then the LZW codes (9 to 12 bits).
 ;
+;TASM fixup order: 0046 000D 002A   (TASM wrote these fixups in this order: tools/u/tasmorder.py)
 
 CLEAR      EQU 256	;code: reset the table
 EOF        EQU 257	;code: end of the data
@@ -42,8 +43,8 @@ DGROUP	GROUP	_DATA
 	EXTRN	_free:FAR
 	EXTRN	_farmalloc:FAR
 
-LZW_TEXT	SEGMENT PUBLIC WORD 'CODE'
-	ASSUME	CS:LZW_TEXT,DS:DGROUP
+LOADZ_TEXT	SEGMENT PUBLIC WORD 'CODE'
+	ASSUME	CS:LOADZ_TEXT,DS:DGROUP
 
 ;-- the next code from the input buffer, in ax (refills the buffer near its end)
 read_code	MACRO
@@ -155,7 +156,7 @@ ENDM
 ;C_0F18_000E: void far *LoadZFile(char *name): the decompressed file in newly
 ;allocated memory, 0 if it cannot be read
 PUBLIC	_LoadZFile
-_LoadZFile	PROC FAR
+_LoadZFile	PROC FAR	;0F18:000E
 	PUSH	BP
 	MOV	BP,SP
 	PUSH	DI
@@ -396,6 +397,6 @@ lz6:	MOV	BX,D_4138
 	RET
 LoadZ	ENDP
 
-LZW_TEXT	ENDS
+LOADZ_TEXT	ENDS
 
 END

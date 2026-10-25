@@ -3,6 +3,7 @@
 ;pseudo-random order (a maximal-length linear feedback shift register over the
 ;window's x and y bits), for each video mode
 ;----------------------------------------
+;TASM fixup order: 0019 0000   (TASM wrote these fixups in this order: tools/u/tasmorder.py)
 INCLUDE OSI.INC
 
 DSegStart
@@ -37,7 +38,7 @@ nmask2	db 0Fh,0F0h	;D_496C
 	dd 3880000h,7200000h,9000000h,14000000h,32800000h,48000000h,0A3000000h
 DSegEnd
 
-EXTRN C_1368_0015:FAR	;wait for the vertical retrace
+EXTRN _VID_waitRetrace:FAR	;wait for the vertical retrace
 
 CSegStart	DISSOLVE_TEXT
 
@@ -46,7 +47,7 @@ C_000A	dw DGROUP
 ;dissolve a surface into another, one pixel at a time in a random order (a linear
 ;feedback shift register), 1 byte a pixel (MCGA):
 ;DIS_dissolve(struct tSurface *from, struct tSurface *to, int speed)
-ProcStart	DIS_dissolve	;13F2:000C
+ProcStart	_DIS_dissolve	;13F2:000C
 	MOV	AX,[BP+0Ah]	;-- a wait every (pixels / (7 * speed + 1)) pixels
 	MOV	CL,3
 	SHL	AX,CL
@@ -145,7 +146,7 @@ C_00DE:
 	MOV	ES:[BX+SI],CL
 	DEC	BP
 	JNZ	C_012A
-	CALL	C_1368_0015
+	CALL	_VID_waitRetrace
 	MOV	BP,perWait
 C_012A:
 	DEC	count
@@ -164,7 +165,7 @@ C_0132:	;-- (0,0), which the register never gives
 	ADD	BX,dstLeft
 	MOV	ES,dstSeg
 	MOV	ES:[BX],CL
-ProcEnd	DIS_dissolve
+ProcEnd	_DIS_dissolve
 
 ;the two surfaces of the caller's [BP+6], [BP+8]
 FProc	DIS_setup	;13F2:0161
@@ -203,7 +204,7 @@ FProc	DIS_setup	;13F2:0161
 DIS_setup	ENDP
 
 ;DIS_farcpy(void far *from, void far *to, unsigned n)
-ProcStart	DIS_farcpy	;13F2:01B9
+ProcStart	_DIS_farcpy	;13F2:01B9
 	MOV	CX,[BP+0Eh]
 	LES	DI,[BP+0Ah]
 	LDS	SI,[BP+06]
@@ -211,10 +212,10 @@ ProcStart	DIS_farcpy	;13F2:01B9
 	REP	MOVSW
 	RCL	CX,1
 	REP	MOVSB
-ProcEnd	DIS_farcpy
+ProcEnd	_DIS_farcpy
 
 ;the same for the EGA (16 colors, 4 planes, 8 pixels a byte)
-ProcStart	DIS_dissolveEGA	;13F2:01D5
+ProcStart	_DIS_dissolveEGA	;13F2:01D5
 	MOV	DX,3C4h
 	MOV	AX,0F02h
 	OUT	DX,AX
@@ -369,7 +370,7 @@ C_033F:
 	OUT	DX,AX
 	MOV	AX,0FF08h
 	OUT	DX,AX
-ProcEnd	DIS_dissolveEGA
+ProcEnd	_DIS_dissolveEGA
 
 ;wait for the next timer tick
 waitTick	PROC NEAR	;13F2:036C
@@ -385,7 +386,7 @@ C_0373:
 waitTick	ENDP
 
 ;the same for the CGA (4 colors, 4 pixels a byte)
-ProcStart	DIS_dissolveCGA	;13F2:037A
+ProcStart	_DIS_dissolveCGA	;13F2:037A
 	MOV	AX,[BP+0Ah]
 	MOV	perWait,AX
 	CALL	FAR PTR DIS_setup
@@ -530,10 +531,10 @@ C_04B4:
 	AND	CL,ES:[BX]
 	OR	CL,CH
 	MOV	ES:[BX],CL
-ProcEnd	DIS_dissolveCGA
+ProcEnd	_DIS_dissolveCGA
 
 ;the same for 16 colors, 2 pixels a byte (Tandy)
-ProcStart	DIS_dissolveTDY	;13F2:0504
+ProcStart	_DIS_dissolveTDY	;13F2:0504
 	MOV	AX,[BP+0Ah]
 	MOV	perWait,AX
 	CALL	FAR PTR DIS_setup
@@ -674,7 +675,7 @@ C_063A:
 	AND	CH,nmask2[SI]
 	OR	CL,CH
 	MOV	ES:[BX],CL
-ProcEnd	DIS_dissolveTDY
+ProcEnd	_DIS_dissolveTDY
 
 CSegEnd	DISSOLVE_TEXT
 

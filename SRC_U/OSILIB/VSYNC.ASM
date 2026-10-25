@@ -4,14 +4,14 @@
 INCLUDE OSI.INC
 
 DSegStart
-EXTRN D_459E:WORD	;_pMouse
-EXTRN D_45A0:WORD	;_nMouseSem
+EXTRN _pMouse:WORD	;_pMouse
+EXTRN _nMouseSem:WORD	;_nMouseSem
 DSegEnd
 
 CSegStart	VSYNC_TEXT
 
 ;wait until the display is in its vertical retrace
-FProc	VID_inRetrace	;1368:0002
+FProc	_VID_inRetrace	;1368:0002
 C_0002:
 	MOV	AX,40h
 	MOV	ES,AX
@@ -22,10 +22,10 @@ C_000F:
 	TEST	AL,8
 	JZ	C_000F
 	RET
-VID_inRetrace	ENDP
+_VID_inRetrace	ENDP
 
 ;wait for the beginning of a vertical retrace
-FProc	VID_waitRetrace	;1368:0015
+FProc	_VID_waitRetrace	;1368:0015
 	MOV	AX,40h
 	MOV	ES,AX
 	MOV	DX,ES:[63h]
@@ -39,14 +39,14 @@ C_0027:
 	TEST	AL,8
 	JZ	C_0027
 	RET
-VID_waitRetrace	ENDP
+_VID_waitRetrace	ENDP
 
 ;VID_inRetrace when the mouse pointer is shown
 FProc	VID_mouseRetrace	;1368:002D
-	MOV	BX,D_459E
+	MOV	BX,_pMouse
 	CMP	[BX].installed,0
 	JZ	C_003F
-	MOV	AX,D_45A0
+	MOV	AX,_nMouseSem
 	CMP	AX,0
 	JGE	C_0002
 C_003F:

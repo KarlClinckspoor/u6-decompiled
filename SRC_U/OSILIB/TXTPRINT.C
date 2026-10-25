@@ -7,10 +7,10 @@
 #include <string.h>
 #include "OSILIB.H"
 
-extern struct tText *D_45B2;/*the current text window*/
-extern C_128D_000C(char far *s);/*TXT_puts: print a string, word-wrapped and justified*/
-extern void C_135A_0008(int c);/*TXT_putc: print a character*/
-extern void C_135A_001B(int c);/*TXT_bufc: add a character to the window's string buffer*/
+extern struct tText *pText;/*the current text window*/
+extern TXT_puts(char far *s);/*TXT_puts: print a string, word-wrapped and justified*/
+extern void TXT_putc(int c);/*TXT_putc: print a character*/
+extern void TXT_bufc(int c);/*TXT_bufc: add a character to the window's string buffer*/
 
 /*output a string, a character at a time*/
 /*C_12EE_0002*/static outstr(void (*out)(int), register char *s) {
@@ -40,11 +40,11 @@ extern void C_135A_001B(int c);/*TXT_bufc: add a character to the window's strin
 					case 'x': outstr(out, strupr(ultoa(va_arg(ap, unsigned), buf, 16))); break;
 					case 'c': (*out)(va_arg(ap, int)); break;
 					case 's': outstr(out, va_arg(ap, char *)); break;
-					case 'X': D_45B2->curX = va_arg(ap, int); break;
-					case 'Y': D_45B2->curY = va_arg(ap, int); break;
-					case 'B': D_45B2->bgColor = va_arg(ap, int); break;
-					case 'F': D_45B2->fgColor = va_arg(ap, int); break;
-					case 'P': C_128D_000C(D_45B2->buffer); break;
+					case 'X': pText->curX = va_arg(ap, int); break;
+					case 'Y': pText->curY = va_arg(ap, int); break;
+					case 'B': pText->bgColor = va_arg(ap, int); break;
+					case 'F': pText->fgColor = va_arg(ap, int); break;
+					case 'P': TXT_puts(pText->buffer); break;
 					default: (*out)(c2); break;
 				}
 				break;
@@ -60,7 +60,7 @@ extern void C_135A_001B(int c);/*TXT_bufc: add a character to the window's strin
 	register va_list ap;
 
 	va_start(ap, fmt);
-	format(C_135A_0008, fmt, ap);
+	format(TXT_putc, fmt, ap);
 }
 
 /*format into the window's string buffer*/
@@ -68,8 +68,8 @@ extern void C_135A_001B(int c);/*TXT_bufc: add a character to the window's strin
 	register va_list ap;
 
 	va_start(ap, fmt);
-	D_45B2->bufPtr = D_45B2->buffer;
-	format(C_135A_001B, fmt, ap);
+	pText->bufPtr = pText->buffer;
+	format(TXT_bufc, fmt, ap);
 }
 
 /*and add to it*/
@@ -77,5 +77,5 @@ extern void C_135A_001B(int c);/*TXT_bufc: add a character to the window's strin
 	register va_list ap;
 
 	va_start(ap, fmt);
-	format(C_135A_001B, fmt, ap);
+	format(TXT_bufc, fmt, ap);
 }

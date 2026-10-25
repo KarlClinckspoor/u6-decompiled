@@ -13,34 +13,34 @@
 /*a drawing surface, as GAME.EXE's tSurface*/
 
 /*---- other modules ----*/
-extern C_00E1_04F9();
-extern C_00E1_052D();
-extern C_00E1_0561();
-extern C_00E1_178A();
-extern C_09A0_000B();/*start the music/sound piece n*/
-extern C_09A0_21C5();/*called every frame while a piece plays*/
-extern C_0BC1_0079();/*AskForDisk(n)*/
-extern C_0BC1_03D2();/*LoadPalette(n)*/
-extern C_1277_000C();/*(struct tSurface *): give the surface its own pixel buffer*/
-extern C_1277_00D8();/*(struct tSurface *): free it*/
-extern C_12EA_000A();/*(dst, src, 0): copy a surface*/
-extern C_132C_0008();/*poll the mouse (D_5046, D_5047)*/
-extern C_1368_0002();/*wait for the vertical retrace?*/
-extern C_1368_0015();/*wait for the vertical retrace*/
-extern C_136D_014D();/*(&screen, &back buffer): fade in (MCGA)*/
-extern C_136D_0346();/*(&back buffer, 0): fade out (MCGA)*/
-void far *C_13BC_000C(char *);/*load a shapes file*/
-extern C_13F2_000C();/*(dst, src, speed): dissolve, MCGA*/
-extern C_13F2_01D5();/*(dst, src, speed): dissolve, EGA*/
-extern C_13F2_037A();/*(dst, src, speed): dissolve, CGA/Hercules*/
-extern C_13F2_0504();/*(dst, src, speed): dissolve, Tandy*/
-extern C_1475_0099();/*(i, int rgb[3]): set palette entry i*/
-extern C_1475_00B8();/*(i, int rgb[3]): get palette entry i*/
-extern C_1482_000F();/*(void (far *)()): install a timer tick handler*/
-extern C_1482_001F();/*remove it*/
-extern C_1482_0055();
-extern C_1482_009C();
-extern C_1482_00BE();
+extern SetPalette();
+extern RestorePalette();
+extern SavePalette();
+extern PlayMusic();
+extern ShowPassage();/*start the music/sound piece n*/
+extern DisplayPassage();/*called every frame while a piece plays*/
+extern AskForDisk();/*AskForDisk(n)*/
+extern LoadPalette();/*LoadPalette(n)*/
+extern SURF_alloc();/*(struct tSurface *): give the surface its own pixel buffer*/
+extern SURF_free();/*(struct tSurface *): free it*/
+extern SURF_share();/*(dst, src, 0): copy a surface*/
+extern MOUSE_SERVE();/*poll the mouse (D_5046, D_5047)*/
+extern VID_inRetrace();/*wait for the vertical retrace?*/
+extern VID_waitRetrace();/*wait for the vertical retrace*/
+extern FADE_in();/*(&screen, &back buffer): fade in (MCGA)*/
+extern FADE_out();/*(&back buffer, 0): fade out (MCGA)*/
+void far *LZW_load(char *);/*load a shapes file*/
+extern DIS_dissolve();/*(dst, src, speed): dissolve, MCGA*/
+extern DIS_dissolveEGA();/*(dst, src, speed): dissolve, EGA*/
+extern DIS_dissolveCGA();/*(dst, src, speed): dissolve, CGA/Hercules*/
+extern DIS_dissolveTDY();/*(dst, src, speed): dissolve, Tandy*/
+extern PAL_set();/*(i, int rgb[3]): set palette entry i*/
+extern PAL_get();/*(i, int rgb[3]): get palette entry i*/
+extern TIM_setCallback();/*(void (far *)()): install a timer tick handler*/
+extern TIM_resetCallback();/*remove it*/
+extern TIM_install();
+extern TIM_remove();
+extern TIM_calibrate();
 
 /*---- data ----*/
 extern int D_5044;/*video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA*/
@@ -204,13 +204,13 @@ int ScaleSpeed(int, int);
 
 	if(D_5044 == 0x13 && D_12FE++ == 3) {
 		D_12FE = 0;
-		C_1368_0015();
-		C_1475_00B8(0xe5, first);
+		VID_waitRetrace();
+		PAL_get(0xe5, first);
 		for(i = 0xe4; i >= 0xe0; i--) {
-			C_1475_00B8(i, rgb);
-			C_1475_0099(i + 1, rgb);
+			PAL_get(i, rgb);
+			PAL_set(i + 1, rgb);
 		}
-		C_1475_0099(0xe0, first);
+		PAL_set(0xe0, first);
 	}
 }
 
@@ -242,11 +242,11 @@ int ScaleSpeed(int, int);
 /*C_06E9_0351*/int PollInput() {
 	char c[2];
 
-	C_132C_0008();
+	MOUSE_SERVE();
 	if(D_5046 || D_5047) {
 		/*wait for the release*/
 		while(D_5046 || D_5047)
-			C_132C_0008();
+			MOUSE_SERVE();
 		return 1;
 	}
 	if(!kbhit())
@@ -343,13 +343,13 @@ int ScaleSpeed(int, int);
 /*C_06E9_05BC*/FlashMoongate() {
 	if(D_5044 == 0x13) {
 		if(!D_1308) {
-			C_1368_0015();
-			C_1475_00B8(0x9f, D_5BA8);
+			VID_waitRetrace();
+			PAL_get(0x9f, D_5BA8);
 			for(D_5BA0 = 0x9e; D_5BA0 >= 0x90; D_5BA0--) {
-				C_1475_00B8(D_5BA0, D_5BA2);
-				C_1475_0099(D_5BA0 + 1, D_5BA2);
+				PAL_get(D_5BA0, D_5BA2);
+				PAL_set(D_5BA0 + 1, D_5BA2);
 			}
-			C_1475_0099(0x90, D_5BA8);
+			PAL_set(0x90, D_5BA8);
 		}
 		D_1308 = !D_1308;
 	}
@@ -518,25 +518,25 @@ int ScaleSpeed(int, int);
 	D_6072.right = 319;
 	D_6072.bottom = 31;
 	if(D_5044 != 0xd)
-		C_1277_000C(&D_6072);
+		SURF_alloc(&D_6072);
 	else
 		D_6072.segment = 0xa600;
-	C_0BC1_03D2(1);
-	C_00E1_0561();
-	C_1482_00BE();
-	C_1482_0055();
+	LoadPalette(1);
+	SavePalette();
+	TIM_calibrate();
+	TIM_install();
 	CheckInput();
 	if(D_58F0)
 		goto quit;
 	/*---- part 1: the bedroom ----*/
-	C_0BC1_0079(1);
-	C_00E1_178A(2);
+	AskForDisk(1);
+	PlayMusic(2);
 	switch(D_5044) {
-		case 4: shapes = D_6060 = C_13BC_000C("intro1.cga"); break;
-		case 7: shapes = D_6060 = C_13BC_000C("intro1.hrc"); break;
-		case 9: shapes = D_6060 = C_13BC_000C("intro1.tga"); break;
-		case 0xd: shapes = D_6060 = C_13BC_000C("intro1.ega"); break;
-		case 0x13: shapes = D_6060 = C_13BC_000C("intro_1.shp"); break;
+		case 4: shapes = D_6060 = LZW_load("intro1.cga"); break;
+		case 7: shapes = D_6060 = LZW_load("intro1.hrc"); break;
+		case 9: shapes = D_6060 = LZW_load("intro1.tga"); break;
+		case 0xd: shapes = D_6060 = LZW_load("intro1.ega"); break;
+		case 0x13: shapes = D_6060 = LZW_load("intro_1.shp"); break;
 	}
 	DRV(0xc)(&D_5732, 0);
 	DRV(3)(&D_5732, 0, 0, shapes, 0x45);/*the title*/
@@ -544,7 +544,7 @@ int ScaleSpeed(int, int);
 		MUS(6)(D_5692);/*play*/
 	}
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 		D_5732.segment = D_5710.segment;
@@ -556,19 +556,19 @@ int ScaleSpeed(int, int);
 		if(D_58F0)
 			goto end;
 		if(D_5044 == 0x13)
-			C_1368_0015();
+			VID_waitRetrace();
 		else
 			Delay(0x50);
 	}
 	DRV(0xc)(&D_5732, 0);
 	DRV(3)(&D_5732, 0, 0, shapes, 0x46);/*"presents"?*/
 	if(D_5044 == 0x13) {
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 		DRV(0xc)(&D_5710, 0);
-		C_00E1_052D();
+		RestorePalette();
 	}
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 		D_5BAE.segment = D_5BBC.segment = D_5BCA.segment = D_5732.segment = D_5710.segment;
@@ -580,15 +580,15 @@ int ScaleSpeed(int, int);
 		if(D_58F0)
 			goto end;
 		if(D_5044 == 0x13)
-			C_1368_0015();
+			VID_waitRetrace();
 		else
 			Delay(0x50);
 	}
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	DRV(0xc)(&D_5732, 0);
-	C_00E1_052D();
+	RestorePalette();
 	CheckInput();
 	if(D_58F0)
 		goto end;
@@ -599,12 +599,12 @@ int ScaleSpeed(int, int);
 	D_5FBA.right = 0x11d;
 	D_5FBA.bottom = 0x56;
 	SetScript(2);
-	C_09A0_000B(0);
+	ShowPassage(0);
 	DRV(3)(&D_5BAE, 0, 0, shapes, 0);
 	DRV(3)(&D_5BCA, 0, 0x3f, shapes, 0xd);
 	DrawClock(&D_5732, shapes, 0xdd);
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 		D_5BAE.segment = D_5BCA.segment = D_5732.segment = D_5710.segment;
@@ -639,7 +639,7 @@ int ScaleSpeed(int, int);
 			DRV(3)(&D_5BCA, 0x8f, 0x5b, shapes, 0xe);
 			D_606E = 0;
 		}
-		C_09A0_21C5();
+		DisplayPassage();
 		DrawClock(&D_5732, shapes, 0xdd);
 		ShowFrame();
 	} while(!CheckInput());
@@ -647,7 +647,7 @@ int ScaleSpeed(int, int);
 		goto end;
 	while(kbhit())
 		getch();
-	C_09A0_000B(1);
+	ShowPassage(1);
 	do {
 		DRV(3)(&D_5BAE, 0, 0, shapes, 0);
 		DRV(3)(&D_5BCA, 0, 0x3f, shapes, 0xd);
@@ -656,7 +656,7 @@ int ScaleSpeed(int, int);
 			DRV(3)(&D_5BCA, 0x8f, 0x5b, shapes, 0xe);
 			D_606E = 0;
 		}
-		C_09A0_21C5();
+		DisplayPassage();
 		DrawClock(&D_5732, shapes, 0xdd);
 		ShowFrame();
 	} while(!CheckInput());
@@ -664,7 +664,7 @@ int ScaleSpeed(int, int);
 		goto end;
 	/*the view scrolls right to the window, 320 pixels: the monitor goes out on the
 	 left, the window (shape 0xf) comes in*/
-	C_09A0_000B(2);
+	ShowPassage(2);
 	speed = ScaleSpeed(2, 10);
 	/*(done is set before the last frame: the one with i at its end)*/
 	for(i = 0, done = 0; !done && (done = (i == 320), 1); ) {
@@ -675,7 +675,7 @@ int ScaleSpeed(int, int);
 		DRV(3)(&D_5BAE, D_5BAE.left - i, 0, shapes, 0);
 		DRV(3)(&D_5BBC, D_5BBC.left + 320 - i, 0, shapes, 1);
 		DRV(3)(&D_5BCA, D_5BCA.left - i * 2, 0x3f, shapes, 0xd);
-		C_09A0_21C5();
+		DisplayPassage();
 		if(D_5FBA.right > 0 && i < 300)
 			RunScript();
 		D_5FBA.right -= speed;
@@ -686,7 +686,7 @@ int ScaleSpeed(int, int);
 		}
 		DrawClock(&D_5732, shapes, 0xdd - i);
 		if(D_5044 == 0x13)
-			C_1368_0015();
+			VID_waitRetrace();
 		ShowFrame();
 		if(CheckInput())
 			i = 320 - speed;
@@ -698,13 +698,13 @@ int ScaleSpeed(int, int);
 	}
 	farfree(shapes);
 	/*---- part 2: the storm ----*/
-	C_0BC1_0079(1);
+	AskForDisk(1);
 	switch(D_5044) {
-		case 4: shapes = D_6068 = C_13BC_000C("intro2.cga"); break;
-		case 7: shapes = D_6068 = C_13BC_000C("intro2.hrc"); break;
-		case 9: shapes = D_6068 = C_13BC_000C("intro2.tga"); break;
-		case 0xd: shapes = D_6068 = C_13BC_000C("intro2.ega"); break;
-		case 0x13: shapes = D_6068 = C_13BC_000C("intro_2.shp"); break;
+		case 4: shapes = D_6068 = LZW_load("intro2.cga"); break;
+		case 7: shapes = D_6068 = LZW_load("intro2.hrc"); break;
+		case 9: shapes = D_6068 = LZW_load("intro2.tga"); break;
+		case 0xd: shapes = D_6068 = LZW_load("intro2.ega"); break;
+		case 0x13: shapes = D_6068 = LZW_load("intro_2.shp"); break;
 	}
 	while(!CheckInput());
 	if(D_58F0)
@@ -722,7 +722,7 @@ int ScaleSpeed(int, int);
 	/*the storm*/
 	InitRain(&D_5732, 150, 0);
 	InitClouds(&D_5732, 5, shapes);
-	C_09A0_000B(3);
+	ShowPassage(3);
 	done = i = 0;
 	frames = done;
 	flashTime = face = scene = done;
@@ -740,16 +740,16 @@ int ScaleSpeed(int, int);
 			DRV(3)(&D_5732, rand() % 3 + flashX - 2, rand() % 3 + flashY - 2, shapes, flashShape + 0xb);
 		}
 		if(D_5044 == 0x13 && started) {
-			C_1368_0002();
+			VID_inRetrace();
 			/*the sky lit by the lightning*/
 			if((flashTime || scene == 3) && (rand() % 3 || scene == 3)) {
-				C_1475_0099(0x58, flashColor);
-				C_1475_0099(0x5a, flashColor);
-				C_1475_0099(0x5c, flashColor);
+				PAL_set(0x58, flashColor);
+				PAL_set(0x5a, flashColor);
+				PAL_set(0x5c, flashColor);
 			} else {
-				C_1475_0099(0x58, sky0);
-				C_1475_0099(0x5a, sky1);
-				C_1475_0099(0x5c, sky2);
+				PAL_set(0x58, sky0);
+				PAL_set(0x5a, sky1);
+				PAL_set(0x5c, sky2);
 			}
 		}
 		DRV(3)(&D_5732, 0, 0x4c, shapes, 10);
@@ -797,25 +797,25 @@ int ScaleSpeed(int, int);
 				DRV(3)(&D_5732, i + 0xfd, 0, shapes, 0x19);
 				i += speed3;
 				if(i > 0x4b) {
-					C_09A0_000B(8);
+					ShowPassage(8);
 					i = 0;
 					scene = 7;
 				}
 			break;
 			case 7:
 			music:
-				C_09A0_21C5();
+				DisplayPassage();
 			break;
 		}
 		if(!started) {
 			started ++;
 			if(D_5044 == 0x13) {
-				C_1368_0015();
-				C_0BC1_03D2(2);
-				C_1475_00B8(0x58, sky0);
-				C_1475_00B8(0x5a, sky1);
-				C_1475_00B8(0x5c, sky2);
-				C_1475_00B8(0x75, flashColor);
+				VID_waitRetrace();
+				LoadPalette(2);
+				PAL_get(0x58, sky0);
+				PAL_get(0x5a, sky1);
+				PAL_get(0x5c, sky2);
+				PAL_get(0x75, flashColor);
 			}
 		}
 		ShowFrame();
@@ -823,19 +823,19 @@ int ScaleSpeed(int, int);
 		if(CheckInput()) {
 			switch(scene) {
 				case 6:
-					C_09A0_000B(8);
+					ShowPassage(8);
 				case 0: case 4:
 					scene ++;
 					i = 0;
 				break;
 				case 1:
-					C_09A0_000B(4);
+					ShowPassage(4);
 				goto next;
 				case 2:
-					C_09A0_000B(5);
+					ShowPassage(5);
 				goto next;
 				case 3:
-					C_09A0_000B(6);
+					ShowPassage(6);
 				case 5:
 				next:
 					scene ++;
@@ -861,31 +861,31 @@ int ScaleSpeed(int, int);
 	farfree(shapes);
 	/*---- part 3: the moongate ----*/
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	DRV(0xc)(&D_5732, 0);
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	switch(D_5044) {
-		case 4: shapes = C_13BC_000C("intro3.cga"); break;
-		case 7: shapes = C_13BC_000C("intro3.hrc"); break;
-		case 9: shapes = C_13BC_000C("intro3.tga"); break;
+		case 4: shapes = LZW_load("intro3.cga"); break;
+		case 7: shapes = LZW_load("intro3.hrc"); break;
+		case 9: shapes = LZW_load("intro3.tga"); break;
 		case 0xd:
-			shapes = C_13BC_000C("intro3.ega");
+			shapes = LZW_load("intro3.ega");
 			DRV(0xc)(&D_5710, 0);
 			DRV(0x15)(&D_5710);
 			DRV(0xc)(&D_5710, 0);
 			DRV(0x15)(&D_5710);
 		break;
-		case 0x13: shapes = C_13BC_000C("intro_3.shp"); break;
+		case 0x13: shapes = LZW_load("intro_3.shp"); break;
 	}
-	C_0BC1_03D2(3);
+	LoadPalette(3);
 	CheckInput();
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(9);
+	ShowPassage(9);
 	DRV(3)(&D_5732, 0, 0, shapes, 0);
 	if(D_5044 == 0x13) {
-		C_136D_014D(&D_5732, &D_5710);
+		FADE_in(&D_5732, &D_5710);
 	} else if(D_5044 == 0xd) {
 		DRV(0x15)(&D_5710);
 		D_5732.segment = D_5710.segment;
@@ -895,7 +895,7 @@ int ScaleSpeed(int, int);
 	CheckInput();
 	if(D_58F0)
 		goto end;
-	C_1482_000F(FlashMoongate);/*the moongate's light*/
+	TIM_setCallback(FlashMoongate);/*the moongate's light*/
 	for(i = 0; i < 3; i++) {
 		DRV(3)(&D_5732, 0, 0, shapes, 0);
 		ShowFrame();
@@ -906,7 +906,7 @@ int ScaleSpeed(int, int);
 		goto end;
 	do {
 		DRV(3)(&D_5732, 0, 0, shapes, 0);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 	} while(!CheckInput());
 	if(D_58F0)
@@ -926,13 +926,13 @@ int ScaleSpeed(int, int);
 	/*clipped to the upper half*/
 	D_5BAE = D_5732;
 	D_5BAE.bottom = 0x65;
-	C_09A0_000B(10);
+	ShowPassage(10);
 	speed = ScaleSpeed(4, 10);
 	for(i = 199, done = 0; !done && (done = (i == 0x54), 1); ) {
 		DRV(3)(&D_5732, 0, 0, shapes, 0);
 		DRV(3)(&D_5732, 0xbd, i, shapes, 1);
 		DRV(3)(&D_5732, 0x96, 0x64, shapes, 3);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 		if(CheckInput())
 			i = speed + 0x54;
@@ -941,7 +941,7 @@ int ScaleSpeed(int, int);
 		i -= speed;
 		i += (0x54 - i) * (i <= 0x54);
 	}
-	C_09A0_000B(0xb);
+	ShowPassage(0xb);
 	while(!CheckInput());
 	speed = ScaleSpeed(2, 8);
 	for(i = 0x65, done = 0; !done && (done = (i == 6), 1); ) {
@@ -949,7 +949,7 @@ int ScaleSpeed(int, int);
 		DRV(3)(&D_5732, 0x5e, 0x66, shapes, 4);
 		DRV(3)(&D_5732, 0xbd, 0x54, shapes, 1);
 		DRV(3)(&D_5BAE, 0x7c, i, shapes, 2);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 		if(CheckInput())
 			i = speed + 6;
@@ -964,7 +964,7 @@ int ScaleSpeed(int, int);
 		DRV(3)(&D_5732, 0x5e, 0x66, shapes, 4);
 		DRV(3)(&D_5732, 0xbd, i, shapes, 1);
 		DRV(3)(&D_5BAE, 0x7c, 5, shapes, 2);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 		if(CheckInput())
 			i = 0xcc - speed;
@@ -991,7 +991,7 @@ int ScaleSpeed(int, int);
 		i += speed;
 		i += (0x3f - i) * (i >= 0x3f);
 	}
-	C_09A0_000B(0xc);
+	ShowPassage(0xc);
 	do {
 		DRV(3)(&D_5732, 0, -0x3f, shapes, 5);
 		DRV(3)(&D_5732, 0x5e, 0x27, shapes, 4);
@@ -1000,7 +1000,7 @@ int ScaleSpeed(int, int);
 		DRV(0xc)(&D_5732, 0);
 		D_5732.top = 0;
 		DRV(3)(&D_5732, 0x9b, 0x4a, shapes, 6);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 	} while(!CheckInput());
 	if(D_58F0)
@@ -1023,38 +1023,38 @@ int ScaleSpeed(int, int);
 		i -= speed;
 		i += (0 - i) * (i <= 0);
 	}
-	C_09A0_000B(0xd);
+	ShowPassage(0xd);
 	do {
 		DRV(3)(&D_5732, 0, 0, shapes, 5);
 		DRV(3)(&D_5732, 0x5e, 0x66, shapes, 4);
 		DRV(3)(&D_5BAE, 0x7c, 5, shapes, 2);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 	} while(!CheckInput());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xe);
+	ShowPassage(0xe);
 	do {
 		DRV(3)(&D_5732, 0, 0, shapes, 5);
 		DRV(3)(&D_5732, 0x5e, 0x66, shapes, 4);
 		DRV(3)(&D_5BAE, (rand() & 1) + 0x7c, (rand() & 1) + 5, shapes, 2);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 	} while(!CheckInput());
 	if(D_58F0)
 		goto end;
-	C_09A0_000B(0xf);
+	ShowPassage(0xf);
 	if(D_5044 == 0x13) {
-		C_1475_00B8(0x19, sky0);
-		C_1475_00B8(0x19, flashColor);
+		PAL_get(0x19, sky0);
+		PAL_get(0x19, flashColor);
 		flashColor[0] = flashColor[1] = flashColor[2] = 0;
-		C_1475_0099(0x19, flashColor);
+		PAL_set(0x19, flashColor);
 	}
 	do {
 		DRV(3)(&D_5732, 0, 0, shapes, 5);
 		DRV(3)(&D_5732, 0x5e, 0x66, shapes, 4);
 		DRV(3)(&D_5BAE, (rand() & 1) + 0x7c, (rand() & 3) + 5, shapes, 2);
-		C_09A0_21C5();
+		DisplayPassage();
 		ShowFrame();
 	} while(!CheckInput());
 	if(D_58F0)
@@ -1064,7 +1064,7 @@ int ScaleSpeed(int, int);
 	D_5BBC.bottom = D_5BAE.bottom - D_5BAE.top;
 	D_5BBC.right = D_5BAE.right - D_5BAE.left;
 	if(D_5044 != 0xd) {
-		C_1277_000C(&D_5BBC);
+		SURF_alloc(&D_5BBC);
 		allocated = 1;
 	} else {
 		allocated = 0;
@@ -1104,26 +1104,26 @@ int ScaleSpeed(int, int);
 	/*the dissolve*/
 	switch(D_5044) {
 		case 4: case 7:
-			C_12EA_000A(&D_5710, &D_5BAE, 0);
+			SURF_share(&D_5710, &D_5BAE, 0);
 			speed = ScaleSpeed(200, 300);
-			C_13F2_037A(&D_5BBC, &D_5BAE, speed);
+			DIS_dissolveCGA(&D_5BBC, &D_5BAE, speed);
 		goto show;
 		case 9:
-			C_12EA_000A(&D_5710, &D_5BAE, 0);
+			SURF_share(&D_5710, &D_5BAE, 0);
 			speed = ScaleSpeed(200, 300);
-			C_13F2_0504(&D_5BBC, &D_5BAE, speed);
+			DIS_dissolveTDY(&D_5BBC, &D_5BAE, speed);
 		goto show;
 		case 0xd:
 			D_5710.segment ^= 0x200;
 			speed = ScaleSpeed(200, 300);
-			C_13F2_01D5(&D_5BD8, &D_5710, speed);
+			DIS_dissolveEGA(&D_5BD8, &D_5710, speed);
 			D_5710.segment ^= 0x200;
 		break;
 		case 0x13:
-			C_12EA_000A(&D_5710, &D_5BAE, 0);
-			C_13F2_000C(&D_5BBC, &D_5BAE, 0x1e);
+			SURF_share(&D_5710, &D_5BAE, 0);
+			DIS_dissolve(&D_5BBC, &D_5BAE, 0x1e);
 		show:
-			C_12EA_000A(&D_5732, &D_5BAE, 0);
+			SURF_share(&D_5732, &D_5BAE, 0);
 		break;
 	}
 	CheckInput();
@@ -1143,7 +1143,7 @@ int ScaleSpeed(int, int);
 		i += (0x65 - i) * (i >= 0x65);
 	}
 	if(D_5044 == 0x13)
-		C_1475_0099(0x19, sky0);
+		PAL_set(0x19, sky0);
 	DRV(0xc)(&D_5732, 0);
 	while(!CheckInput()) {
 		DRV(3)(&D_5732, 0, 0, shapes, 0);
@@ -1152,23 +1152,23 @@ int ScaleSpeed(int, int);
 	}
 end:/*cleanup*/
 	if(allocated) {
-		C_1277_00D8(&D_5BBC);
+		SURF_free(&D_5BBC);
 		allocated = 0;
 	}
 	farfree(shapes);
 	if(D_5044 == 0x13)
-		C_136D_0346(&D_5710, 0);
+		FADE_out(&D_5710, 0);
 	DRV(0xc)(&D_5710, 0);
 	DRV(0xc)(&D_5732, 0);
 quit:
-	C_0BC1_0079(2);
+	AskForDisk(2);
 	if(D_5044 == 0x13)
-		C_1482_001F();
-	C_1482_009C();
+		TIM_resetCallback();
+	TIM_remove();
 	if(D_5044 != 0xd)
-		C_1277_00D8(&D_6072);
-	C_00E1_04F9();
-	C_00E1_178A(0);
+		SURF_free(&D_6072);
+	SetPalette();
+	PlayMusic(0);
 }
 
 /*the frame drawn in the back buffer goes to the screen (EGA: page flip)*/

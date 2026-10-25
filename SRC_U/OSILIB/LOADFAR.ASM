@@ -16,7 +16,7 @@ CSegStart	LOADFAR_TEXT
 
 ;load a whole file into memory it farmallocs: LOAD_far(char *name), returns the
 ;buffer (NULL on error)
-ProcStart	LOAD_far	;1463:0002
+ProcStart	_LOAD_far	;1463:0002
 	MOV	AX,3D00h	;open file (read)
 	MOV	DX,[BP+06]
 	INT	21h
@@ -77,7 +77,7 @@ C_00A4:
 	MOV	AX,0
 	MOV	DX,AX
 C_00A9:
-ProcEnd	LOAD_far
+ProcEnd	_LOAD_far
 
 ;load a whole file (smaller than 64K) into a buffer: LOAD_to(char *name, void far *buf),
 ;returns its size (0 on error)

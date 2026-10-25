@@ -2,7 +2,8 @@
 ; the uninitialised data (_BSS) of the C modules, at the addresses U.EXE has them.
 ; Turbo C 2.0 orders a module's _BSS by its symbol table, not by the order of
 ; definition, so (as SRC/BSS.ASM does for GAME.EXE) it is laid out here; the C modules
-; declare these extern. Each label is followed by the address (DS offset) and what it is.
+; declare these extern. ORG reserves the room without writing any data, so that
+; the uninitialised data stays out of the .EXE as in the original. Each label is followed by the address (DS offset) and what it is.
 
 DGROUP	GROUP	_BSS
 _BSS	SEGMENT WORD PUBLIC 'BSS'
@@ -27,155 +28,304 @@ PUBLIC	_D_6082,_D_6084,_D_6086,_D_6094,_D_6095,_D_6096,_D_6098,_D_609E
 PUBLIC	_D_60A4,_D_60A6,_D_60A8,_D_60AA,_D_60AE,_D_60B0,_D_60B2,_D_60BC
 PUBLIC	_D_62BC,_D_64BC,_D_66BC,_D_66C4,_D_66D4
 
-_D_4A14	dw 16 dup(?)	;4A14 the 5 main menu highlight colors (r, g, b)
-_D_4A34	db 12 dup(?)	;4A34 
-_D_4A40	dw 770 dup(?)	;4A40 VGA palette (r, g, b)
-_D_5044	dw ?	;5044 video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA
-_D_5046	db ?	;5046 mouse buttons
-_D_5047	db ?	;5047 mouse buttons
-_D_5048	dw ?	;5048 mouse x, y
-_D_504A	dw 2 dup(?)	;504A mouse x, y
-_D_504E	dd ?	;504E mouse pointer shapes
-_D_5052	dw ?	;5052 mouse pointer shape
-_D_5054	db 2 dup(?)	;5054 the surface the mouse pointer is drawn on
-_D_5056	db 8 dup(?)	;5056 mouse background save area
-_D_505E	db ?	;505E a mouse is present?
-_D_505F	dw 768 dup(?)	;505F saved VGA palette
-_D_565F	db 14 dup(?)	;565F the vellum's area
-_D_566D	db 2 dup(?)	;566D the current text window
-_D_566F	dw ?	;566F text cursor x, y
-_D_5671	dw ?	;5671 text cursor x, y
-_D_5673	dd ?	;5673 console: font
-_D_5677	db ?	;5677 text colors
-_D_5678	db ?	;5678 text colors
-_D_5679	db 4 dup(?)	;5679 console: buffer
-_D_567D	db 21 dup(?)	;567D the console: alignment (0 left, 1 right, 2 centred)
-_D_5692	dd ?	;5692 the music driver's song
-_D_5696	db 80 dup(?)	;5696 GAME.EXE's command line argument
-_D_56E6	db 28 dup(?)	;56E6 
-_D_5702	db 14 dup(?)	;5702 copy of D_565F
-_D_5710	db 14 dup(?)	;5710 the screen
-_D_571E	dw ?	;571E parse position in midi.dat
-_D_5720	dw ?	;5720 music card i/o port
-_D_5722	db 16 dup(?)	;5722 
-_D_5732	db 14 dup(?)	;5732 the back buffer
-_D_5740	db 6 dup(?)	;5740 free far memory
-_D_5746	dw ?	;5746 music on
-_D_5748	db 18 dup(?)	;5748 EGA: the page the noise is drawn into
-_D_575A	dw ?	;575A set when the player gave up
-_D_575C	dw 200 dup(?)	;575C scanline offsets
-_D_58EC	dw ?	;58EC mouse on
-_D_58EE	dw ?	;58EE graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules
-_D_58F0	dw ?	;58F0 1: Escape was pressed: leave the introduction
-_D_58F2	db 2 dup(?)	;58F2 blocks.xxx
-_D_58F4	dw ?	;58F4 
-_D_58F6	dd ?	;58F6 mouse pointer shapes (cursors.xxx)
-_D_58FA	db 4 dup(?)	;58FA the music driver
-_D_58FE	db 70 dup(?)	;58FE the buttons
-_D_5944	db 16 dup(?)	;5944 name
-_D_5954	dw ?	;5954 strength, dexterity, intelligence
-_D_5956	dw ?	;5956 strength, dexterity, intelligence
-_D_5958	dw ?	;5958 strength, dexterity, intelligence
-_D_595A	db 8 dup(?)	;595A "Male"/"Female"
-_D_5962	db 16 dup(?)	;5962 class
-_D_5972	db ?	;5972 'G'
-_D_5973	db ?	;5973 1: an Avatar
-_D_5974	dw ?	;5974 experience
-_D_5976	dw ?	;5976 level
-_D_5978	dw ?	;5978 hit points, maximum
-_D_597A	dw ?	;597A hit points, maximum
-_D_597C	dw 2 dup(?)	;597C magic points
-_D_5980	db 28 dup(?)	;5980 
-_D_599C	db 14 dup(?)	;599C the text window of the name question
-_D_59AA	db 14 dup(?)	;59AA the title
-_D_59B8	dw 52 dup(?)	;59B8 the vellum has been shown
-_D_5A20	db 14 dup(?)	;5A20 the character sheet
-_D_5A2E	dw ?	;5A2E portrait (0-5)
-_D_5A30	db 16 dup(?)	;5A30 name
-_D_5A40	dw ?	;5A40 strength, dexterity, intelligence
-_D_5A42	dw ?	;5A42 strength, dexterity, intelligence
-_D_5A44	dw ?	;5A44 strength, dexterity, intelligence
-_D_5A46	db 8 dup(?)	;5A46 sex: 'M' or 'F'
-_D_5A4E	db 16 dup(?)	;5A4E "Avatar"
-_D_5A5E	db ?	;5A5E 'G'
-_D_5A5F	db ?	;5A5F 
-_D_5A60	dw ?	;5A60 experience
-_D_5A62	dw ?	;5A62 level
-_D_5A64	dw ?	;5A64 hit points
-_D_5A66	dw ?	;5A66 hit points, maximum
-_D_5A68	dw ?	;5A68 magic points
-_D_5A6A	db 104 dup(?)	;5A6A portrait
-_D_5AD2	dd ?	;5AD2 montage image
-_D_5AD6	dd ?	;5AD6 vellum image
-_D_5ADA	db 2 dup(?)	;5ADA the save file read
-_D_5ADC	db 10 dup(?)	;5ADC woods / gypsy image
-_D_5AE6	db 20 dup(?)	;5AE6 the area of the gypsy's pattern
-_D_5AFA	db 14 dup(?)	;5AFA EGA: the second page (segment a800)
-_D_5B08	db 14 dup(?)	;5B08 EGA: the screen, for the mouse pointer
-_D_5B16	dw ?	;5B16 
-_D_5B18	dw 8 dup(?)	;5B18 level of each vial
-_D_5B28	dw ?	;5B28 number of colors in the pattern
-_D_5B2A	dw 8 dup(?)	;5B2A virtues
-_D_5B3A	dw 32 dup(?)	;5B3A colors of the pattern
-_D_5B7A	db 32 dup(?)	;5B7A pattern
-_D_5B9A	dw ?	;5B9A script: position of the loop
-_D_5B9C	dw ?	;5B9C script: loop count
-_D_5B9E	dw ?	;5B9E script: the picture chosen by command 0x87
-_D_5BA0	dw ?	;5BA0 palette entry
-_D_5BA2	dw 3 dup(?)	;5BA2 palette colors
-_D_5BA8	dw 3 dup(?)	;5BA8 palette colors
-_D_5BAE	db 14 dup(?)	;5BAE twinkle: the surface the stars are drawn on
-_D_5BBC	db 14 dup(?)	;5BBC 
-_D_5BCA	db 14 dup(?)	;5BCA 
-_D_5BD8	db 14 dup(?)	;5BD8 EGA: the second page
-_D_5BE6	dw ?	;5BE6 clouds: their number
-_D_5BE8	dw ?	;5BE8 script: the current one
-_D_5BEA	dd ?	;5BEA clouds: the shapes
-_D_5BEE	db 2 dup(?)	;5BEE clouds: the surface
-_D_5BF0	db 2 dup(?)	;5BF0 rain: the surface
-_D_5BF2	dw ?	;5BF2 rain: frames between the moves of a drop
-_D_5BF4	dw ?	;5BF4 clouds: x, y of the big cloud bank
-_D_5BF6	dw ?	;5BF6 clouds: x, y of the big cloud bank
-_D_5BF8	dw ?	;5BF8 script: position in it
-_D_5BFA	dw 150 dup(?)	;5BFA rain: x, y of each drop
-_D_5D26	dw 10 dup(?)	;5D26 clouds: x, y, shape of each
-_D_5D3A	dw 150 dup(?)	;5D3A rain: x, y of each drop
-_D_5E66	dw 10 dup(?)	;5E66 clouds: x, y, shape of each
-_D_5E7A	dw 10 dup(?)	;5E7A clouds: x, y, shape of each
-_D_5E8E	dw 150 dup(?)	;5E8E rain: frames before the next move of each drop
-_D_5FBA	db 14 dup(?)	;5FBA the monitor's screen
-_D_5FC8	db 150 dup(?)	;5FC8 rain: shape of each drop
-_D_605E	dw ?	;605E clouds: speed
-_D_6060	dd ?	;6060 shapes of intro1
-_D_6064	dw ?	;6064 rain: 1 in n chances of a new drop every frame
-_D_6066	dw ?	;6066 how far the monitor's picture went out of the screen on the left
-_D_6068	dd ?	;6068 shapes of intro2
-_D_606C	dw ?	;606C rain: the maximum number of drops - 1
-_D_606E	dw ?	;606E 1: the monitor showed noise: redraw its frame
-_D_6070	dw ?	;6070 rain: the number of drops
-_D_6072	db 14 dup(?)	;6072 a 320x56 work surface (the A/B buttons)
-_D_6080	dw ?	;6080 
-_D_6082	dw ?	;6082 where the text area is on the screen: x (in 8-pixel columns?), y
-_D_6084	dw ?	;6084 where the text area is on the screen: x (in 8-pixel columns?), y
-_D_6086	db 14 dup(?)	;6086 copy of D_5732 the text area is shown in
-_D_6094	db ?	;6094 DOS version: major, minor
-_D_6095	db ?	;6095 DOS version: major, minor
-_D_6096	dw ?	;6096 twinkle: palette index (a global: the twinkle runs from the timer)
-_D_6098	db 6 dup(?)	;6098 twinkle: a palette entry
-_D_609E	db 6 dup(?)	;609E twinkle: a palette entry
-_D_60A4	dw ?	;60A4 twinkle: star index
-_D_60A6	dw ?	;60A6 twinkle: colour of the star's pixel
-_D_60A8	dw ?	;60A8 twinkle: colour of a lit star
-_D_60AA	dd ?	;60AA starpos.dat
-_D_60AE	dw ?	;60AE twinkle: first star of the group that twinkles
-_D_60B0	dw ?	;60B0 number of stars
-_D_60B2	dw 5 dup(?)	;60B2 twinkle: random number (a shift register)
-_D_60BC	dw 256 dup(?)	;60BC colour of each star
-_D_62BC	dw 256 dup(?)	;62BC x of each star
-_D_64BC	dw 256 dup(?)	;64BC y of each star
-_D_66BC	dw 4 dup(?)	;66BC the hands: x0,y0, x1,y1
-_D_66C4	dw 8 dup(?)	;66C4 where the moving shapes go
-_D_66D4	dw 8 dup(?)	;66D4 the moving shapes: x,y each
+_D_4A14	LABEL	WORD	;4A14 the 5 main menu highlight colors (r, g, b)
+	ORG	$+32
+_D_4A34	LABEL	BYTE	;4A34 
+	ORG	$+12
+_D_4A40	LABEL	WORD	;4A40 VGA palette (r, g, b)
+	ORG	$+1540
+_D_5044	LABEL	WORD	;5044 video mode: 4 CGA, 7 Hercules, 9 Tandy, 0x0d EGA, 0x13 MCGA
+	ORG	$+2
+_D_5046	LABEL	BYTE	;5046 mouse buttons
+	ORG	$+1
+_D_5047	LABEL	BYTE	;5047 mouse buttons
+	ORG	$+1
+_D_5048	LABEL	WORD	;5048 mouse x, y
+	ORG	$+2
+_D_504A	LABEL	WORD	;504A mouse x, y
+	ORG	$+4
+_D_504E	LABEL	DWORD	;504E mouse pointer shapes
+	ORG	$+4
+_D_5052	LABEL	WORD	;5052 mouse pointer shape
+	ORG	$+2
+_D_5054	LABEL	BYTE	;5054 the surface the mouse pointer is drawn on
+	ORG	$+2
+_D_5056	LABEL	BYTE	;5056 mouse background save area
+	ORG	$+8
+_D_505E	LABEL	BYTE	;505E a mouse is present?
+	ORG	$+1
+_D_505F	LABEL	WORD	;505F saved VGA palette
+	ORG	$+1536
+_D_565F	LABEL	BYTE	;565F the vellum's area
+	ORG	$+14
+_D_566D	LABEL	BYTE	;566D the current text window
+	ORG	$+2
+_D_566F	LABEL	WORD	;566F text cursor x, y
+	ORG	$+2
+_D_5671	LABEL	WORD	;5671 text cursor x, y
+	ORG	$+2
+_D_5673	LABEL	DWORD	;5673 console: font
+	ORG	$+4
+_D_5677	LABEL	BYTE	;5677 text colors
+	ORG	$+1
+_D_5678	LABEL	BYTE	;5678 text colors
+	ORG	$+1
+_D_5679	LABEL	BYTE	;5679 console: buffer
+	ORG	$+4
+_D_567D	LABEL	BYTE	;567D the console: alignment (0 left, 1 right, 2 centred)
+	ORG	$+21
+_D_5692	LABEL	DWORD	;5692 the music driver's song
+	ORG	$+4
+_D_5696	LABEL	BYTE	;5696 GAME.EXE's command line argument
+	ORG	$+80
+_D_56E6	LABEL	BYTE	;56E6 
+	ORG	$+28
+_D_5702	LABEL	BYTE	;5702 copy of D_565F
+	ORG	$+14
+_D_5710	LABEL	BYTE	;5710 the screen
+	ORG	$+14
+_D_571E	LABEL	WORD	;571E parse position in midi.dat
+	ORG	$+2
+_D_5720	LABEL	WORD	;5720 music card i/o port
+	ORG	$+2
+_D_5722	LABEL	BYTE	;5722 
+	ORG	$+16
+_D_5732	LABEL	BYTE	;5732 the back buffer
+	ORG	$+14
+_D_5740	LABEL	BYTE	;5740 free far memory
+	ORG	$+6
+_D_5746	LABEL	WORD	;5746 music on
+	ORG	$+2
+_D_5748	LABEL	BYTE	;5748 EGA: the page the noise is drawn into
+	ORG	$+18
+_D_575A	LABEL	WORD	;575A set when the player gave up
+	ORG	$+2
+_D_575C	LABEL	WORD	;575C scanline offsets
+	ORG	$+400
+_D_58EC	LABEL	WORD	;58EC mouse on
+	ORG	$+2
+_D_58EE	LABEL	WORD	;58EE graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules
+	ORG	$+2
+_D_58F0	LABEL	WORD	;58F0 1: Escape was pressed: leave the introduction
+	ORG	$+2
+_D_58F2	LABEL	BYTE	;58F2 blocks.xxx
+	ORG	$+2
+_D_58F4	LABEL	WORD	;58F4 
+	ORG	$+2
+_D_58F6	LABEL	DWORD	;58F6 mouse pointer shapes (cursors.xxx)
+	ORG	$+4
+_D_58FA	LABEL	BYTE	;58FA the music driver
+	ORG	$+4
+_D_58FE	LABEL	BYTE	;58FE the buttons
+	ORG	$+70
+_D_5944	LABEL	BYTE	;5944 name
+	ORG	$+16
+_D_5954	LABEL	WORD	;5954 strength, dexterity, intelligence
+	ORG	$+2
+_D_5956	LABEL	WORD	;5956 strength, dexterity, intelligence
+	ORG	$+2
+_D_5958	LABEL	WORD	;5958 strength, dexterity, intelligence
+	ORG	$+2
+_D_595A	LABEL	BYTE	;595A "Male"/"Female"
+	ORG	$+8
+_D_5962	LABEL	BYTE	;5962 class
+	ORG	$+16
+_D_5972	LABEL	BYTE	;5972 'G'
+	ORG	$+1
+_D_5973	LABEL	BYTE	;5973 1: an Avatar
+	ORG	$+1
+_D_5974	LABEL	WORD	;5974 experience
+	ORG	$+2
+_D_5976	LABEL	WORD	;5976 level
+	ORG	$+2
+_D_5978	LABEL	WORD	;5978 hit points, maximum
+	ORG	$+2
+_D_597A	LABEL	WORD	;597A hit points, maximum
+	ORG	$+2
+_D_597C	LABEL	WORD	;597C magic points
+	ORG	$+4
+_D_5980	LABEL	BYTE	;5980 
+	ORG	$+28
+_D_599C	LABEL	BYTE	;599C the text window of the name question
+	ORG	$+14
+_D_59AA	LABEL	BYTE	;59AA the title
+	ORG	$+14
+_D_59B8	LABEL	WORD	;59B8 the vellum has been shown
+	ORG	$+104
+_D_5A20	LABEL	BYTE	;5A20 the character sheet
+	ORG	$+14
+_D_5A2E	LABEL	WORD	;5A2E portrait (0-5)
+	ORG	$+2
+_D_5A30	LABEL	BYTE	;5A30 name
+	ORG	$+16
+_D_5A40	LABEL	WORD	;5A40 strength, dexterity, intelligence
+	ORG	$+2
+_D_5A42	LABEL	WORD	;5A42 strength, dexterity, intelligence
+	ORG	$+2
+_D_5A44	LABEL	WORD	;5A44 strength, dexterity, intelligence
+	ORG	$+2
+_D_5A46	LABEL	BYTE	;5A46 sex: 'M' or 'F'
+	ORG	$+8
+_D_5A4E	LABEL	BYTE	;5A4E "Avatar"
+	ORG	$+16
+_D_5A5E	LABEL	BYTE	;5A5E 'G'
+	ORG	$+1
+_D_5A5F	LABEL	BYTE	;5A5F 
+	ORG	$+1
+_D_5A60	LABEL	WORD	;5A60 experience
+	ORG	$+2
+_D_5A62	LABEL	WORD	;5A62 level
+	ORG	$+2
+_D_5A64	LABEL	WORD	;5A64 hit points
+	ORG	$+2
+_D_5A66	LABEL	WORD	;5A66 hit points, maximum
+	ORG	$+2
+_D_5A68	LABEL	WORD	;5A68 magic points
+	ORG	$+2
+_D_5A6A	LABEL	BYTE	;5A6A portrait
+	ORG	$+104
+_D_5AD2	LABEL	DWORD	;5AD2 montage image
+	ORG	$+4
+_D_5AD6	LABEL	DWORD	;5AD6 vellum image
+	ORG	$+4
+_D_5ADA	LABEL	BYTE	;5ADA the save file read
+	ORG	$+2
+_D_5ADC	LABEL	BYTE	;5ADC woods / gypsy image
+	ORG	$+10
+_D_5AE6	LABEL	BYTE	;5AE6 the area of the gypsy's pattern
+	ORG	$+20
+_D_5AFA	LABEL	BYTE	;5AFA EGA: the second page (segment a800)
+	ORG	$+14
+_D_5B08	LABEL	BYTE	;5B08 EGA: the screen, for the mouse pointer
+	ORG	$+14
+_D_5B16	LABEL	WORD	;5B16 
+	ORG	$+2
+_D_5B18	LABEL	WORD	;5B18 level of each vial
+	ORG	$+16
+_D_5B28	LABEL	WORD	;5B28 number of colors in the pattern
+	ORG	$+2
+_D_5B2A	LABEL	WORD	;5B2A virtues
+	ORG	$+16
+_D_5B3A	LABEL	WORD	;5B3A colors of the pattern
+	ORG	$+64
+_D_5B7A	LABEL	BYTE	;5B7A pattern
+	ORG	$+32
+_D_5B9A	LABEL	WORD	;5B9A script: position of the loop
+	ORG	$+2
+_D_5B9C	LABEL	WORD	;5B9C script: loop count
+	ORG	$+2
+_D_5B9E	LABEL	WORD	;5B9E script: the picture chosen by command 0x87
+	ORG	$+2
+_D_5BA0	LABEL	WORD	;5BA0 palette entry
+	ORG	$+2
+_D_5BA2	LABEL	WORD	;5BA2 palette colors
+	ORG	$+6
+_D_5BA8	LABEL	WORD	;5BA8 palette colors
+	ORG	$+6
+_D_5BAE	LABEL	BYTE	;5BAE twinkle: the surface the stars are drawn on
+	ORG	$+14
+_D_5BBC	LABEL	BYTE	;5BBC 
+	ORG	$+14
+_D_5BCA	LABEL	BYTE	;5BCA 
+	ORG	$+14
+_D_5BD8	LABEL	BYTE	;5BD8 EGA: the second page
+	ORG	$+14
+_D_5BE6	LABEL	WORD	;5BE6 clouds: their number
+	ORG	$+2
+_D_5BE8	LABEL	WORD	;5BE8 script: the current one
+	ORG	$+2
+_D_5BEA	LABEL	DWORD	;5BEA clouds: the shapes
+	ORG	$+4
+_D_5BEE	LABEL	BYTE	;5BEE clouds: the surface
+	ORG	$+2
+_D_5BF0	LABEL	BYTE	;5BF0 rain: the surface
+	ORG	$+2
+_D_5BF2	LABEL	WORD	;5BF2 rain: frames between the moves of a drop
+	ORG	$+2
+_D_5BF4	LABEL	WORD	;5BF4 clouds: x, y of the big cloud bank
+	ORG	$+2
+_D_5BF6	LABEL	WORD	;5BF6 clouds: x, y of the big cloud bank
+	ORG	$+2
+_D_5BF8	LABEL	WORD	;5BF8 script: position in it
+	ORG	$+2
+_D_5BFA	LABEL	WORD	;5BFA rain: x, y of each drop
+	ORG	$+300
+_D_5D26	LABEL	WORD	;5D26 clouds: x, y, shape of each
+	ORG	$+20
+_D_5D3A	LABEL	WORD	;5D3A rain: x, y of each drop
+	ORG	$+300
+_D_5E66	LABEL	WORD	;5E66 clouds: x, y, shape of each
+	ORG	$+20
+_D_5E7A	LABEL	WORD	;5E7A clouds: x, y, shape of each
+	ORG	$+20
+_D_5E8E	LABEL	WORD	;5E8E rain: frames before the next move of each drop
+	ORG	$+300
+_D_5FBA	LABEL	BYTE	;5FBA the monitor's screen
+	ORG	$+14
+_D_5FC8	LABEL	BYTE	;5FC8 rain: shape of each drop
+	ORG	$+150
+_D_605E	LABEL	WORD	;605E clouds: speed
+	ORG	$+2
+_D_6060	LABEL	DWORD	;6060 shapes of intro1
+	ORG	$+4
+_D_6064	LABEL	WORD	;6064 rain: 1 in n chances of a new drop every frame
+	ORG	$+2
+_D_6066	LABEL	WORD	;6066 how far the monitor's picture went out of the screen on the left
+	ORG	$+2
+_D_6068	LABEL	DWORD	;6068 shapes of intro2
+	ORG	$+4
+_D_606C	LABEL	WORD	;606C rain: the maximum number of drops - 1
+	ORG	$+2
+_D_606E	LABEL	WORD	;606E 1: the monitor showed noise: redraw its frame
+	ORG	$+2
+_D_6070	LABEL	WORD	;6070 rain: the number of drops
+	ORG	$+2
+_D_6072	LABEL	BYTE	;6072 a 320x56 work surface (the A/B buttons)
+	ORG	$+14
+_D_6080	LABEL	WORD	;6080 
+	ORG	$+2
+_D_6082	LABEL	WORD	;6082 where the text area is on the screen: x (in 8-pixel columns?), y
+	ORG	$+2
+_D_6084	LABEL	WORD	;6084 where the text area is on the screen: x (in 8-pixel columns?), y
+	ORG	$+2
+_D_6086	LABEL	BYTE	;6086 copy of D_5732 the text area is shown in
+	ORG	$+14
+_D_6094	LABEL	BYTE	;6094 DOS version: major, minor
+	ORG	$+1
+_D_6095	LABEL	BYTE	;6095 DOS version: major, minor
+	ORG	$+1
+_D_6096	LABEL	WORD	;6096 twinkle: palette index (a global: the twinkle runs from the timer)
+	ORG	$+2
+_D_6098	LABEL	BYTE	;6098 twinkle: a palette entry
+	ORG	$+6
+_D_609E	LABEL	BYTE	;609E twinkle: a palette entry
+	ORG	$+6
+_D_60A4	LABEL	WORD	;60A4 twinkle: star index
+	ORG	$+2
+_D_60A6	LABEL	WORD	;60A6 twinkle: colour of the star's pixel
+	ORG	$+2
+_D_60A8	LABEL	WORD	;60A8 twinkle: colour of a lit star
+	ORG	$+2
+_D_60AA	LABEL	DWORD	;60AA starpos.dat
+	ORG	$+4
+_D_60AE	LABEL	WORD	;60AE twinkle: first star of the group that twinkles
+	ORG	$+2
+_D_60B0	LABEL	WORD	;60B0 number of stars
+	ORG	$+2
+_D_60B2	LABEL	WORD	;60B2 twinkle: random number (a shift register)
+	ORG	$+10
+_D_60BC	LABEL	WORD	;60BC colour of each star
+	ORG	$+512
+_D_62BC	LABEL	WORD	;62BC x of each star
+	ORG	$+512
+_D_64BC	LABEL	WORD	;64BC y of each star
+	ORG	$+512
+_D_66BC	LABEL	WORD	;66BC the hands: x0,y0, x1,y1
+	ORG	$+8
+_D_66C4	LABEL	WORD	;66C4 where the moving shapes go
+	ORG	$+16
+_D_66D4	LABEL	WORD	;66D4 the moving shapes: x,y each
+	ORG	$+16
 
 _BSS	ENDS
 

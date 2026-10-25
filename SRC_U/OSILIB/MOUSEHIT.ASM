@@ -5,8 +5,8 @@
 INCLUDE OSI.INC
 
 DSegStart
-EXTRN D_459E:WORD	;_pMouse
-EXTRN D_45A0:WORD	;_nMouseSem
+EXTRN _pMouse:WORD	;_pMouse
+EXTRN _nMouseSem:WORD	;_nMouseSem
 DSegEnd
 
 CSegStart	MOUSEHIT_TEXT
@@ -16,7 +16,7 @@ CSegStart	MOUSEHIT_TEXT
 ProcStart	_MOUSE_IN_AREA	;1344:0000
 	PUSH	ES
 	;--
-	MOV	SI,D_459E
+	MOV	SI,_pMouse
 	MOV	AH,0
 	MOV	AL,[SI].installed
 	CMP	AX,0
@@ -58,7 +58,7 @@ C_0018:	;--
 	;--
 	MOV	BX,[BP+06]
 	MOV	AX,0
-	MOV	CX,D_45A0
+	MOV	CX,_nMouseSem
 	CMP	CX,0
 	JL	C_00A1
 	;--
@@ -92,7 +92,7 @@ ProcEnd	_MOUSE_IN_AREA
 ProcStart	_MOUSE_IN_RECT	;1344:00A7
 	MOV	BX,[BP+06]
 	;--
-	MOV	SI,D_459E
+	MOV	SI,_pMouse
 	MOV	AX,0
 	CMP	BYTE PTR [SI].installed,0
 	JZ	C_00DA
