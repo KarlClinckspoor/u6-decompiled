@@ -650,4 +650,8 @@ extern struct {
 /*ECC8,ECC9*/extern unsigned char DosVerMajor,DosVerMinor;/*dos version.major/minor*/
 /*====---- ----====*/
 
+#ifndef __TURBOC__
+#include "portprot.h"/*port only: prototypes of every game function (tools/mkprotos.py)*/
+#endif
+
 #endif

@@ -344,14 +344,14 @@ Constants are pushed; an operator pops its operands from the top of
 lstack and leaves its result in the lowest operand's slot.*/
 /*C_1703_050E*/static parse_factor() {
 	int16 sidx;/*stack index*/
-	int32 lstack[10];/*local "stack"*/
+	NEARLONG lstack[10];/*local "stack"*/
 	int32 arrayAddr;
 	int16 i, j, opcode, cmpLen;
 	unsigned char cparam0, cparam1, varIdx;
 	int16 isOperator, isString;
 	int16 iparam0, iparam1, iparam2;
 	unsigned char scratch[80];
-	int16 inputStr;
+	NEARPTR inputStr;
 
 	sidx = 0;
 	i = 0;
@@ -596,7 +596,7 @@ lstack and leaves its result in the lowest operand's slot.*/
 				break;
 				case OP_VARSTR:/*$ string: pushes a pointer*/
 					varIdx = lstack[sidx - 1];
-					lstack[sidx - 1] = (int16)VarStr[varIdx];
+					lstack[sidx - 1] = PTR2INT16(VarStr[varIdx]);
 					/*from now on, OP_EQU compares strings*/
 					isString = 1;
 					sidx --;

@@ -2108,7 +2108,7 @@
 /*load tile description from "look.lzd": entries are (word first tile,
   zero-terminated string) sorted by tile; the entry for numTile is the
   first one whose first tile is >= numTile. Returns "nothing" if empty.*/
-/*C_1184_3C1B*/GetTileString(int16 numTile) {
+/*C_1184_3C1B*/char *GetTileString(int16 numTile) {
 	int16 tileNum;
 	char *dst;
 	int16 far *src;
@@ -2120,17 +2120,17 @@
 	src = ScratchBuf;
 	tileNum = *(src++);
 	while(tileNum < numTile) {
-		while(*(((char far *)src)++));
+		while(*CHARPTR_POSTINC(src));
 		tileNum = *(src++);
 	}
 	dst = TileStringBuf;
-	while(*dst++ = *(((char far *)src)++));
+	while(*dst++ = *CHARPTR_POSTINC(src));
 	return TileStringBuf[0]?TileStringBuf:/*07BB*/"nothing";
 }
 
 /*name of an object: the party member's name, the original shape's name for
   a dead or sleeping NPC, otherwise its tile description*/
-/*C_1184_3C9C*/GetObjectString(int16 objNum) {
+/*C_1184_3C9C*/char *GetObjectString(int16 objNum) {
 	char *str;
 	int16 i;
 

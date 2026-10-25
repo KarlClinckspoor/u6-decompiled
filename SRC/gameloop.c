@@ -53,7 +53,7 @@ unsigned char DirWallFlags[] = {TERRAIN_WALL_N,0,TERRAIN_WALL_E,0,TERRAIN_WALL_S
 
 /*increase karma by "amount", clamped at 99*/
 /*never called?*/
-/*C_0A33_0027*/AddKarma(amount) {
+/*C_0A33_0027*/AddKarma(int16 amount) {
 	if(KARMA + amount < 100)
 		KARMA += amount;
 	else

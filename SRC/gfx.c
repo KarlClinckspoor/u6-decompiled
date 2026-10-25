@@ -65,7 +65,7 @@ int16 ColorYellow = 14;/*yellow: unused*/
   load the graphic driver for adapter type "adapter" (0:MCGA 1:EGA 2:Tandy
   3:CGA 4:Hercules), initialise it and give it the callbacks it needs
   (floppy request, file loading/open/read/close)*/
-/*C_2FC1_000A*/InitGraphicsDriver(adapter/*bp06*/) {
+/*C_2FC1_000A*/InitGraphicsDriver(int16 adapter/*bp06*/) {
 	/*-- load graphic driver*/
 	IsZFile = 1;
 	GrDriver.p = LoadFile(GrDriverFiles[adapter], 0L);

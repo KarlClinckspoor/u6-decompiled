@@ -99,7 +99,7 @@ static /*C_1100_000B*/VIS_IsSeeThrough(int16 x, int16 y) {
 
 /*uncalled?*/
 /*is (x, y) in the 11x11 view square around the party?*/
-/*__1100_009F*/static VIS_IsInViewSquare(x, y) {
+/*__1100_009F*/static VIS_IsInViewSquare(int16 x, int16 y) {
 	return CLOSE_ENOUGH(5, x, y, MapX, MapY);
 }
 

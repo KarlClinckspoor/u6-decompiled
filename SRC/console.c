@@ -2138,7 +2138,7 @@ an unknown conversion prints its char raw ("%>" prints the '>' prompt);
 the numbers set LastNumberPlural (plural flag); literal chars go through
 CON_putch() so escapes apply, but the converted values (%s too) also do*/
 cdecl /*C_0C9C_3643*/CON_printf(unsigned char far *format, ...) {
-	void **argp;
+	VA_LIST argp;
 	uint16 num;
 	char numBuf[8];
 	int16 c, fmtCh;
@@ -2147,7 +2147,7 @@ cdecl /*C_0C9C_3643*/CON_printf(unsigned char far *format, ...) {
 
 	if(!TextOn)
 		return;
-	argp = ...;/*Turbo C: address of the variable arguments*/
+	VA_START(argp, format);/*Turbo C: address of the variable arguments*/
 	while(*format) {
 		c = *format++;
 		fieldWidth = len = leftAlign = 0;
@@ -2170,31 +2170,31 @@ cdecl /*C_0C9C_3643*/CON_printf(unsigned char far *format, ...) {
 			}
 			switch(tolower(fmtCh)) {
 				case 'd':
-					num = *(int16 *)argp++;
+					num = VA_INT(argp);
 					len = CON_itoa(num, numBuf, 6, -10);
 					LastNumberPlural = (num != 1);
 				break;
 				case 'o':
-					num = *(int16 *)argp++;
+					num = VA_INT(argp);
 					len = CON_itoa(num, numBuf, 6, 8);
 					LastNumberPlural = (num != 1);
 				break;
 				case 'x':
-					num = *(int16 *)argp++;
+					num = VA_INT(argp);
 					len = CON_itoa(num, numBuf, 4, 16);
 					LastNumberPlural = (num != 1);
 				break;
 				case 'u':
-					num = *(int16 *)argp++;
+					num = VA_INT(argp);
 					len = CON_itoa(num, numBuf, 5, 10);
 					LastNumberPlural = (num != 1);
 				break;
 				case 'c':
-					numBuf[0] = *(char *)argp++;
+					numBuf[0] = VA_CHAR(argp);
 					numBuf[1] = 0;
 				break;
 				case 's':
-					str = (char *)*argp++;
+					str = VA_STR(argp);
 					len = strlen(str);
 				break;
 				default:
