@@ -97,3 +97,16 @@ Still, a real rebuild with `doit.bat` plus `mydiff.bat` is the final word.
 The same sources also build a native Windows/Linux version on SDL2, with a settings screen
 over the game (F11), character creation, and a recording of every session that replays
 exactly. The DOS build stays byte-identical. See [docs/port/PORT.md](docs/port/PORT.md).
+
+---
+
+## U.EXE decompiled (branch `uexe`)
+
+`SRC_U/` is the decompilation of `U.EXE`, the other big program of the game: the main menu,
+the introduction, the gypsy's character creation, the transfer of a character from Ultima IV
+or V, the credits, and Origin's OSI library under them. It rebuilds an `U.EXE` identical to
+the original, header and relocation table included:
+
+    python3 tools/u/ubuild.py
+
+See [SRC_U/DECOMP.md](SRC_U/DECOMP.md) for how it is put together and what it needs.

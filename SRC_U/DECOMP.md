@@ -1,88 +1,107 @@
-# Decompiling U.EXE
+# U.EXE decompiled
 
 `U.EXE` is the program `ULTIMA6.EXE` starts: the main menu, the introduction, the gypsy
-and character creation, the transfer of a character. `ULTIMA6.EXE` (a small Microsoft C
-launcher) then starts `GAME.EXE`. This folder is its decompilation: C that Turbo C 2.0
-compiles back to the same bytes, the way `SRC/` does for `GAME.EXE`.
+and character creation, the transfer of a character from Ultima IV or V, the credits.
+`ULTIMA6.EXE` (a small Microsoft C launcher) then starts `GAME.EXE`. This folder is its
+decompilation: C and assembly that Turbo C 2.0, MASM 3.0 and TLINK build back into the
+same `U.EXE`, byte for byte (header and relocation table included), the way `SRC/` does
+for `GAME.EXE`.
 
-## The binary
+    python3 tools/u/ubuild.py [--keep DIR]    build U.EXE in DOSBox and compare it
+    python3 tools/u/ucheck.py [MODULE ...]    compare each module with U.EXE
 
-Turbo C 2.0, medium model (far code, near data), **cdecl** (not `-p` like GAME.EXE).
-Compiler flags: `tcc -mm -c -O -G` (checked on segment 0BC1).
+Both need DOSBox and the DOS tools (Turbo C 2.0, MASM 3.0) that `tools/dosbuild.py`
+uses (`U6_DOSTOOLS`), and the original U.EXE to compare with (`U6_UEXE`, or
+`gamedata/U.EXE`).
 
-| image | segment | what |
+## The program
+
+| frame | module | what |
 |---|---|---|
-| 00000-009F0 | 0000 (_TEXT) | C0M start-up and Turbo C helpers (SCOPY@, LXLSH@, ...) |
-| 009F0-00E10 | 0000 (_TEXT) | OSI file routines in assembly (OSI_open 09F3, OSI_close 0A32, OSI_read 0AE4, OSI_write 0BCA: **pascal**) |
-| 00E10-0F4F0 | 00E1 0263 0406 0676 06E9 09A0 0BC1 0C17 0F15 0F18 | the C modules, in link order |
-| 0F4F0-1277C | 0F4F..1276 | Turbo C 2.0 CM.LIB modules (named in tools/u/usyms.txt) |
-| 1277C-14990 | 1277..1482 | the OSI library: assembly (and maybe C), cdecl, like GAME.EXE's SRC/OSILIB |
-| 14990- | 1499 | DGROUP: C0M's data (0000-0194), then each module's _DATA in link order (its initialised variables, then its string literals), then the libraries' data; uninitialised data (_BSS) from about 4A14 |
+| 00E1 | main.c | configuration, keyboard, palettes, the main menu, `main()`, music |
+| 0263 | transfer.c | the character sheet; a character from Ultima IV's party.sav or V's saved.gam |
+| 0406 | chargen.c | the gypsy: the questions, the vials, the pattern; the name and the portrait |
+| 0676 | credits.c | the credits |
+| 06E9 | intro.c | the introduction: the monitor, the clouds and rain, the storm, the scripts |
+| 09A0 | passage.c | the text passages of the introduction |
+| 0BC1 | disk.c | the game disks: which drive has which disk, "insert disk" |
+| 0C17 | moongate.c | the moongate, the stars twinkling, the hands, starting GAME.EXE |
+| 0F15 | criterr.asm | the critical error (int 24h) handler |
+| 0F18 | lzw.asm | `LoadZFile`: load an LZW-compressed driver (MCGADRV.BIN, U6ADLIB.DRV, ...) |
+| | BSS.ASM | the uninitialised data of all the modules (see below) |
+| 1277.. | OSILIB/ | Origin's OSI library: surfaces, text windows, the mouse, files (pascal), fades, dissolves, LZW, the timer |
 
-TLINK packs the modules' code segments without alignment: a module starts where the
-previous one ends, and its frame (the segment of its far addresses) is its start rounded
-down to a paragraph. The address names C_SSSS_OOOO are frame-relative; `ucmp.py` shows
-module-relative offsets (frame offset minus the module's start offset `--at`).
+All the C is `tcc -mm -c -O -G`: medium model (far code, near data), **cdecl** (GAME.EXE
+is `-p`). The OSI library's C is `-mm -c -G` (no `-O`). Every function has its address
+before it (`/*C_SSSS_OOOO*/`: frame, offset) and every global its DS offset
+(`/*XXXX*/` in C, `;D_XXXX` in assembly); `tools/u/usym.py list` lists them all.
 
-| frame | image | --at | length | 
-|---|---|---|---|
-| 00E1 | 00E16-02630 | 6 | 181A |
-| 0263 | 02630-04066 | 0 | 1A36 |
-| 0406 | 04066-06766 | 6 | 2700 |
-| 0676 | 06766-06E9E | 6 | 738 |
-| 06E9 | 06E9E-09A0B | E | 2B6D |
-| 09A0 | 09A0B-0BC10 | B | 2205 |
-| 0BC1 | 0BC10-0C170 | 0 | 560 (disk.c, done) |
-| 0C17 | 0C170-0F156 | 0 | 2FE6 |
-| 0F15 | 0F156-0F18E | 6 | 38 |
-| 0F18 | 0F18E-0F4F3 | E | 365 (ends with an iret: an interrupt function) |
+## How it is put together
 
-## Conventions
+TLINK packs the code segments without alignment: a module starts where the previous one
+ends, and its frame (the segment of its far addresses) is its start rounded down to a
+paragraph. `ucmp.py` shows module-relative offsets (frame offset minus the module's
+start, `--at`; `ucheck.py` has each module's frame, start, length and data range).
 
-- A function is preceded by its address comment, as in SRC/: `/*C_0BC1_0031*/` (segment,
-  offset). Give the functions you define descriptive names.
-- Anything **defined in another module** is referred to by its address name, declared
-  `extern` at the top of your file with the best type you can tell:
-  `C_SSSS_OOOO()` for functions, `D_XXXX` for data (DS offset, upper-case hex). A final
-  pass replaces these with the names their modules gave them.
-- For now **every global variable is `extern D_XXXX`**, even those that live in your
-  module's _DATA/_BSS: the data layout is done in a second pass. Only string literals
-  stay inline (they are your module's _DATA, after its variables). A comment after the
-  declaration saying what the variable is helps the final pass name it.
-- Library functions by their Turbo C names, with the Turbo C headers (`<dos.h>`,
-  `<alloc.h>`, `<conio.h>`, `<string.h>`, `<stdio.h>`, `<process.h>`, ...): prototypes
-  change the code, so include what the original code needs. `u.h` has the OSI file
-  routines (pascal) and the graphics driver call `DRV(o)(args)` (a far pointer at 4A34
-  whose offset selects the entry, like GAME.EXE's `MUS_DRV`).
-- Code style: tabs, `if(`, `for(`, the comments explain what the code does and why, as
-  in SRC/.
+The link: `TLINK C0M main transfer chargen credits intro passage disk moongate criterr
+lzw bss, U.EXE, , CM OSILIB` (case-insensitive, like Origin's), with:
 
-## What Turbo C does (found so far)
+- **CM.LIB, Origin's**: Turbo C's, with `clreol()` and `gotoxy()` replaced by versions
+  that work on the OSI text window. TLINK lays out library modules in the order of the
+  library, so `ubuild.py` rebuilds CM.LIB with the replacements in Turbo C's places
+  (`OSILIB/CLREOL.ASM`, `OSILIB/GOTOXY.ASM`). `clreol()`'s code is in `OSILIB/TXTCLR.ASM`,
+  and CM.LIB's CLREOL module only names the start of its segment: that is the only way
+  for the code to be where Turbo C's is and for its relocation to be in the table among
+  TXTCLR's (see CLREOL.ASM).
+- **OSILIB.LIB**, in the order of `OSILIB/osilib.lst`.
+
+The data segment (DGROUP 1499): C0M's data (0000-0194), each module's `_DATA` in link
+order (its initialised variables in the order of definition, then its string literals),
+the libraries' data; then the uninitialised data: the modules' (4A14-66E4), CM.LIB's
+(66E4-681B), the OSI library's (681C-683E). Turbo C orders a module's `_BSS` by its
+symbol table (by a hash of the names), so the C declares those variables `extern`, and
+`BSS.ASM` (`OSILIB/LIBBSS.ASM` for FADE and TIMER) lays them out with `LABEL`s and
+`ORG`s (MASM 3.0 writes data records for `dup(?)`).
+
+The assembly: Origin used TASM. MASM 3.0 makes the same bytes, with these differences
+taken care of:
+
+- `OFFSET sym` is relative to the segment: `OFFSET DGROUP:sym` where the original has a
+  DGROUP offset. A forward far call needs `FAR PTR`; a forward `JMP` is near unless
+  `SHORT` (`JMPN`, `JMPF` in OSI.INC for the cases TASM made differently).
+- TASM wrote the fixups of some data records in another order than the code's, and the
+  .EXE relocation table follows that order: `tools/u/tasmorder.py` rearranges the
+  object's fixups as the module's `;TASM fixup order:` comment says (six modules).
+- C modules with inline assembly (main.c; FADE.C, TIMER.C, SURFSHR.C in the library)
+  were compiled through the assembler (`tcc -B`): `tcc -S` then MASM 3.0 `/Mx` gives
+  the same code (`#pragma inline` marks the library ones).
+
+## What Turbo C does
 
 - Locals: the first declared gets the lowest address (furthest from bp). Register
-  variables (si, di) are given to int/pointer locals automatically; try the order of
-  declaration when si/di come out swapped.
-- `x = y = 0` stores y first. `a = b = c` vs two statements makes a difference (a
-  reload from the stack in the original means two statements).
+  variables (si, di) go to the most used int/pointer locals; the order of declaration
+  decides between equals.
+- `a = b = c` stores the rightmost first; a reload from the stack in the original means
+  two statements.
+- With `-O`, identical tails of the branches of an `if` are merged (cross-jumping).
 - `cmp/jz/mov ax,1/jmp/xor ax,ax` is `return a != b;`.
 - `push cs / call near X` is a call to a function of the same module.
 - A two-byte argument cleanup is `inc sp / inc sp`; `pop cx` means other flags.
-- Struct assignment calls `SCOPY@` (cx = size).
+- Struct assignment calls `SCOPY@` (cx = size); an initialised local array is a
+  `SCOPY@` from an anonymous initialiser in `_DATA`.
 - Long shifts call `LXLSH@`; long multiply `LXMUL@`; long divide `LDIV@`/`LUDIV@`.
+- `atoi` is a macro for `atol` (with `<stdlib.h>`).
+- The graphics driver call `DRV(o)(args)` (`u.h`) is two statements: brace it in an `if`.
 
 ## Tools
 
     python3 tools/u/udis.py SEG [END]         annotated disassembly of a module
-    python3 tools/u/ucmp.py FILE.c --seg SEG --at AT --include SRC_U --length LEN
-                                              compile and compare with U.EXE
+    python3 tools/u/ucmp.py FILE --seg SEG --at AT --include SRC_U --length LEN
+                                              compile one module and compare it
     python3 tools/u/tcc.py [--masm] FILE      just compile (assemble) in DOSBox
+    python3 tools/u/usym.py list|apply        the symbol table; turn address names
+                                              (C_SSSS_OOOO, D_XXXX) into names
 
 `ucmp.py` reports the first instruction that really differs (branch displacements and
-fixups aside), checks every fixup against the original (calls by name or address,
-DS offsets), and compares the string literals with the data segment. A module is done
-when it says `0 bytes differ`, `data ... same`, `0 problems`, with `--length` the
-module's length from the table above.
-
-`disk.c` (frame 0BC1) is a finished example. GAME.EXE's decompilation in `SRC/` comes
-from the same team and libraries: grep it for similar code (driver calls, console,
-mouse, file handling) and for names.
+fixups aside), checks every fixup against the original (calls and variables by name or
+address), and compares the string literals with the data segment.
