@@ -11,11 +11,23 @@ files from its folder and never writes there.
 
 ## Building
 
-Linux (Debian/Ubuntu: `apt install cmake ninja-build clang libsdl2-dev`):
+Ready-made builds for Windows and Linux are on the repository's Releases page.
+
+The port lives on the `portable` branch, so check it out first (the commands below run
+from the repository's top folder):
+
+    git fetch origin
+    git checkout portable
+
+Linux, and Windows' WSL (Debian/Ubuntu: `sudo apt install cmake ninja-build clang libsdl2-dev`;
+under WSL the window opens through WSLg, Windows 11 or a recent Windows 10):
 
     cmake -S port -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build build
     ./build/u6 --data "/path/to/Ultima 6"
+
+Under WSL the game folder can stay on the Windows side, e.g.
+`--data "/mnt/c/GOG Games/Ultima 6"`.
 
 Windows, with MSYS2 (UCRT64 shell: `pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,ninja,SDL2}`):
 

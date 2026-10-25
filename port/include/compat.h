@@ -72,4 +72,12 @@ void MUSDRV_0xc(int channel, int a, int b);
 /* Turbo C packs structs (no -a): byte alignment for every struct the game declares. */
 #pragma pack(1)
 
+/* The game's variables live at DOS's offsets inside blocks (port/sys/bss.c,
+ * port/game/*_port.c), so an array may start at any address. The x86-64 ABI lets a
+ * compiler assume 16-byte alignment for any global array of 16 bytes or more, and clang
+ * does for extern declarations too (aligned SSE stores: a crash at -O2). Declaring every
+ * extern with alignment 1 takes that assumption away; gcc makes none. (After the system
+ * headers above, so it only reaches the game's own declarations.) */
+#define extern extern __attribute__((aligned(1)))
+
 #endif

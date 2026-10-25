@@ -82,4 +82,12 @@ typedef int64_t NEARLONG;
 #define WRITABLE_STR(s) ({ static char writable_[] = s; writable_; })
 #endif
 
+/*a local the game only partly sets (DOS keeps whatever the stack held in the rest):
+  the port zeroes it, so that what reaches a file does not depend on the compiler*/
+#ifdef __TURBOC__
+#define PORT_ZERO(v)
+#else
+#define PORT_ZERO(v) memset(&(v), 0, sizeof(v));
+#endif
+
 #endif
