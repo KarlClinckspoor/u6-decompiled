@@ -31,6 +31,7 @@ void OPL3_WriteReg(opl3_chip *chip, uint16_t reg, uint8_t v)
 	if (log_n < (int)(sizeof log_buf / sizeof log_buf[0]))
 		log_buf[log_n++] = (uint16_t)(reg << 8 | v);
 }
+void OPL3_WriteRegBuffered(opl3_chip *chip, uint16_t reg, uint8_t v) { OPL3_WriteReg(chip, reg, v); }
 void OPL3_GenerateResampled(opl3_chip *chip, int16_t *buf) { (void)chip; buf[0] = buf[1] = 0; }
 
 /* ---- for the test ---- */

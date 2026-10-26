@@ -117,7 +117,10 @@ static void opl(uint8_t reg, uint8_t val)
 {
 	opl_regs[reg] = val;
 	opl_set[reg] = 1;
-	OPL3_WriteReg(&chip, reg, val);
+	/* buffered: the chip sees the writes spread over its samples, as the card did with
+	 * the driver's waits after each write. A note's key off and key on (two writes to
+	 * B0h) must reach it at different samples, or the note never starts again. */
+	OPL3_WriteRegBuffered(&chip, reg, val);
 }
 
 static void chip_reset(int rate)
@@ -355,7 +358,7 @@ static void render(int16_t *out, int frames, int rate)
 			}
 		}
 		OPL3_GenerateResampled(&chip, s);
-		v = out[i] + (int32_t)s[0] * volume / 100;
+		v = out[i] + (int32_t)s[0] * volume / 40;
 		out[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
 	}
 }
