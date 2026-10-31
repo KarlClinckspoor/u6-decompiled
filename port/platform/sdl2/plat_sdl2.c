@@ -637,7 +637,7 @@ int plat_init(const PlatConfig *c)
 		want.freq = 44100;
 		want.format = AUDIO_S16SYS;
 		want.channels = 1;
-		want.samples = 512;
+		want.samples = 2048;	/* 46 ms: no underruns (dropped beats) on busy systems */
 		want.callback = audio_cb;
 		audio_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
 		if (audio_dev) {
