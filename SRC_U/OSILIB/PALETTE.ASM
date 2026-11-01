@@ -13,6 +13,8 @@ CSegStart	PALETTE_TEXT
 
 ;load the 256 colors of a palette file (at 30h, 3 bytes a color, 8 bits each) into the
 ;DAC: PAL_load(char *name), returns the high byte of the file's word at 20h (-1 on error)
+PUBLIC	_PAL_load
+_PAL_load	LABEL	FAR	;the name C calls it by (END.EXE's main.c)
 ProcStart	PAL_load	;1475:0002
 	MOV	AH,48h	;allocate memory
 	MOV	BX,31h

@@ -53,14 +53,14 @@
 /*20FC*/extern int16 mouseOn;/*mouse on*/
 /*20FE*/extern int16 adapter;/*graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
 /*2100*/extern union tMus musDrv;/*the music driver*/
-/*21BE*/extern uint32 loopsPerTick;/*(the OSI library's) speed of the computer: TIM_calibrate's loops in a tick*/
-/*1328*/extern int16 far drvDrawPointer[];/*(the OSI library's) graphic driver entries: (offset, segment) pairs*/
+extern uint32 loopsPerTick;/*(the OSI library's, DS:21BE) speed of the computer: TIM_calibrate's loops in a tick*/
+extern int16 far drvDrawPointer[];/*(the OSI library's, DS:1328) graphic driver entries: (offset, segment) pairs; declared far as in U.EXE (its accesses load its segment)*/
 
 extern void far *LoadZFile(char *);/*load a (compressed) driver*/
 extern void far *LZW_load(char *);/*load a (compressed) file*/
-extern int16 C_02AE_00BA();/*the graphics driver's segment*/
-extern C_02AE_00D0();/*Hercules: 720x348 graphics, the scanline offsets*/
-extern void far C_02AE_0001();/*the timer tick: the stars twinkle, the colours cycle*/
+extern int16 DriverSegment();/*the graphics driver's segment (tick.c)*/
+extern InitHercules();/*Hercules: 720x348 graphics, the scanline offsets (tick.c)*/
+extern EndTick();/*the timer callback: the stars twinkle, the colours cycle (tick.c)*/
 extern SURF_alloc(struct tSurface *);
 extern SURF_free(struct tSurface *);
 extern MOUSE_INIT(struct tMouse *);
@@ -83,7 +83,7 @@ extern DIS_dissolveTDY(struct tSurface *, struct tSurface *, int16);
 extern TIM_install();
 extern TIM_remove();
 extern TIM_calibrate();
-extern TIM_setCallback(void (far *)());
+extern TIM_setCallback(int16 (far *)());/*(END.EXE's library: a far pointer)*/
 extern TIM_resetCallback();
 
 Delay(int16);
@@ -570,7 +570,7 @@ game took*/
 		case 4: videoMode = 7; gfxDrv.f = (void (far *)())LoadZFile("cgadrv.bin"); break;
 	}
 	/*some of its entries, for the OSI library*/
-	y = C_02AE_00BA();
+	y = DriverSegment();
 	drvDrawPointer[0] = 3; drvDrawPointer[1] = y;
 	drvDrawPointer[2] = 6; drvDrawPointer[3] = y;
 	drvDrawPointer[4] = 9; drvDrawPointer[5] = y;
@@ -578,7 +578,7 @@ game took*/
 	drvDrawPointer[8] = 0xc; drvDrawPointer[9] = y;
 	switch(videoMode) {
 		case 4: case 9: screen.segment = 0xb800; break;
-		case 7: screen.segment = 0xb000; C_02AE_00D0(); break;
+		case 7: screen.segment = 0xb000; InitHercules(); break;
 		case 0xd: screen.segment = 0xa200; break;
 		case 0x13: screen.segment = 0xa000; break;
 	}
@@ -669,11 +669,12 @@ game took*/
 	ShowAround();
 	TIM_install();
 	if(videoMode == 0x13)
-		TIM_setCallback(C_02AE_0001);
+		TIM_setCallback(EndTick);
 	/*Lord British's lens rises*/
 	speed = ScaleSpeed(3, 6);
 	y = 0x7d;
 	done = 0;
+	/*(the frame where it reaches the top, -12, is still drawn: done is set before it)*/
 	while(!done && (done = y == -12, 1)) {
 		DRV(3)(&backBuffer, 0, 0, endShapes, 7);
 		DRV(3)(&leftLens, 9, y, endShapes, 3);
@@ -681,10 +682,10 @@ game took*/
 		DRV(3)(&backBuffer, 0xda, 0x57, endShapes, 6);
 		DrawText();
 		ShowAround();
-		if(CheckInput())
+		if(CheckInput())/*a key: to the top at once*/
 			y = speed + -12;
 		y -= speed;
-		y += (-12 - y) * (y <= -12);
+		y += (-12 - y) * (y <= -12);/*not above -12*/
 	}
 	ShowText(1);
 	while(!CheckInput())
@@ -712,8 +713,9 @@ game took*/
 			moving++;
 			DRV(3)(&rightLens, 0xe6, y += speed, endShapes, 3);
 		}
-		if(scene >= 7 && scene <= 10)
+		if(scene >= 7 && scene <= 10) {
 			DRV(3)(&rightHalf, 0, 0, endShapes, 8);
+		}
 		if(scene > 10) {
 			DRV(3)(&rightHalf, 0, 0, endShapes, 9);
 		} else {
@@ -733,7 +735,7 @@ game took*/
 			WaitInput(5);
 			DRV(3)(&backCodex, 0x6a, 0, endShapes, 0);
 			if(videoMode != 0x13)
-				TIM_setCallback(C_02AE_0001);
+				TIM_setCallback(EndTick);
 			switch(videoMode) {
 				case 4: case 7:
 					effect = ScaleSpeed(0x1e, 0x3c);

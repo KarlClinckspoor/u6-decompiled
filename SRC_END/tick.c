@@ -47,7 +47,7 @@ straight to the timer handler, over this function's popf)*/
 		StarsMCGA();
 	} else if(videoMode == 0xd) {
 		egaPage = screen.segment ^ 0x200;/*the page not shown*/
-		asm mov es,egaPage
+		asm mov es,DGROUP:egaPage/*(DGROUP: MASM takes the extrn Turbo C declares at the end for a _BSS-relative one)*/
 		StarsEGA();
 	} else if(videoMode == 9) {
 		StarsTandy();

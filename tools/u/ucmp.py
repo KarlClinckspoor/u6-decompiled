@@ -258,7 +258,10 @@ def main():
                     if want is None:
                         learned.append((f.target, '%04X' % (v - f.disp)))
                         dsyms[f.target] = v - f.disp
-                    elif want + f.disp != v:
+                    elif want + f.disp != v and not (
+                            f.frame and (f.frame[0] == 4 or (f.frame[0] == 0 and m.segs[f.frame[1]] is cs))
+                            and (want + f.disp + (DGROUP - segp) * 16) & 0xFFFF == v):
+                        # (an access through CS: (stars.asm), its offset relative to the code's frame)
                         problems.append((where, 'offset %s+%x: original %04x, %s is at %04x' % (
                             f.target, f.disp, v, f.target, want)))
                 else:
@@ -268,6 +271,13 @@ def main():
                 want = DGROUP if f.target in ('DGROUP', '_DATA', '_BSS') else (segp if f.target == cs.name else None)
                 if f.tkind == 'ext':
                     want = DGROUP if dsyms.get(f.target) is not None else syms.get(f.target, (None,))[0]
+                    if (want == DGROUP and v != DGROUP
+                            and any(n == f.target for n, _ in learned)):
+                        # a far pointer to a function of another module (its offset fixup
+                        # came first and was taken for data's): its segment is that module's
+                        learned[:] = [x for x in learned if x[0] != f.target]
+                        del dsyms[f.target]
+                        want = v
                 if want is None or v != want:
                     problems.append((where, 'segment of %s %s: original %04x, expected %s' % (
                         f.tkind, f.target, v, '%04x' % want if want is not None else '?')))
