@@ -18,42 +18,43 @@
 #include <string.h>
 #include <time.h>
 
-extern union tDrv gfxDrv;/*1770 the graphics driver*/
-extern void far *endShapes;/*1774 the pictures of the ending (end.xxx)*/
+/*1770*/extern union tDrv gfxDrv;/*the graphics driver*/
+/*1774*/extern void far *endShapes;/*the pictures of the ending (end.xxx)*/
 /*parts of the back buffer the kings and the lenses are drawn into (clipping rectangles)*/
-extern struct tSurface leftHalf;/*1778 x 0..A0: Lord British's side*/
-extern struct tSurface rightHalf;/*1786 x A0..: King Draxinusom's side*/
-extern struct tSurface leftLens;/*1794 x 0..A0, y 0..7D: Lord British's lens rising*/
-extern struct tSurface rightLens;/*17A2 x A0.., y 0..7D: the Gargoyle's lens*/
+/*1778*/extern struct tSurface leftHalf;/*x 0..A0: Lord British's side*/
+/*1786*/extern struct tSurface rightHalf;/*x A0..: King Draxinusom's side*/
+/*1794*/extern struct tSurface leftLens;/*x 0..A0, y 0..7D: Lord British's lens rising*/
+/*17A2*/extern struct tSurface rightLens;/*x A0.., y 0..7D: the Gargoyle's lens*/
 /*the three parts of the screen around the Codex, copied from the back buffer each frame
   (scrXxx on the screen, backXxx the same rectangle of the back buffer)*/
-extern struct tSurface scrLower;/*17B0 y 51..*/
-extern struct tSurface backLower;/*17BE*/
-extern struct tSurface scrLeft;/*17CC x 0..69, y 0..50*/
-extern struct tSurface backLeft;/*17DA*/
-extern struct tSurface scrRight;/*17E8 x D5.. (EGA D8..), y 0..50*/
-extern struct tSurface backRight;/*17F6*/
-extern struct tSurface textSurface;/*1804 where the text is printed (off screen; EGA: page A600)*/
-extern int16 codexStage;/*1812 the Codex: 0 closed, 1 shown, 2 the lenses' light on it, 3 open*/
-extern struct tMouse mouseInfo;/*1818*/
-extern int16 palette[][3];/*1837 the VGA palette (r, g, b)*/
-extern struct tText console;/*1E37 the console's text window*/
-extern char far *songData;/*1E48 the song (or midi.dat) loaded*/
-extern int16 songPos;/*1E9A parse position in midi.dat*/
-extern int16 textShape;/*1E9C the picture behind the text (end.xxx shape)*/
-extern struct tSurface scrCodex;/*1E9E the Codex (x 6A..DA, y 0..5D) on the screen*/
-extern int16 musicPort;/*1EAC music card i/o port*/
-extern struct tSurface backCodex;/*1EAE the Codex in the back buffer*/
-extern int16 textShapeX, textShapeY;/*1EBC, 1EBE where the picture behind the text goes*/
-extern struct tSurface backBuffer;/*1EC0 the back buffer (EGA: the other page)*/
-extern int16 musicCard;/*1ECE music card: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
-extern struct tSurface egaSaved;/*1ED0 EGA: the back buffer allocated*/
-extern struct tSurface textBack;/*1EDE where the text goes in the back buffer*/
-extern int16 mouseOn;/*20FC mouse on*/
-extern int16 adapter;/*20FE graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
-extern union tMus musDrv;/*2100 the music driver*/
-extern uint32 loopsPerTick;/*21BE (the OSI library's) speed of the computer: TIM_calibrate's loops in a tick*/
-extern int16 far drvDrawPointer[];/*1328 (the OSI library's) graphic driver entries: (offset, segment) pairs*/
+/*17B0*/extern struct tSurface scrLower;/*y 51..*/
+/*17BE*/extern struct tSurface backLower;
+/*17CC*/extern struct tSurface scrLeft;/*x 0..69, y 0..50*/
+/*17DA*/extern struct tSurface backLeft;
+/*17E8*/extern struct tSurface scrRight;/*x D5.. (EGA D8..), y 0..50*/
+/*17F6*/extern struct tSurface backRight;
+/*1804*/extern struct tSurface textSurface;/*where the text is printed (off screen; EGA: page A600)*/
+/*1812*/extern int16 codexStage;/*the Codex: 0 closed, 1 shown, 2 the lenses' light on it, 3 open*/
+/*1818*/extern struct tMouse mouseInfo;
+/*1837*/extern int16 palette[][3];/*the VGA palette (r, g, b)*/
+/*1E37*/extern struct tText console;/*the console's text window*/
+/*1E48*/extern char far *songData;/*the song (or midi.dat) loaded*/
+/*1E9A*/extern int16 songPos;/*parse position in midi.dat*/
+/*1E9C*/extern int16 textShape;/*the picture behind the text (end.xxx shape)*/
+/*1E9E*/extern struct tSurface scrCodex;/*the Codex (x 6A..DA, y 0..5D) on the screen*/
+/*1EAC*/extern int16 musicPort;/*music card i/o port*/
+/*1EAE*/extern struct tSurface backCodex;/*the Codex in the back buffer*/
+/*1EBC*/extern int16 textShapeX;/*where the picture behind the text goes*/
+/*1EBE*/extern int16 textShapeY;
+/*1EC0*/extern struct tSurface backBuffer;/*the back buffer (EGA: the other page)*/
+/*1ECE*/extern int16 musicCard;/*music card: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
+/*1ED0*/extern struct tSurface egaSaved;/*EGA: the back buffer allocated*/
+/*1EDE*/extern struct tSurface textBack;/*where the text goes in the back buffer*/
+/*20FC*/extern int16 mouseOn;/*mouse on*/
+/*20FE*/extern int16 adapter;/*graphic adapter: 0 VGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
+/*2100*/extern union tMus musDrv;/*the music driver*/
+/*21BE*/extern uint32 loopsPerTick;/*(the OSI library's) speed of the computer: TIM_calibrate's loops in a tick*/
+/*1328*/extern int16 far drvDrawPointer[];/*(the OSI library's) graphic driver entries: (offset, segment) pairs*/
 
 extern void far *LoadZFile(char *);/*load a (compressed) driver*/
 extern void far *LZW_load(char *);/*load a (compressed) file*/
