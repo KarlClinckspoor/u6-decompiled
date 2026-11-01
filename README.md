@@ -107,16 +107,26 @@ Every decompiled program here is built with the **original tools**, Borland Turb
 result is compared byte for byte with the original. Nothing is approximated: the C is only
 accepted when the compiler produces the original machine code. The tools are not included;
 put them in `tools/turboc20` and `tools/masm300` (or set `U6_DOSTOOLS`), and put the
-original `U.EXE` and `END.EXE` in `gamedata/` next to the repository (or set `U6_UEXE` / `U6_ENDEXE`).
+original `GAME.EXE`, `U.EXE` and `END.EXE` in `gamedata/` next to the repository (or set
+`U6_GAMEEXE` / `U6_UEXE` / `U6_ENDEXE`).
 
 | program | source | check | result |
 |---|---|---|---|
-| `GAME.EXE` | `SRC/` | `python3 tools/dosbuild.py` | identical to the reference build, sha1 `d2bd60741a41e685e8dbd67a9430ff96a62fb49d` (before EXEPACK) |
+| `GAME.EXE` | `SRC/` | `python3 tools/dosbuild.py` | identical to the original once that is unpacked (load image, relocation table, CS:IP, SS:SP); sha1 `5129af96d4ba63b7f84c663e14e3a3b90fd524a3` before EXEPACK |
 | `U.EXE` | `SRC_U/` | `python3 tools/u/ubuild.py` | identical to the original, 109988 bytes, sha1 `b6cde9fb239d56656777ad52adbe1324315b65ac` |
 | `END.EXE` | `SRC_END/` | `U6_PROG=end python3 tools/u/ubuild.py` | identical to the original, 40112 bytes, sha1 `91868fa6b5e8f5c2a85d2b5393a74ab2ae268005` |
 
 Each build prints the two sha1s and `identical to the original` (header and relocation table
 included); on a difference it shows the first bytes that differ and the module they fall in.
+The original `GAME.EXE` is EXEPACKed, so `dosbuild.py` unpacks it (`tools/exepack.py`) and
+compares what the linker produces: the build before EXEPACK has the same load image (its
+image only runs on with the zeros of the uninitialised data, which EXEPACK drops), the same
+relocations, entry point and stack.
+
+The last differences in `GAME.EXE` were not in the C: Origin assembled `OSI_FILE.ASM` and
+`MOUSE.ASM` with TASM, which encodes an AND with a small constant in the short sign-extended
+form (`83 /4`), where MASM 3.0 always writes `81 /4`. Those six instructions are written as
+`db` (with the instruction in a comment), and MASM 3.0 now gives TASM's bytes.
 `python3 tools/u/ucheck.py` (with `U6_PROG=end` for `END.EXE`) also compares each module's
 object code, data and relocations against the original image, one module at a time.
 These were last run on the sources of this branch, with the Turbo C 2.0 and MASM 3.0 provided
