@@ -100,7 +100,29 @@ exactly. The DOS build stays byte-identical. See [docs/port/PORT.md](docs/port/P
 
 ---
 
-## U.EXE decompiled (branch `uexe`)
+## Verified with the real compiler: byte-for-byte checks
+
+Every decompiled program here is built with the **original tools**, Borland Turbo C 2.0
+(`tcc -mm -c -O -G`), Microsoft MASM 3.0 and Borland TLINK, run in a headless DOSBox, and the
+result is compared byte for byte with the original. Nothing is approximated: the C is only
+accepted when the compiler produces the original machine code. The tools are not included;
+put them in `tools/turboc20` and `tools/masm300` (or set `U6_DOSTOOLS`), and put the
+original `U.EXE` and `END.EXE` in `gamedata/` next to the repository (or set `U6_UEXE` / `U6_ENDEXE`).
+
+| program | source | check | result |
+|---|---|---|---|
+| `GAME.EXE` | `SRC/` | `python3 tools/dosbuild.py` | identical to the reference build, sha1 `d2bd60741a41e685e8dbd67a9430ff96a62fb49d` (before EXEPACK) |
+| `U.EXE` | `SRC_U/` | `python3 tools/u/ubuild.py` | identical to the original, 109988 bytes, sha1 `b6cde9fb239d56656777ad52adbe1324315b65ac` |
+| `END.EXE` | `SRC_END/` | `U6_PROG=end python3 tools/u/ubuild.py` | identical to the original, 40112 bytes, sha1 `91868fa6b5e8f5c2a85d2b5393a74ab2ae268005` |
+
+Each build prints the two sha1s and `identical to the original` (header and relocation table
+included); on a difference it shows the first bytes that differ and the module they fall in.
+`python3 tools/u/ucheck.py` (with `U6_PROG=end` for `END.EXE`) also compares each module's
+object code, data and relocations against the original image, one module at a time.
+These were last run on the sources of this branch, with the Turbo C 2.0 and MASM 3.0 provided
+for the project.
+
+## U.EXE decompiled
 
 `SRC_U/` is the decompilation of `U.EXE`, the other big program of the game: the main menu,
 the introduction, the gypsy's character creation, the transfer of a character from Ultima IV
