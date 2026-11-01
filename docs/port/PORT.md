@@ -2,7 +2,7 @@
 
 The game's own C compiled for Windows and Linux on SDL2: `GAME.EXE`'s (`SRC/`) and `U.EXE`'s
 (`SRC_U/`: the title, the main menu, the introduction, the gypsy's character creation, the
-transfer of a character), the same files that still build byte-identical programs for DOS,
+transfer of a character) and `END.EXE`'s (`SRC_END/`: the ending), the same files that still build byte-identical programs for DOS,
 with the DOS pieces they need rewritten in C under `port/`: the OSI assembly libraries,
 the MCGA graphics drivers, the AdLib music driver, DOS files and memory. On top: a settings
 screen over the game (F11) and a recording of every session that replays exactly.
@@ -68,6 +68,10 @@ usual GOG folders.
   goes to the game. With the setting "Main menu at start" off (or `--game`), the port goes
   straight to the game when the saved game has a character. A saved game without one
   always starts with the menu, as `GAME.EXE` sends you back there in DOS.
+- **The ending**: when the lenses are placed on the Codex, `GAME.EXE` runs `END.EXE` with
+  the time spent in Britannia; the port plays it in its place (the kings and the lenses,
+  the Codex among the stars, the sixteen pages of the text, the congratulations), and
+  ends there as DOS did. `--ending Y,M,D` plays it on its own.
   To transfer a character, put Ultima IV's `PARTY.SAV` or Ultima V's `SAVED.GAM` in the
   home folder and choose drive C (the port's only drive).
 - **Music**: the AdLib music, in the menu and the introduction and in the game
@@ -116,6 +120,7 @@ recording made on Windows replays identically on Linux and the other way round.
     --scale N, --fullscreen, --no-aspect, --no-integer, --no-audio
     --menu, --game      start with the main menu (U.EXE), or with the game
     --new-avatar SPEC   make the character without the gypsy (tests): NAME[,M|F[,PORTRAIT[,VIRTUE]]]
+    --ending Y,M,D      play the ending (END.EXE), as after Y years, M months and D days
     --screenshot FILE   write the screen as a BMP when the session ends (tests)
     --run-ms N          end the session after N ms (tests)
     --keys SCRIPT       type keys at given times (tests): "1500:up 2000:a 2500:^s"
@@ -146,13 +151,19 @@ recording made on Windows replays identically on Linux and the other way round.
   (`docs/port/U_OSILIB.md`), `urun.c` the rest (LoadZFile, the DOS handlers, the code its
   noise effects read). `U.EXE`'s exec of `GAME.EXE` goes on with the game in the same
   process; `GAME.EXE`'s exec of `ULTIMA6.EXE` restarts the port with the menu.
+- `port/end/`: `END.EXE` in the port, the same way: its C (`SRC_END/`) with its names
+  renamed `E_*` (`eport.h`, and `erename.h`, `eprot.h`, `ebss.c` from
+  `port/tools/gen_u.py --prog end`). It links the same OSI library, LoadZFile and graphics
+  driver as `U.EXE`, so it uses their ports in `port/u/` (the library's names stay `U_*`);
+  `lib/stars.c` is its starfield (`stars.asm`) in C, `erun.c` runs it. `GAME.EXE`'s exec of
+  `END.EXE` runs it in the same process, after the session (the ending is not recorded).
 - `port/sys/adlib.c`: the AdLib driver U6ADLIB.DRV in C, run at 60 Hz in the audio
   callback, through Nuked OPL3 (`port/third_party/nuked-opl3`, LGPL 2.1).
 - `port/replay/`: the recording format; `port/ui/`: the settings screen, the settings
   file; `port/platform/`: `plat.h` and its SDL2 backend.
 - Not ported: the other music drivers (Roland, CMS, Tandy, ...: the port plays AdLib), the
-  graphics modes other than VGA, `END.EXE` (the endgame). The part of the session in
-  `U.EXE` is not recorded; the recording starts with the game.
+  graphics modes other than VGA. The parts in `U.EXE` and `END.EXE` are not recorded; the
+  recording is the game's.
 
 ## Tests
 

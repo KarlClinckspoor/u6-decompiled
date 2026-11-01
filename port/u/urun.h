@@ -8,4 +8,8 @@
  * quits, or does not return (U's execl of GAME.EXE goes through dosint's exec handler) */
 int u_run(int argc, char **argv);
 
+/* MCGADRV.BIN's mode set (entry 0): the screen is A000:0000 of the arena (END.EXE uses it
+ * too) */
+void u_mode_set(void);
+
 #endif

@@ -30,8 +30,10 @@ extern StarsCGA();
 cycles the colours 16..31 by one; then the stars move (the routines of stars.asm return
 straight to the timer handler, over this function's popf)*/
 /*C_02AE_0001*/EndTick() {
+#ifdef __TURBOC__
 	asm pushf
 	asm cli
+#endif
 	if(videoMode == 0x13) {
 		if((cycleOdd = !cycleOdd) != 0 && scene < 9) {
 			VID_waitRetrace();
@@ -47,14 +49,18 @@ straight to the timer handler, over this function's popf)*/
 		StarsMCGA();
 	} else if(videoMode == 0xd) {
 		egaPage = screen.segment ^ 0x200;/*the page not shown*/
+#ifdef __TURBOC__
 		asm mov es,DGROUP:egaPage/*(DGROUP: MASM takes the extrn Turbo C declares at the end for a _BSS-relative one)*/
+#endif
 		StarsEGA();
 	} else if(videoMode == 9) {
 		StarsTandy();
 	} else {
 		StarsCGA();
 	}
+#ifdef __TURBOC__
 	asm popf
+#endif
 }
 
 /*the segment of the graphic driver (for the OSI library's entries)*/

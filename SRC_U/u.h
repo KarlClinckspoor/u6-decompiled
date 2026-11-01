@@ -98,7 +98,11 @@ extern union tMus musDrv;
 #endif
 
 #ifndef __TURBOC__
+#ifdef PORT_END
+#include "eprot.h"/*END.EXE's (SRC_END uses this header)*/
+#else
 #include "uprot.h"/*the port: a prototype for every function (port/tools/gen_u.py)*/
+#endif
 #endif
 
 #endif

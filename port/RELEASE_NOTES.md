@@ -1,8 +1,11 @@
-Beta of the native Windows/Linux port of Ultima VI, now with the original introduction, main menu and character creation, and the AdLib music. It runs the decompiled `GAME.EXE` and `U.EXE` sources on SDL2.
+Beta of the native Windows/Linux port of Ultima VI, now with the ending. It runs the decompiled `GAME.EXE`, `U.EXE` and `END.EXE` sources on SDL2.
 
 You need your own copy of Ultima VI (the GOG version works). The port reads the game's files from that folder and never writes there. Start it with `--data <game folder>` once and it remembers the folder. On Windows it also offers a folder picker if it can't find the game.
 
 **New in this release**
+- `END.EXE`, decompiled: the ending. When the lenses are placed on the Codex, the port plays it as DOS did: Lord British and King Draxinusom, the lenses, the Codex among the stars, the text, and the congratulations with the time you spent in Britannia. `--ending Y,M,D` plays it on its own.
+
+**In 0.1 beta**
 - `U.EXE`, decompiled: Lord British's title, the bedroom introduction, the main menu, the gypsy who asks her questions and pours the vials, the transfer of an Ultima IV or V character, the acknowledgements, and the moongate into Britannia. It replaces the port's own stand-in character screen.
 - Music: the AdLib music in the menu, the introduction and the game, through an emulated OPL2 (Nuked OPL3). The driver sends the sound chip the same notes, at the same times, as the original running in DOSBox. Music on/off and its volume are in the settings (F11).
 - "Main menu at start" setting (on by default; `--game` skips it when the saved game has a character).
@@ -14,7 +17,7 @@ You need your own copy of Ultima VI (the GOG version works). The port reads the 
 
 **Known limits**
 - This is a beta: please report anything that plays or looks different from DOS.
-- Not ported yet: the endgame sequence (`END.EXE`), sound cards other than the AdLib, video modes other than VGA.
+- Not ported: sound cards other than the AdLib, video modes other than VGA.
 
 **Downloads**
 - `u6port-windows-x64.zip`: `u6.exe` with `SDL2.dll`. Unzip and run `u6.exe`.

@@ -81,11 +81,36 @@ else()
 	target_compile_options(u6u PRIVATE -w -fpermissive)
 endif()
 
+# ---- END.EXE's C (the endgame), the same way: its names are renamed E_* (port/end/eport.h),
+# the OSI library's U_* (it shares U's port of the library) ----
+set(E_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../SRC_END)
+file(GLOB E_C ${E_SRC}/*.c ${CMAKE_CURRENT_SOURCE_DIR}/end/lib/*.c)
+add_library(u6end OBJECT ${E_C})
+target_include_directories(u6end PRIVATE ${E_SRC} ${U_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/end ${CMAKE_CURRENT_SOURCE_DIR}/u
+	${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/sys ${CMAKE_CURRENT_SOURCE_DIR}/platform)
+target_compile_definitions(u6end PRIVATE PORT_END)
+foreach(f ${E_C})
+	get_filename_component(n ${f} NAME_WE)
+	set_property(SOURCE ${f} APPEND PROPERTY COMPILE_DEFINITIONS PORT_ETU_${n})
+endforeach()
+target_compile_options(u6end PRIVATE
+	-std=gnu89 -fsigned-char -fwrapv -fno-strict-aliasing
+	"SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/include/compat.h"
+	"SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/end/eport.h"
+	-Wno-everything)
+if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+	target_compile_options(u6end PRIVATE
+		-Wno-error=int-conversion -Wno-error=return-type -Wno-error=implicit-function-declaration
+		-Wno-error=implicit-int -Wno-error=incompatible-function-pointer-types)
+else()
+	target_compile_options(u6end PRIVATE -w -fpermissive)
+endif()
+
 # ---- the port ----
 file(GLOB PORT_C
-	sys/*.c gfx/*.c replay/*.c ui/*.c u/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c
+	sys/*.c gfx/*.c replay/*.c ui/*.c u/*.c end/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c
 	third_party/nuked-opl3/opl3.c)
-add_executable(u6 ${PORT_C} $<TARGET_OBJECTS:u6game> $<TARGET_OBJECTS:u6u>)
+add_executable(u6 ${PORT_C} $<TARGET_OBJECTS:u6game> $<TARGET_OBJECTS:u6u> $<TARGET_OBJECTS:u6end>)
 target_include_directories(u6 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/platform)
 target_compile_options(u6 PRIVATE -fsigned-char -fwrapv -fno-strict-aliasing)
 target_link_libraries(u6 PRIVATE ${SDL2_TARGET} m)

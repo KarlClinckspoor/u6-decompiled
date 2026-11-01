@@ -7,7 +7,7 @@ on:
   push:
     tags: ['port-v*']
     branches: [portable]
-    paths: ['SRC/**', 'SRC_U/**', 'port/**', '.github/workflows/port-release.yml']
+    paths: ['SRC/**', 'SRC_U/**', 'SRC_END/**', 'port/**', '.github/workflows/port-release.yml']
   workflow_dispatch:
     inputs:
       release_tag:

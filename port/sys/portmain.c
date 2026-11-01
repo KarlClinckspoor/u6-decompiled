@@ -20,6 +20,7 @@
 #include "../gfx/mcga.h"
 #include "../gfx/vgadac.h"
 #include "../u/urun.h"
+#include "../end/erun.h"
 #include "adlib.h"
 
 #include <setjmp.h>
@@ -94,16 +95,35 @@ static int same_name(const char *path, const char *name)
 	return !*b && !*name;
 }
 
-/* GAME.EXE's execs: ULTIMA6.EXE when the saved game has no character (the port starts
- * again with U.EXE's menu); END.EXE, the endgame, is not ported */
-static void on_exec(const char *path, int argc, const char *const *argv)
+/* END.EXE's execs: none; it exits */
+static void on_exec_end(const char *path, int argc, const char *const *argv)
 {
 	(void)argc;
 	(void)argv;
+	plat_log("END.EXE asked to run %s, which is not part of the port: the session ends", path);
+	port_exit(0);
+}
+
+/* GAME.EXE's execs: ULTIMA6.EXE when the saved game has no character (the port starts
+ * again with U.EXE's menu); END.EXE, the endgame (end.exe <config> <years> <months>
+ * <days>), which the port runs in place of the game (a replay stops there: the ending is
+ * not recorded) */
+static void on_exec(const char *path, int argc, const char *const *argv)
+{
 	if (same_name(path, "ultima6.exe") && rp_mode != RP_REPLAY) {
 		plat_log("the game runs ULTIMA6.EXE: back to the main menu");
 		session_end();
 		session_restart_menu();
+	}
+	if (same_name(path, "end.exe") && rp_mode != RP_REPLAY) {
+		plat_log("the game runs END.EXE: the ending");
+		session_end();
+		MUSDRV_9();
+		plat_speaker(0);
+		dosmem_init();
+		dos_set_exec_handler(on_exec_end);
+		e_run(argc, (char **)argv);
+		port_exit(0);	/* END's main returned */
 	}
 	plat_log("the game asked to run %s, which is not part of the port: the session ends", path);
 	port_exit(0);
@@ -260,12 +280,14 @@ static void usage(void)
 		"                      character creation), or with the game (default: the setting)\n"
 		"  --new-avatar SPEC   when the saved game has no character yet, make one without\n"
 		"                      the gypsy: NAME[,M|F[,PORTRAIT 1-6[,VIRTUE 1-8]]] (tests)\n"
+		"  --ending Y,M,D      play the ending (END.EXE), as after Y years, M months and\n"
+		"                      D days in Britannia\n"
 		"F11 opens the settings screen in the game.\n");
 }
 
 int main(int argc, char **argv)
 {
-	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0;
+	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0, *ending = 0;
 	int menu = -1;
 	int recording = -1, speed = -1, audio = 1, settings_now = 0, i;
 	int scale = 0, fullscreen = -1, aspect = -1, integer = -1, first_run;
@@ -295,6 +317,7 @@ int main(int argc, char **argv)
 		else if (!strcmp(a, "--new-avatar")) new_avatar = ARG;
 		else if (!strcmp(a, "--menu")) menu = 1;
 		else if (!strcmp(a, "--game")) menu = 0;
+		else if (!strcmp(a, "--ending")) ending = ARG;
 		else if (!strcmp(a, "--keys")) key_script = ARG;
 		else if (!strcmp(a, "--run-ms")) run_ms = (uint32_t)atol(ARG);
 		else if (!strcmp(a, "--help") || !strcmp(a, "-h")) { usage(); return 0; }
@@ -376,6 +399,30 @@ int main(int argc, char **argv)
 		overlay_run_modal();
 
 	adlib_set_volume(settings.music ? settings.music_volume : 0);
+
+	/* --ending: END.EXE alone, with the arguments GAME.EXE gives it */
+	if (ending && !replay) {
+		static char y[8], m[8], d[8];
+		static char cfgstr[] = "MA";	/* mouse, AdLib (e_run adds VGA) */
+		char *eargv[6];
+		int ey = 0, em = 0, ed = 0;
+		sscanf(ending, "%d,%d,%d", &ey, &em, &ed);
+		snprintf(y, sizeof y, "%d", ey);
+		snprintf(m, sizeof m, "%d", em);
+		snprintf(d, sizeof d, "%d", ed);
+		eargv[0] = "END.EXE";
+		eargv[1] = cfgstr;
+		eargv[2] = y;
+		eargv[3] = m;
+		eargv[4] = d;
+		eargv[5] = 0;
+		dosfs_init(settings.data, home);
+		dosmem_init();
+		dos_set_exec_handler(on_exec_end);
+		dos_exit_hook = port_exit;
+		e_run(5, eargv);
+		port_exit(0);
+	}
 
 	/* U.EXE's part (ULTIMA6.EXE runs it first): the title, the main menu, the introduction
 	 * and the gypsy; "Journey onward" (or a new character) goes on with GAME.EXE below. It

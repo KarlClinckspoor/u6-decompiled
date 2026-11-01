@@ -110,3 +110,11 @@ the original, header and relocation table included:
     python3 tools/u/ubuild.py
 
 See [SRC_U/DECOMP.md](SRC_U/DECOMP.md) for how it is put together and what it needs.
+
+`SRC_END/` is the decompilation of `END.EXE`, the ending (the lenses, the Codex, the stars,
+the final text). It rebuilds an `END.EXE` identical to the original, sharing `SRC_U`'s OSI
+library:
+
+    U6_PROG=end python3 tools/u/ubuild.py
+
+See [SRC_END/DECOMP.md](SRC_END/DECOMP.md).
