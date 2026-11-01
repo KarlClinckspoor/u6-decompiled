@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Build U.EXE from SRC_U/ with the original tools in a headless DOSBox, and compare it
-with the original.
+"""Build U.EXE from SRC_U/ (or END.EXE from SRC_END/, with U6_PROG=end) with the original
+tools in a headless DOSBox, and compare it with the original.
 
-    python3 tools/u/ubuild.py [--keep DIR] [--log]
+    [U6_PROG=end] python3 tools/u/ubuild.py [--keep DIR] [--log]
 
-SRC_U/u.lnk lists the objects in link order (after C0M); SRC_U/OSILIB/osilib.lst lists
+SRC_U/u.lnk (SRC_END/end.lnk) lists the objects in link order (after C0M: a module is
+taken from the program's folder, else from SRC_U, as END.EXE shares lzw.asm);
+SRC_U/OSILIB/osilib.lst lists
 the library modules (their sources in SRC_U/OSILIB) in the order they are put into
 OSILIB.LIB, which is linked after Turbo C's CM.LIB, as the original was. C files are
 compiled with `tcc -mm -c -O -G`, assembly with MASM 3.0 /Mx.
@@ -19,10 +21,14 @@ sys.path.insert(0, HERE)
 import tcc  # noqa: E402
 import omf  # noqa: E402
 import tasmorder  # noqa: E402
+import prog  # noqa: E402
 from ucmp import find_uexe  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(HERE))
-SRC = os.path.join(ROOT, 'SRC_U')
+SRC = prog.SRC_U          # the OSI library and the shared headers
+PSRC = prog.SRC           # the program's own modules
+EXE = prog.EXE
+BASE = EXE.split('.')[0]
 FLAGS = '-mm -c -O -G'
 LIBFLAGS = '-mm -c -G'   # the library's C was compiled without -O
 CM_REPLACED = ['CLREOL', 'GOTOXY']
@@ -41,7 +47,7 @@ def main():
     tools = os.environ.get('U6_DOSTOOLS') or next(
         (d for d in (os.path.join(ROOT, 'tools'), '/home/claude/dostools')
          if os.path.isdir(os.path.join(d, 'turboc20'))))
-    objs = open(os.path.join(SRC, 'u.lnk')).read().split()
+    objs = open(os.path.join(PSRC, prog.P['lnk'])).read().split()
     libmods = open(os.path.join(SRC, 'OSILIB', 'osilib.lst')).read().split()
     with tempfile.TemporaryDirectory() as tmp:
         c = os.path.join(tmp, 'c')
@@ -63,6 +69,10 @@ def main():
         for fn in os.listdir(os.path.join(SRC, 'OSILIB')):
             if fn.lower().endswith(('.c', '.h', '.asm', '.inc')):
                 crlf(os.path.join(SRC, 'OSILIB', fn), os.path.join(s, 'L', fn.upper()))
+        if PSRC != SRC:  # the program's own sources (they take precedence)
+            for fn in os.listdir(PSRC):
+                if fn.lower().endswith(('.c', '.h', '.asm', '.inc')):
+                    crlf(os.path.join(PSRC, fn), os.path.join(s, fn.upper()))
         for fn in os.listdir(SRC):  # headers the library's C may include
             if fn.lower().endswith('.h'):
                 crlf(os.path.join(SRC, fn), os.path.join(s, 'L', fn.upper()))
@@ -106,16 +116,17 @@ def main():
         lines.append('cd \\S')
         for o in objs:
             base = o.upper()
-            if os.path.exists(os.path.join(SRC, o + '.c')) and tcc.has_inline_asm(os.path.join(SRC, o + '.c')):
+            src = prog.source(o)
+            if src and src.lower().endswith('.c') and tcc.has_inline_asm(src):
                 lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s -S %s.C >> \\BUILD.LOG' % (FLAGS.replace('-c ', ''), base))
                 lines.append('\\TOOLS\\MASM /Mx %s.ASM; >> \\BUILD.LOG' % base)
-            elif os.path.exists(os.path.join(SRC, o + '.c')):
+            elif src and src.lower().endswith('.c'):
                 lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s %s.C >> \\BUILD.LOG' % (FLAGS, base))
             else:
                 lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % base)
         open(os.path.join(s, 'U.RSP'), 'w', newline='').write(
             '\\TOOLS\\TURBOC20\\LIB\\C0M ' + ' '.join(o.upper() for o in objs) +
-            ',U.EXE,U.MAP,L\\CM\\CMU L\\OSILIB\r\n')
+            ',%s,%s.MAP,%s\r\n' % (EXE, BASE, prog.P['libs']))
         link.append('cd \\S')
         link.append('TLINK /m @U.RSP >> \\BUILD.LOG')
 
@@ -136,9 +147,9 @@ def main():
                 if os.path.exists(os.path.join(SRC, 'OSILIB', m + e)):
                     tasmorder.fix(os.path.join(SRC, 'OSILIB', m + e), os.path.join(s, 'L', m.upper() + '.OBJ'))
         for o in objs:
-            for e in ('.ASM', '.asm'):
-                if os.path.exists(os.path.join(SRC, o + e)):
-                    tasmorder.fix(os.path.join(SRC, o + e), os.path.join(s, o.upper() + '.OBJ'))
+            src = prog.source(o)
+            if src and src.lower().endswith('.asm'):
+                tasmorder.fix(src, os.path.join(s, o.upper() + '.OBJ'))
         run(link)
         log = open(os.path.join(c, 'BUILD.LOG'), encoding='latin-1').read() if os.path.exists(os.path.join(c, 'BUILD.LOG')) else ''
         if a.log:
@@ -148,13 +159,13 @@ def main():
                 print(l)
         if a.keep:
             shutil.copytree(s, a.keep, dirs_exist_ok=True)
-        built = os.path.join(s, 'U.EXE')
+        built = os.path.join(s, EXE)
         if not os.path.exists(built):
-            sys.exit('no U.EXE was built')
+            sys.exit('no %s was built' % EXE)
         new = open(built, 'rb').read()
-        mapf = open(os.path.join(s, 'U.MAP'), encoding='latin-1').read() if os.path.exists(os.path.join(s, 'U.MAP')) else ''
+        mapf = open(os.path.join(s, BASE + '.MAP'), encoding='latin-1').read() if os.path.exists(os.path.join(s, BASE + '.MAP')) else ''
     old = open(find_uexe(), 'rb').read()
-    print('U.EXE %d bytes sha1 %s; original %d bytes sha1 %s' % (
+    print(EXE + ' %d bytes sha1 %s; original %d bytes sha1 %s' % (
         len(new), hashlib.sha1(new).hexdigest(), len(old), hashlib.sha1(old).hexdigest()))
     if new == old:
         print('identical to the original')

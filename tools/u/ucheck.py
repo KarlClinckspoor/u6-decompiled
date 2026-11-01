@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Check every finished module of SRC_U against U.EXE (tools/u/ucmp.py), in parallel.
+"""Check every finished module of SRC_U against U.EXE (tools/u/ucmp.py), in parallel
+(SRC_END against END.EXE with U6_PROG=end).
 
-    python3 tools/u/ucheck.py [MODULE ...]
+    [U6_PROG=end] python3 tools/u/ucheck.py [MODULE ...]
 """
 import os, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -9,8 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 
+sys.path.insert(0, HERE)
+import prog  # noqa: E402
+
 # file, frame, --at, code length, _DATA range
-MODULES = [
+MODULES_U = [
     ('main.c', '00E1', '6', '181A', ('0194', '03CA')),
     ('transfer.c', '0263', '0', '1A36', ('03CA', '0692')),
     ('chargen.c', '0406', '6', '2700', ('0692', '0C90')),
@@ -22,12 +26,17 @@ MODULES = [
     ('criterr.asm', '0F15', '6', '38', ('410E', '4110')),
     ('lzw.asm', '0F18', 'E', '365', ('4110', '413E')),
 ]
+MODULES_END = [
+    ('lzw.asm', '0308', 'A', '365', ('0E8C', '0EBA')),
+]
+MODULES = MODULES_END if prog.NAME == 'end' else MODULES_U
 
 
 def check(m):
     f, seg, at, ln, (d0, d1) = m
-    r = subprocess.run([sys.executable, os.path.join(HERE, 'ucmp.py'), os.path.join(ROOT, 'SRC_U', f), '--seg', seg,
-                        '--at', at, '--length', ln, '--data-range', d0, d1, '--include', os.path.join(ROOT, 'SRC_U')],
+    r = subprocess.run([sys.executable, os.path.join(HERE, 'ucmp.py'), prog.source(f.rsplit('.', 1)[0]) or f, '--seg', seg,
+                        '--at', at, '--length', ln, '--data-range', d0, d1, '--include', prog.SRC,
+                        '--include', prog.SRC_U],
                        capture_output=True, text=True)
     lines = [l for l in r.stdout.splitlines() if not l.startswith('Warning ')]
     return f, r.returncode == 0, lines

@@ -17,7 +17,9 @@ cases them and TLINK ignores case).
 import collections, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SRC = os.path.join(ROOT, 'SRC_U')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import prog  # noqa: E402
+SRC = prog.SRC
 PASCAL = {(0x0000, 0x09F2): 'OSI_callback', (0x0000, 0x09F3): 'OSI_open', (0x0000, 0x0A32): 'OSI_close',
           (0x0000, 0x0A66): 'OSI_create', (0x0000, 0x0AA6): 'OSI_delete', (0x0000, 0x0AE4): 'OSI_read',
           (0x0000, 0x0BCA): 'OSI_write', (0x0000, 0x0C8F): 'OSI_rename', (0x0000, 0x0CD4): 'OSI_copy',
@@ -26,7 +28,9 @@ PASCAL = {(0x0000, 0x09F2): 'OSI_callback', (0x0000, 0x09F3): 'OSI_open', (0x000
 
 def files():
     out = []
-    for d in (SRC, os.path.join(SRC, 'OSILIB')):
+    # (the OSI library's address comments are U.EXE's: END.EXE's library symbols come
+    #  from tools/u/endsyms.txt)
+    for d in (SRC,) + ((prog.OSILIB,) if prog.NAME == 'u' else ()):
         for fn in sorted(os.listdir(d)):
             if fn.lower().endswith(('.c', '.h', '.asm', '.inc')):
                 out.append(os.path.join(d, fn))
@@ -56,7 +60,7 @@ def table():
                 t[('C', int(m.group(2), 16), int(m.group(3), 16))] = (m.group(1), fn, 'asm', False)
             for m in re.finditer(r'^(\w+)\s+(?:db|dw|dd|LABEL)\b[^;\n]*;\s*D_([0-9A-F]{4})\b', s, re.M):
                 t[('D', int(m.group(2), 16))] = (m.group(1), fn, 'asm', False)
-    for (sg, o), n in PASCAL.items():
+    for (sg, o), n in (PASCAL.items() if prog.NAME == 'u' else ()):
         t[('C', sg, o)] = (n, 'OSILIB/OSI_FILE.ASM', 'pascal', False)
     return t
 

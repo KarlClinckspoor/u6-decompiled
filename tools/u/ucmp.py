@@ -28,16 +28,13 @@ sys.path.insert(0, HERE)
 import omf  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(HERE))
-DGROUP = 0x1499
-SYMS = os.path.join(HERE, 'usyms.txt')
+import prog  # noqa: E402
+DGROUP = prog.DGROUP
+SYMS = prog.SYMS
 
 
 def find_uexe():
-    for p in (os.environ.get('U6_UEXE'), os.path.join(ROOT, 'gamedata', 'U.EXE'),
-              os.path.join(ROOT, '..', 'gamedata', 'U.EXE'), '/home/claude/gamedata/U.EXE'):
-        if p and os.path.exists(p):
-            return p
-    sys.exit('U.EXE not found: set U6_UEXE')
+    return prog.find_exe()
 
 
 def load_image(path):
