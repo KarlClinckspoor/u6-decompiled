@@ -100,6 +100,22 @@ exactly. The DOS build stays byte-identical. See [docs/port/PORT.md](docs/port/P
 
 ---
 
+## GAME.EXE identical to the original
+
+`python3 tools/dosbuild.py` builds `GAME.EXE` from `SRC/` with Turbo C 2.0 and MASM 3.0 in a
+headless DOSBox (the tools go in `tools/turboc20` and `tools/masm300`, or `U6_DOSTOOLS`). The
+original `GAME.EXE` is EXEPACKed: when it is in `gamedata/` (or `U6_GAMEEXE`), the script
+unpacks it (`tools/exepack.py`) and compares what the linker produces, the load image, the
+relocation table, CS:IP and SS:SP. They are identical; the build's SHA-1 before EXEPACK is
+`5129af96d4ba63b7f84c663e14e3a3b90fd524a3` (`tools/game.sha1`).
+
+The last differences were not in the C: Origin assembled `OSI_FILE.ASM` and `MOUSE.ASM` with
+TASM, which encodes an AND with a small constant in the short sign-extended form (`83 /4`),
+where MASM 3.0 always writes `81 /4`. Those six instructions are written as `db` (with the
+instruction in a comment), and MASM 3.0 now gives TASM's bytes.
+
+---
+
 ## U.EXE decompiled (branch `uexe`)
 
 `SRC_U/` is the decompilation of `U.EXE`, the other big program of the game: the main menu,

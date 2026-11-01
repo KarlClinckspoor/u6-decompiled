@@ -168,9 +168,13 @@ endif
 	MOV	D_2FBA,CX	;store pos x
 	MOV	D_2FBC,DX	;store pos y
 	MOV	D_2FBE,BX
-	AND	D_2FBE,1	;store L button status
+	db	83h,26h	;AND D_2FBE,1 (TASM's sign-extended imm8; MASM 3.0 writes 81h)
+	dw	OFFSET DGROUP:D_2FBE
+	db	1	;store L button status
 	MOV	D_2FC0,BX
-	AND	D_2FC0,2	;store R button status
+	db	83h,26h	;AND D_2FC0,2 (TASM's sign-extended imm8; MASM 3.0 writes 81h)
+	dw	OFFSET DGROUP:D_2FC0
+	db	2	;store R button status
 	;--
 	MOV	SI,_pMouse
 	MOV	[SI].tMouse.posX,CX
@@ -335,7 +339,7 @@ C_0208:	;--
 	ADD	AX,ES:[BX+DI]
 	ADC	DX,ES:[BX+DI+02]
 	MOV	DI,AX
-	AND	DI,0Fh
+	db	83h,0E7h,0Fh	;AND DI,0Fh (TASM's sign-extended imm8; MASM 3.0 writes 81h)
 	SHR	DX,1
 	RCR	AX,1
 	SHR	DX,1
@@ -427,7 +431,7 @@ ProcStart	_MOUSE_02CF	;332B:02CF
 	ADD	AX,ES:[BX+DI]
 	ADC	DX,ES:[BX+DI+02]
 	MOV	DI,AX
-	AND	DI,0Fh
+	db	83h,0E7h,0Fh	;AND DI,0Fh (TASM's sign-extended imm8; MASM 3.0 writes 81h)
 	SHR	DX,1
 	RCR	AX,1
 	SHR	DX,1

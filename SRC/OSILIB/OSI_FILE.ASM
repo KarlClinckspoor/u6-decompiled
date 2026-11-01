@@ -341,7 +341,7 @@ OSI_copy	PROC FAR
 	ROL	AX,CL
 	MOV	[BP-06],AX
 	;--
-	AND	WORD PTR [BP-06],NOT 0Fh
+	db	83h,66h,0FAh,0F0h	;AND WORD PTR [BP-06],NOT 0Fh (TASM's sign-extended imm8; MASM 3.0 writes 81h)
 	AND	AX,0Fh
 	MOV	[BP-04],AX
 	;--
@@ -474,7 +474,7 @@ OSI_memory	PROC FAR
 	ROL	AX,1
 	MOV	DX,AX
 	AND	AX,NOT 0Fh
-	AND	DX,0Fh
+	db	83h,0E2h,0Fh	;AND DX,0Fh (TASM's sign-extended imm8; MASM 3.0 writes 81h)
 	JMP	SHORT C_0628
 C_0624:	;--
 	XOR	AX,AX
