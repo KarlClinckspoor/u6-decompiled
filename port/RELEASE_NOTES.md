@@ -14,8 +14,7 @@ You need your own copy of Ultima VI (the GOG version works). The port reads the 
 
 **Known limits**
 - This is a beta: please report anything that plays or looks different from DOS.
-- The endgame sequence (`END.EXE`).
-- Sound cards other than the AdLib, and video modes other than VGA.
+- Not ported yet: the endgame sequence (`END.EXE`), sound cards other than the AdLib, video modes other than VGA.
 
 **Downloads**
 - `u6port-windows-x64.zip`: `u6.exe` with `SDL2.dll`. Unzip and run `u6.exe`.
