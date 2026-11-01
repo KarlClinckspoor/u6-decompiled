@@ -27,6 +27,8 @@ MODULES_U = [
     ('lzw.asm', '0F18', 'E', '365', ('4110', '413E')),
 ]
 MODULES_END = [
+    ('tick.c', '02AE', '1', '13B', ('0E5E', '0E72')),
+    ('stars.asm', '02C1', 'C', '46D', ('0E72', '0E8C')),
     ('lzw.asm', '0308', 'A', '365', ('0E8C', '0EBA')),
 ]
 MODULES = MODULES_END if prog.NAME == 'end' else MODULES_U
