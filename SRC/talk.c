@@ -18,12 +18,12 @@
 #include "u6.h"
 
 /*start a conversation between party member #partyId and NPC objNum*/
-/*C_16E1_0007*/TALK_initTalk(int partyId, int objNum) {
-	int i;
+/*C_16E1_0007*/TALK_initTalk(int16 partyId, int16 objNum) {
+	int16 i;
 
 	/*set strings $*/
 	VarStr['G' - 0x37] = AvatarFemale?/*0920*/"milady":/*0927*/"milord";/*[g]reetings*/
-	VarStr['N' - 0x37] = /*092E*/"lots of space for any possible NPC name";/*[n]ame of NPC*/
+	VarStr['N' - 0x37] = WRITABLE_STR(/*092E*/"lots of space for any possible NPC name");/*[n]ame of NPC*/
 	VarStr['P' - 0x37] = Names[partyId];/*name of PC*/
 	VarStr['T' - 0x37] =
 		(Time_H < 12)?/*0956*/"morning":
@@ -72,8 +72,8 @@ NPC object numbers:
 ;4 - iolo
 ;5 - lord british
 ;...*/
-/*C_16E1_015C*/TALK_talkTo(int partyId, int objNum, int showName) {
-	int objTyp;
+/*C_16E1_015C*/TALK_talkTo(int16 partyId, int16 objNum, int16 showName) {
+	int16 objTyp;
 
 	objTyp = GetType(objNum);
 	if(objTyp == OBJ_HORSE || objTyp == OBJ_MOUNTED_HORSE)

@@ -21,23 +21,23 @@
 */
 #include "u6.h"
 
-/*05CA*/int MapCoordMask = 0x3FF;/*coordinate wrap mask: 0x3ff on surface, 0xff underground*/
-/*05CC*/int ChunksFile = -1;/*file "chunks" handler*/
-/*05CE*/int MapFile = -1;/*file "map" handler*/
-/*05D0*/int LoadedMapZ = -1;/*level (z) currently loaded in ChunkIndexBuf*/
-/*05D2*/int LoadedSuperChunks[4] = {-1, -1, -1, -1};/*surface: ids of the 2x2 superchunks loaded in ChunkIndexBuf (top-left, top-right, bottom-left, bottom-right)*/
-/*05DA*/int BuiltAreaX = -1;/*AreaX of the AreaTiles currently built*/
-/*05DC*/int BuiltAreaY = -1;/*AreaY of the AreaTiles currently built*/
-/*05DE*/int BuiltAreaZ = -1;/*MapZ of the AreaTiles currently built*/
+/*05CA*/int16 MapCoordMask = 0x3FF;/*coordinate wrap mask: 0x3ff on surface, 0xff underground*/
+/*05CC*/int16 ChunksFile = -1;/*file "chunks" handler*/
+/*05CE*/int16 MapFile = -1;/*file "map" handler*/
+/*05D0*/int16 LoadedMapZ = -1;/*level (z) currently loaded in ChunkIndexBuf*/
+/*05D2*/int16 LoadedSuperChunks[4] = {-1, -1, -1, -1};/*surface: ids of the 2x2 superchunks loaded in ChunkIndexBuf (top-left, top-right, bottom-left, bottom-right)*/
+/*05DA*/int16 BuiltAreaX = -1;/*AreaX of the AreaTiles currently built*/
+/*05DC*/int16 BuiltAreaY = -1;/*AreaY of the AreaTiles currently built*/
+/*05DE*/int16 BuiltAreaZ = -1;/*MapZ of the AreaTiles currently built*/
 
 /*superchunk id = row * 8 + column (each superchunk is 128x128 tiles)*/
 #define MK_MAP_ID(x,y) (((x) >> 7) + (((y) >> 4) & 0x38))
 
 /*make sure chunk #chunkIdx is in the chunk cache (load it over the
   least recently used entry if needed); returns its cache slot*/
-static /*C_101C_000F*/cacheChunk(int chunkIdx) {
-	int i, cacheIdx;
-	int oldestIdx;
+static /*C_101C_000F*/cacheChunk(int16 chunkIdx) {
+	int16 i, cacheIdx;
+	int16 oldestIdx;
 
 	if(ChunksFile < 0)
 		return 0;
@@ -57,7 +57,7 @@ static /*C_101C_000F*/cacheChunk(int chunkIdx) {
 		cacheIdx = oldestIdx;
 		ChunkCacheIdx[cacheIdx] = chunkIdx;
 		DISK_confirm(DISK_MAP);
-		OSI_read(ChunksFile, (long)chunkIdx << 6, 0x40, ChunkCache[cacheIdx]);
+		OSI_read(ChunksFile, (int32)chunkIdx << 6, 0x40, ChunkCache[cacheIdx]);
 	}
 	/*update chunks "age"*/
 	for(i = 0; i < CHUNKS_CACHE_MAX; i ++) {
@@ -97,10 +97,10 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 /*load into ChunkIndexBuf the chunk indexes needed for (x, y, z):
   the whole level if z != 0, else a 2x2 window of superchunks
   containing (x, y); the window is only moved when (x, y) leaves it*/
-/*C_101C_00D7*/MAP_LoadChunkIndexes(int x, int y, int z) {
-	int mapId, i;
-	int mustLoad, colDiff, rowDiff, bufOfs;
-	long fileOfs;
+/*C_101C_00D7*/MAP_LoadChunkIndexes(int16 x, int16 y, int16 z) {
+	int16 mapId, i;
+	int16 mustLoad, colDiff, rowDiff, bufOfs;
+	int32 fileOfs;
 	unsigned char far *pSlot;
 
 	mustLoad = (LoadedMapZ != z);
@@ -120,7 +120,7 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 		DISK_confirm(DISK_PLAYER);
 		MapFile = OSI_open(/*05E0*/"map");
 		/*z * 0x600 + 0x5a00 = 0x6000 + (z - 1) * 0x600*/
-		OSI_read(MapFile, (long)((z + z + z) << 9) + 0x5a00, 4 * 0x180, ChunkIndexBuf);
+		OSI_read(MapFile, (int32)((z + z + z) << 9) + 0x5a00, 4 * 0x180, ChunkIndexBuf);
 		OSI_close(MapFile);
 		LoadedMapZ = z;
 		for(i = 0; i < 4; i ++)
@@ -153,7 +153,7 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 			MapFile = OSI_open(/*05E0*/"map");
 			for(i = 0; i < 4; i ++) {
 				/*superchunk id * 0x180*/
-				fileOfs = (long)LoadedSuperChunks[i] << 7; fileOfs += fileOfs << 1;
+				fileOfs = (int32)LoadedSuperChunks[i] << 7; fileOfs += fileOfs << 1;
 				/*window slot * 0x180*/
 				bufOfs = i << 7; bufOfs += bufOfs << 1;
 				pSlot = ChunkIndexBuf + bufOfs;
@@ -171,8 +171,8 @@ each, at file offset 0x6000 + (z - 1) * 0x600
   and hatch the eggs; then update the moongates and ask for a view redraw*/
 /*C_101C_0306*/MAP_BuildArea() {
 	unsigned char *pMap, *pChunk;
-	int i, j;
-	int anX, anY, cacheIdx;
+	int16 i, j;
+	int16 anX, anY, cacheIdx;
 
 	AreaX = anX = (MapX - 0x10) & 0x3f8;
 	ViewX = (MapX - anX - 5) & 0x1f;
@@ -230,7 +230,7 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 
 /*empty the chunk cache*/
 /*C_101C_052D*/MAP_InitChunkCache() {
-	int i;
+	int16 i;
 
 	for(i = 0; i < 0x10; i++) {
 		ChunkCacheIdx[i] = -1;
@@ -250,8 +250,8 @@ each, at file offset 0x6000 + (z - 1) * 0x600
   everybody off the map (z = 15), e.g. before a teleport or a level change.
   withAnimation: 0 = instant; else members walk to the leader for up to 30
   steps, with 1 the screen fades when a member disappears*/
-/*C_101C_0572*/PartyEnter(int withAnimation) {
-	int i;
+/*C_101C_0572*/PartyEnter(int16 withAnimation) {
+	int16 i;
 
 	/*dismount horses*/
 	for(i = 0; i < PartySize; i ++) {
@@ -262,11 +262,11 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 	MAP_LoadAround();
 
 	if(withAnimation) {
-		int j, allArrived;
+		int16 j, allArrived;
 		for(j = 0; j < 30; j ++) {
 			allArrived = 1;
 			for(i = 0; i < PartySize; i ++) {
-				int objNum = Party[i];
+				int16 objNum = Party[i];
 				/*wake up*/
 				if(IsAsleep(objNum))
 					ObjShapeType[objNum] = OrigShapeType[objNum];
@@ -318,8 +318,8 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 
 /*put the whole party back on the map at (x, y, z) and let the
   followers step out around the leader (5 steps)*/
-/*C_101C_077E*/PartyExit(int x, int y, int z, int withAnimation) {
-	int i;
+/*C_101C_077E*/PartyExit(int16 x, int16 y, int16 z, int16 withAnimation) {
+	int16 i;
 
 	MoveAppliesTerrain = 0;
 	for(i = 0; i < PartySize; i ++)
@@ -346,8 +346,8 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 }
 
 /*move the whole party to (x, y, z), removing the red gate it stood on*/
-/*C_101C_0828*/PartyTeleport(int x, int y, int z, int withAnimation) {
-	int gateObj;
+/*C_101C_0828*/PartyTeleport(int16 x, int16 y, int16 z, int16 withAnimation) {
+	int16 gateObj;
 
 	PartyEnter(withAnimation);
 
@@ -372,8 +372,8 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 
 /*enter dungeon/use ladder: move the party one level up or down
   through objNum (ladder, hole, dungeon entrance...)*/
-/*C_101C_089E*/PartyChangeLevel(int objNum) {
-	int z_incr;
+/*C_101C_089E*/PartyChangeLevel(int16 objNum) {
+	int16 z_incr;
 
 	if(InCombat)
 		COMBAT_breakOff();
@@ -421,7 +421,7 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 
 /*travel through a moongate to the place of moonstone #gateIdx
   (stay in place if that moonstone has no position)*/
-/*C_101C_0A3A*/GateTravel(int gateIdx/*bp06*/) {
+/*C_101C_0A3A*/GateTravel(int16 gateIdx/*bp06*/) {
 	if(InCombat)
 		COMBAT_breakOff();
 	if(MoonstonePos[gateIdx][0] || MoonstonePos[gateIdx][1] || MoonstonePos[gateIdx][2])
@@ -435,8 +435,8 @@ each, at file offset 0x6000 + (z - 1) * 0x600
   resurrect the dead party members, heal everybody and bring the party
   to Lord British's castle, then wait for the next audience hours*/
 /*C_101C_0ACC*/PartyResurrect() {
-	int i, memberObj;
-	int bodyObj;
+	int16 i, memberObj;
+	int16 bodyObj;
 
 	Active = -1;
 	for(i = 0; i < 0xe0; i ++) {
@@ -454,7 +454,7 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 						MAGIC[1] = INTEL[1];
 						ClrAilmentsProtected(1);
 						if(KARMA < 98)
-							ExpPoints[1] = ((long)ExpPoints[1] * KARMA) / 100L;
+							ExpPoints[1] = ((int32)ExpPoints[1] * KARMA) / 100L;
 					} else {
 						MoveAppliesTerrain = 0;
 						SPELL_ReviveNPC(bodyObj);
@@ -513,9 +513,9 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 
 /*12-bit index of the chunk containing tile (x, y, z)
   (loads the needed part of the map first)*/
-static /*C_101C_0CF7*/getChunkIdxAt(int x, int y, int z) {
-	int bufPos;
-	int chunkIdx, mapId, quadOfs;
+static /*C_101C_0CF7*/getChunkIdxAt(int16 x, int16 y, int16 z) {
+	int16 bufPos;
+	int16 chunkIdx, mapId, quadOfs;
 
 	x &= 0x3ff;
 	y &= 0x3ff;
@@ -527,9 +527,9 @@ static /*C_101C_0CF7*/getChunkIdxAt(int x, int y, int z) {
 		bufPos += bufPos >> 1;
 		/*odd chunk: upper 12 bits, even chunk: lower 12 bits*/
 		if(x & 8)
-			chunkIdx = *((int far *)(ChunkIndexBuf + bufPos)) >> 4;
+			chunkIdx = *((int16 far *)(ChunkIndexBuf + bufPos)) >> 4;
 		else
-			chunkIdx = *((int far *)(ChunkIndexBuf + bufPos)) & 0xfff;
+			chunkIdx = *((int16 far *)(ChunkIndexBuf + bufPos)) & 0xfff;
 	} else {
 		/*which superchunk of the 2x2 window (x 0x100 chunk entries)*/
 		mapId = MK_MAP_ID(x, y);
@@ -543,9 +543,9 @@ static /*C_101C_0CF7*/getChunkIdxAt(int x, int y, int z) {
 		bufPos += (y << 1) & 0xf0;
 		bufPos += bufPos >> 1;
 		if(x & 8)
-			chunkIdx = *((int far *)(ChunkIndexBuf + bufPos)) >> 4;
+			chunkIdx = *((int16 far *)(ChunkIndexBuf + bufPos)) >> 4;
 		else
-			chunkIdx = *((int far *)(ChunkIndexBuf + bufPos)) & 0xfff;
+			chunkIdx = *((int16 far *)(ChunkIndexBuf + bufPos)) & 0xfff;
 	}
 
 	return chunkIdx;
@@ -553,9 +553,9 @@ static /*C_101C_0CF7*/getChunkIdxAt(int x, int y, int z) {
 
 /*ground tile at (x, y, z): from AreaTiles if inside the current area,
   else from the chunks*/
-unsigned char /*C_101C_0DC9*/GetTileAtXYZ(int x, int y, int z) {
-	int cacheIdx;
-	int relX, relY;
+unsigned char /*C_101C_0DC9*/GetTileAtXYZ(int16 x, int16 y, int16 z) {
+	int16 cacheIdx;
+	int16 relX, relY;
 
 	x &= MapCoordMask;
 	y &= MapCoordMask;

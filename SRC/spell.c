@@ -266,7 +266,7 @@
 };
 
 /*object type of each reagent (bit order of REAGENT_xx)*/
-/*0D34*/int ReagType[] = {OBJ_MANDRAKE,OBJ_NIGHTSHADE,OBJ_BLACK_PEARL,OBJ_BLOOD_MOSS,OBJ_SPIDERSILK,OBJ_GARLIC,OBJ_GINSENG,OBJ_ASH};
+/*0D34*/int16 ReagType[] = {OBJ_MANDRAKE,OBJ_NIGHTSHADE,OBJ_BLACK_PEARL,OBJ_BLOOD_MOSS,OBJ_SPIDERSILK,OBJ_GARLIC,OBJ_GINSENG,OBJ_ASH};
 
 /*reagents mask (REAGENT_xx) of each spell, indexed by spell number*/
 /*0D44*/unsigned char Reagents_needed[] = {
@@ -410,7 +410,7 @@ char *AlignmentNames[] = {
 };
 
 /*tiles of the magical objects (for "detect magic", see IsMagical)*/
-/*0DF6*/int MagicalTiles[] = {
+/*0DF6*/int16 MagicalTiles[] = {
 	TIL_MAGIC_HELM,TIL_MAGIC_SHIELD,TIL_MAGIC_ARMOR,TIL_GLASS_SWORD,TIL_FORCE_FIELD,TIL_MAGIC_BOW,TIL_SPELLBOOK,TIL_SPELL,TIL_VORTEX_CUBE,TIL_MOONSTONE_0,
 	TIL_MOONSTONE_1,TIL_MOONSTONE_2,TIL_MOONSTONE_3,TIL_MOONSTONE_4,TIL_MOONSTONE_5,TIL_MOONSTONE_6,TIL_MOONSTONE_7,TIL_SNAKE_AMULET,TIL_AMULET_OF_SUBMISSION,TIL_GEM,
 	TIL_LIGHTNING_WAND,TIL_FIRE_WAND,TIL_STORM_CLOAK,TIL_RED_GATE_LEFT,TIL_RED_GATE_RIGHT,TIL_MOONGATE_LEFT,TIL_MOONGATE_RIGHT,TIL_ORB_OF_THE_MOONS,TIL_CHEST_MAGIC_LOCKED,TIL_CRYSTAL_BALL,
@@ -427,8 +427,8 @@ char *AlignmentNames[] = {
 
 /*returns 1 if the tile of object objNum is in the MagicalTiles list of magical
   tiles (78 entries), 0 otherwise ("detect magic")*/
-/*C_1944_0006*/static IsMagical(int objNum) {
-	int i, tileFrame;
+/*C_1944_0006*/static IsMagical(int16 objNum) {
+	int16 i, tileFrame;
 
 	tileFrame = TILE_FRAME(objNum);
 	for(i = 0; i < 78; i ++) {
@@ -440,7 +440,7 @@ char *AlignmentNames[] = {
 
 /*returns 0 for creature types that can not be made invisible (giant
   scorpion and above, dragon, hydra, silver serpent, slime), 1 otherwise*/
-/*C_1944_0054*/static SPELL_CanBecomeInvisible(int objTyp) {
+/*C_1944_0054*/static SPELL_CanBecomeInvisible(int16 objTyp) {
 	if(objTyp >= OBJ_GIANT_SCORPION || objTyp == OBJ_DRAGON || objTyp == OBJ_HYDRA || objTyp == OBJ_SILVER_SERPENT || objTyp == OBJ_SLIME)
 		return 0;
 	return 1;
@@ -449,16 +449,16 @@ char *AlignmentNames[] = {
 /*parameters of the casting sound for circles 0..8 (see SPELL_CastEffect):
   OSI_playWavedNote(CastSoundPitch pitch, 1, length, CastSoundStartUp start, +CastSoundStep step)
   then (CastSoundPitch, 1, length, CastSoundStartDown start, -CastSoundStep step)*/
-/*0E92*/int CastSoundPitch[] = {0x226A,0x1E96,0x1B94,0x1996,0x173E,0x15C2,0x143C,0x12D4,0x1180};
-/*0EA4*/int CastSoundStartUp[] = { 2700, 3000, 1000,  100, 5000, 4000, 2500, 1000,    1};
-/*0EB6*/int CastSoundStartDown[] = {32700,31000,37000,45000,31000,34000,36500,39000,42000};
-/*0EC8*/int CastSoundStep[] = {    3,    2,    2,    2,    1,    1,    1,    1,    1};
+/*0E92*/int16 CastSoundPitch[] = {0x226A,0x1E96,0x1B94,0x1996,0x173E,0x15C2,0x143C,0x12D4,0x1180};
+/*0EA4*/int16 CastSoundStartUp[] = { 2700, 3000, 1000,  100, 5000, 4000, 2500, 1000,    1};
+/*0EB6*/int16 CastSoundStartDown[] = {32700,31000,37000,45000,31000,34000,36500,39000,42000};
+/*0EC8*/int16 CastSoundStep[] = {    3,    2,    2,    2,    1,    1,    1,    1,    1};
 
 /*spell casting effect: for circle 0..8 flash the map area and play a
   rising then falling sweep whose pitch depends on the circle
   (CastSoundPitch/CastSoundStartUp/CastSoundStartDown/CastSoundStep); circle >= 9 just plays a short sound*/
-/*C_1944_0085*/SPELL_CastEffect(int circle) {
-	int mouseState;
+/*C_1944_0085*/SPELL_CastEffect(int16 circle) {
+	int16 mouseState;
 
 	mouseState = CON_mouseOffAt(0, 0, 311, 191);
 	if(circle < 9) {
@@ -478,7 +478,7 @@ char *AlignmentNames[] = {
 		GrInfo->xorMode = 0;
 		GrInfo->toBackBuffer = 0;
 	} else {
-		OSI_playWavedNote(0x1180, 1, (int)65000, 300, 1);
+		OSI_playWavedNote(0x1180, 1, (int16)65000, 300, 1);
 	}
 	CON_mouseOn(mouseState);
 }
@@ -486,27 +486,27 @@ char *AlignmentNames[] = {
 /*resistance roll, strength vs. strength: returns non-zero if target
   resists caster ((Str(target)/2 + 30 - Str(caster))/2 > 1d30)
   (used by objcmd.c when moving/pushing an NPC)*/
-/*C_1944_01EC*/SPELL_ResistStrVsStr(int caster, int target) {
+/*C_1944_01EC*/SPELL_ResistStrVsStr(int16 caster, int16 target) {
 	return ((GetStr(target) / 2) + 30 - GetStr(caster)) / 2 > OSI_rand(1, 30);
 }
 
 /*resistance roll, target strength vs. caster intelligence:
   returns non-zero if target resists ("poison")*/
-/*C_1944_0232*/static SPELL_ResistStrVsInt(int caster, int target) {
+/*C_1944_0232*/static SPELL_ResistStrVsInt(int16 caster, int16 target) {
 	return ((GetStr(target) / 2) + 30 - GetInt(caster)) / 2 > OSI_rand(1, 30);
 }
 
 /*resistance roll, target dexterity vs. caster intelligence:
   returns non-zero if target dodges ("magic arrow")*/
-/*C_1944_0278*/static SPELL_ResistDexVsInt(int caster, int target) {
+/*C_1944_0278*/static SPELL_ResistDexVsInt(int16 caster, int16 target) {
 	return ((GetDex(target) / 2) + 30 - GetInt(caster)) / 2 > OSI_rand(1, 30);
 }
 
 /*total quantity of objects of type objTyp and quality objQual carried
   by objNum (walks the Link chain after objNum until an object lying on
   the map is reached, so nested containers are counted too)*/
-/*C_1944_02BE*/static SPELL_CountCarried(int objNum, int objTyp, int objQual) {
-	int item, quantity;
+/*C_1944_02BE*/static SPELL_CountCarried(int16 objNum, int16 objTyp, int16 objQual) {
+	int16 item, quantity;
 
 	quantity = 0;
 	for(item = Link[objNum]; item >= 0 && GetCoordUse(item) != LOCXYZ; item = Link[item]) {
@@ -523,8 +523,8 @@ char *AlignmentNames[] = {
   of the page that shows the current spell).
   (callers in console.c pass 2 arguments which are ignored)*/
 /*C_1944_0321*/SPELL_RefreshList(/*int bp08, bp06*/) {
-	int spellQual, i;
-	int item, firstSpell, circle,  spellIdx, spellCount, curCircle, hasAllSpells;
+	int16 spellQual, i;
+	int16 item, firstSpell, circle,  spellIdx, spellCount, curCircle, hasAllSpells;
 
 	/*if(Spellbook[0]) */{
 		firstSpell = 0;
@@ -602,7 +602,7 @@ char *AlignmentNames[] = {
 /*draw the empty spellbook parchment in the status area (176..311,6..103)
   (picture #1 of BitmapFiles, loaded from disk 6)*/
 /*C_1944_05B1*/SPELL_DrawBG() {
-	int mouseState;
+	int16 mouseState;
 
 	mouseState = CON_mouseOffAt(176, 6, 311, 103);
 	GR_SET_COLOR(ColorPaper);
@@ -619,10 +619,10 @@ char *AlignmentNames[] = {
   by objNum (99 max; "help" and "armageddon" count as 1), stores it in
   SpellPageCounts[index] and prints it. Prints nothing for spells needing no
   reagents (other than help/armageddon)*/
-/*C_1944_0639*/static PrintSpellQuantity(int objNum, int spellNum, int index) {
-	int quantity;
+/*C_1944_0639*/static PrintSpellQuantity(int16 objNum, int16 spellNum, int16 index) {
+	int16 quantity;
 	unsigned char reagentsMask;
-	int reagent,numMax;
+	int16 reagent,numMax;
 
 	numMax = 99;
 	reagentsMask = Reagents_needed[spellNum];
@@ -643,8 +643,8 @@ char *AlignmentNames[] = {
 
 /*returns the line (0..7) of spellNum on the displayed spellbook page
   (SpellbookPage), or -1 if it is not on the page*/
-/*C_1944_06CA*/SPELL_FindPageLine(int spellNum) {
-	int i;
+/*C_1944_06CA*/SPELL_FindPageLine(int16 spellNum) {
+	int16 i;
 
 	for(i = 0; i < 8; i ++) {
 		if(SpellbookPage[i] == spellNum)
@@ -655,10 +655,10 @@ char *AlignmentNames[] = {
 
 /*remove one of each reagent needed by spellNum from objNum's inventory,
   and decrement the castable count SpellPageCounts[index] of that page line*/
-static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
-	int item, itemType;
+static /*C_1944_06EF*/TakeReagents(int16 objNum, int16 spellNum, int16 index) {
+	int16 item, itemType;
 	unsigned char reagentsMask;
-	int reagent;
+	int16 reagent;
 
 	reagentsMask = Reagents_needed[spellNum];
 	for(reagent = 0; reagent < 8; reagent ++) {
@@ -687,10 +687,10 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
     [3] first circle after the displayed one (next circle button)
   0xff = button disabled*/
 /*C_1944_0773*/SPELL_RefreshPage() {
-	int i, prevCircle;
-	int line, col, row, caster;
-	int spellNum, circle, spellIdx;
-	int numSkipped, prevSpellIdx, pageCircle, firstSkippedCircle;
+	int16 i, prevCircle;
+	int16 line, col, row, caster;
+	int16 spellNum, circle, spellIdx;
+	int16 numSkipped, prevSpellIdx, pageCircle, firstSkippedCircle;
 
 	prevCircle = -1;
 	prevSpellIdx = -1;
@@ -772,8 +772,8 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*returns the first object of type objType (and quality objQual, 0 = any)
   inside objNum (inventory or container), -1 if none*/
-/*C_1944_0A43*/OBJ_FindInContainer(int objNum, int objType, int objQual) {
-	int item;
+/*C_1944_0A43*/OBJ_FindInContainer(int16 objNum, int16 objType, int16 objQual) {
+	int16 item;
 	for(
 		item = Link[objNum];
 		item >= 0 && GetCoordUse(item) != LOCXYZ && OBJ_IsInside(item, objNum);
@@ -788,11 +788,11 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 }
 
 /*door object types (see IsDoorType)*/
-/*0EDA*/int DoorTypes[] = {OBJ_OAKEN_DOOR,OBJ_WINDOWED_DOOR,OBJ_CEDAR_DOOR,OBJ_STEEL_DOOR};
+/*0EDA*/int16 DoorTypes[] = {OBJ_OAKEN_DOOR,OBJ_WINDOWED_DOOR,OBJ_CEDAR_DOOR,OBJ_STEEL_DOOR};
 
 /*returns 1 if objType is one of the 4 door types (DoorTypes)*/
-/*C_1944_0AA9*/IsDoorType(int objType) {
-	int i;
+/*C_1944_0AA9*/IsDoorType(int16 objType) {
+	int16 i;
 
 	for(i = 0; i < 4; i ++) {
 		if(DoorTypes[i] == objType)
@@ -805,8 +805,8 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
   2 if the creature class is immune to sleep, else puts target to sleep
   and returns -2 (SpellResult codes, see SPELL_CastMissile). Also used by
   combat.c for sleep-inducing attacks*/
-/*C_1944_0AD0*/SPELL_SleepTarget(int caster, int target) {
-	int objCls;
+/*C_1944_0AD0*/SPELL_SleepTarget(int16 caster, int16 target) {
+	int16 objCls;
 
 	objCls = GetMonsterClass(GetType(target));
 	if(objCls < 0 || !IsMonsterImmuneSleep(objCls))  {
@@ -822,7 +822,7 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*"poison" on one target: returns 1 if resisted, 2 if immune, -2 when
   the target got poisoned*/
-/*C_1944_0B32*/static SPELL_PoisonTarget(int caster, int target) {
+/*C_1944_0B32*/static SPELL_PoisonTarget(int16 caster, int16 target) {
 	if(!IsMonsterImmunePoison(GetMonsterClass(GetType(target)))) {
 		if(SPELL_ResistStrVsInt(caster, target))
 			return 1;
@@ -834,9 +834,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 }
 
 /*"magic arrow": 1d10 damage to Selection.obj unless it dodges*/
-/*C_1944_0B85*/static SPELL_MagicArrow(int caster) {
-	int damage;
-	int xp;
+/*C_1944_0B85*/static SPELL_MagicArrow(int16 caster) {
+	int16 damage;
+	int16 xp;
 
 	if(SPELL_ResistDexVsInt(caster, Selection.obj)) {
 		SpellResult = 1;
@@ -853,9 +853,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*direct damage on Selection.obj: "harm" 1d10, "energy wind" 1d30,
   "disable" leaves the target with 1 hit point*/
-/*C_1944_0BF4*/static SPELL_DirectDamage(int spellNum) {
-	int damage, caster;
-	int xp;
+/*C_1944_0BF4*/static SPELL_DirectDamage(int16 spellNum) {
+	int16 damage, caster;
+	int16 xp;
 
 	caster = Party[Active];
 	if(COMBAT_ResistsSpell(caster, Selection.obj)) {
@@ -879,7 +879,7 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 /*"charm" on one target: makes it fight for the caster (the original
   alignment is saved with SetBKAlignment); casting it on an already
   charmed creature ends the charm instead. SpellResult = 1 if resisted*/
-/*C_1944_0CA3*/static SPELL_CharmTarget(int caster, int target) {
+/*C_1944_0CA3*/static SPELL_CharmTarget(int16 caster, int16 target) {
 	if(!COMBAT_ResistsSpell(caster, target)) {
 		if(!IsCharmed(target)) {
 			SetBKAlignment(target, GetAlignment(target));
@@ -901,9 +901,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*"kill" on one target: returns 2 if dead already or immune to death
   spells, 1 if resisted, -2 when killed*/
-/*C_1944_0D46*/static SPELL_KillTarget(int caster, int target) {
-	int objCls;
-	int xp;
+/*C_1944_0D46*/static SPELL_KillTarget(int16 caster, int16 target) {
+	int16 objCls;
+	int16 xp;
 
 	objCls = GetMonsterClass(GetType(target));
 	if(!IsDead(target) && (objCls < 0 || !IsMonsterDeathImmune(objCls))) {
@@ -922,9 +922,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 /*"douse"/"ignite" objNum (torch, fireplace, candle, campfire, brazier,
   candelabra, powder keg). Bit 0 of the frame is the "lit" state.
   Igniting a powder keg starts its fuse (KegFuse/KegObject)*/
-/*C_1944_0DCF*/static SPELL_DouseIgnite(int objNum, int spellNum) {
-	int objType;
-	int frame;
+/*C_1944_0DCF*/static SPELL_DouseIgnite(int16 objNum, int16 spellNum) {
+	int16 objType;
+	int16 frame;
 
 	objType = GetType(objNum);
 	frame = GetFrame(objNum);
@@ -958,9 +958,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 /*"chain bolt": returns the nearest living NPC visible from fromNpc and
   within 5 tiles of the screen center (ties broken at random),
   -1 if none*/
-/*C_1944_0F02*/static SPELL_FindChainTarget(int fromNpc) {
-	int npc, best;
-	int bestDist, fromX, fromY, x, y, dist;
+/*C_1944_0F02*/static SPELL_FindChainTarget(int16 fromNpc) {
+	int16 npc, best;
+	int16 bestDist, fromX, fromY, x, y, dist;
 
 	best = -1;
 	bestDist = 0x7fff;
@@ -988,9 +988,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*"chain bolt": 1d30 damage to target, then jumps up to 6 times to the
   nearest other creature (1d30 damage each)*/
-/*C_1944_1038*/static SPELL_ChainBolt(int target) {
-	int nextTarget;
-	int hop, reached, x, y, xp;
+/*C_1944_1038*/static SPELL_ChainBolt(int16 target) {
+	int16 nextTarget;
+	int16 hop, reached, x, y, xp;
 
 	xp = LoseHP(target, OSI_rand(1, 30));
 	CON_printf(/*14A6*/"\n");
@@ -1016,8 +1016,8 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*"heal" (+1d30 hit points, capped at max) / "great heal" (full hit
   points) on Selection.obj*/
-/*C_1944_114D*/SPELL_DoHeal(int spellNum) {
-	int healAmount;
+/*C_1944_114D*/SPELL_DoHeal(int16 spellNum) {
+	int16 healAmount;
 
 	if(IsDead(Selection.obj)) {
 		SpellResult = 2;
@@ -1037,8 +1037,8 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*"dispel magic" on one creature: removes sleep, poison, paralysis and
   charm. Returns 0 if something was dispelled, 1 otherwise*/
-/*C_1944_11BB*/static SPELL_DispelTarget(int target) {
-	int dispelled;
+/*C_1944_11BB*/static SPELL_DispelTarget(int16 target) {
+	int16 dispelled;
 
 	dispelled = 0;
 	MagicalHalo(target, 1);
@@ -1067,9 +1067,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*fire damage ("fireball", "explosion", "flame wind"): 1d20, doubled for
   creatures vulnerable to fire. Returns 0 if target is immune to fire*/
-/*C_1944_1232*/static SPELL_FireDamage(int target) {
-	int objCls;
-	int xp;
+/*C_1944_1232*/static SPELL_FireDamage(int16 target) {
+	int16 objCls;
+	int16 xp;
 
 	objCls = GetMonsterClass(GetType(target));
 	if(objCls < 0 || !IsMonsterFireImmune(objCls)) {
@@ -1093,9 +1093,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
     targetPreset = target already in Selection (do not prompt)
   SpellResult: 0 = "Success", 1 = "Failed", 2 = "No effect",
   -1 = done/no message, -2 = done, message already printed*/
-/*C_1944_12FC*/SPELL_CastMissile(int spellNum, int projTile, int range, int objOrNpc, int targetPreset) {
-	int newObj, caster;
-	int targetType, hitOrNpc, tries, x, y, xp;
+/*C_1944_12FC*/SPELL_CastMissile(int16 spellNum, int16 projTile, int16 range, int16 objOrNpc, int16 targetPreset) {
+	int16 newObj, caster;
+	int16 targetType, hitOrNpc, tries, x, y, xp;
 	struct coord xyz;
 
 	caster = Party[Active];
@@ -1313,9 +1313,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
   The NPC is placed on the first free tile in growing squares around
   the body. Party members rejoin the party.
   (also used by map.c and talkdr.c)*/
-/*C_1944_1A42*/SPELL_ReviveNPC(int corpse) {
-	int npc, radius;
-	int placed, step, new_x, new_y;
+/*C_1944_1A42*/SPELL_ReviveNPC(int16 corpse) {
+	int16 npc, radius;
+	int16 placed, step, new_x, new_y;
 
 	placed = 0;
 	npc = OBJ_ReviveFromBody(corpse);
@@ -1325,7 +1325,7 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 	MAGIC[npc] = MaxMagic(npc);
 	ClrAilmentsProtected(npc);
 	if(KARMA < 98)/*lose experience according to karma*/
-		ExpPoints[npc] = ((long)ExpPoints[npc] * KARMA) / 100L;
+		ExpPoints[npc] = ((int32)ExpPoints[npc] * KARMA) / 100L;
 	for(radius = 1; radius < 5; radius ++) {
 		for(step = 0; step < (radius << 1) + 1; step ++) {
 			new_x = GetX(npc) - radius + step;
@@ -1368,8 +1368,8 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*"resurrect": target must be a dead body (quality = NPC number, 0 means
   the corpse is too old, >= 0xe0 = temporary NPC: no effect)*/
-/*C_1944_1C51*/static SPELL_DoResurrect(int targetPreset) {
-	int corpseType, savedStatus;
+/*C_1944_1C51*/static SPELL_DoResurrect(int16 targetPreset) {
+	int16 corpseType, savedStatus;
 
 	CON_printf(/*149D*/"%s", SpellMessages[9]);
 	if(!targetPreset) {
@@ -1414,7 +1414,7 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
 
 /*uncalled: returns 0 for special creature types (ghost, wisp, big
   monsters, dragon, hydra, tangle vine, silver serpent, Lord British)*/
-/*__1944_1DAB*/static SPELL_IsAffectableType(int objTyp) {
+/*__1944_1DAB*/static SPELL_IsAffectableType(int16 objTyp) {
 	if(
 		objTyp == OBJ_GHOST ||
 		objTyp == OBJ_WISP ||
@@ -1453,9 +1453,9 @@ static /*C_1944_06EF*/TakeReagents(int objNum, int spellNum, int index) {
   "unlock magic", "trap", "untrap", "detect trap", "detect magic").
   Same parameters and SpellResult codes as SPELL_CastMissile; the range is
   not checked for the lock/trap/detect spells*/
-/*C_1944_1DF4*/static SPELL_CastOnObject(int spellNum, int range, int objOrNpc, int targetPreset) {
-	int targetType;
-	int caster, item, found;
+/*C_1944_1DF4*/static SPELL_CastOnObject(int16 spellNum, int16 range, int16 objOrNpc, int16 targetPreset) {
+	int16 targetType;
+	int16 caster, item, found;
 
 	found = 0;
 	caster = Party[Active];
@@ -1612,8 +1612,8 @@ C_22A9:
   becomes a slime (swimmers are spared, except amphibians);
   temporary NPCs (>= 0xe0) also lose their inventory*/
 /*C_1944_22F4*/static SPELL_DoSlime() {
-	int npc, x;
-	int caster, y, item, objCls;
+	int16 npc, x;
+	int16 caster, y, item, objCls;
 
 	caster = Party[Active];
 	MagicalHalo(caster, 0);
@@ -1643,8 +1643,8 @@ C_22A9:
 
 /*"reappear": recreate the object last removed by "vanish" (VanishedShape,
   type | frame << 10) at the selected location*/
-/*C_1944_23F2*/static SPELL_DoReappear(int targetPreset) {
-	int newObj, caster;
+/*C_1944_23F2*/static SPELL_DoReappear(int16 targetPreset) {
+	int16 newObj, caster;
 	struct coord xyz;
 
 	caster = Party[Active];
@@ -1686,9 +1686,9 @@ C_22A9:
 /*area spells ("mass ..." and "explosion"): a missile (missileTile)
   flies to the selected location, then an explosion of blastTile
   affects every NPC in it*/
-/*C_1944_256A*/static SPELL_CastMass(int spellNum, int missileTile, int blastTile, int targetPreset) {
-	int caster;
-	int far *victimPtr;
+/*C_1944_256A*/static SPELL_CastMass(int16 spellNum, int16 missileTile, int16 blastTile, int16 targetPreset) {
+	int16 caster;
+	int16 far *victimPtr;
 	
 	caster = Party[Active];
 	if(IsPlrControl(Party[Active]))
@@ -1740,8 +1740,8 @@ C_22A9:
 
 /*"fire|poison|sleep|energy field": creates a field object at the selected
   location ("energy field" makes an OBJ_PROTECTION_FIELD)*/
-/*C_1944_27AF*/static SPELL_CastField(int spellNum, int missileTile, int targetPreset) {
-	int field, caster;
+/*C_1944_27AF*/static SPELL_CastField(int16 spellNum, int16 missileTile, int16 targetPreset) {
+	int16 field, caster;
 	struct coord xyz;
 
 	caster = Party[Active];
@@ -1784,8 +1784,8 @@ C_22A9:
 
 /*"fear" on one creature: non-good NPCs failing an intelligence test and
   not immune to death spells flee*/
-/*C_1944_29AA*/static SPELL_FearTarget(int objNum) {
-	int objCls;
+/*C_1944_29AA*/static SPELL_FearTarget(int16 objNum) {
+	int16 objCls;
 
 	objCls = GetMonsterClass(GetType(objNum));
 	if(objNum >= 0x100)
@@ -1800,9 +1800,9 @@ C_22A9:
 
 /*spells affecting the first object of every tile within 7 tiles of the
   party: "repel undead", "reveal", "fear", "confuse"*/
-/*C_1944_2A15*/static SPELL_CastAroundParty(int spellNum) {
-	register int objNum, x;
-	int y, caster, ring;
+/*C_1944_2A15*/static SPELL_CastAroundParty(int16 spellNum) {
+	register int16 objNum, x;
+	int16 y, caster, ring;
 
 	MagicalHalo(Party[Active], 0);
 	caster = Party[Active];
@@ -1839,8 +1839,8 @@ C_22A9:
 }
 
 /*"create food": gives 1d10 portions of meat to the caster*/
-/*C_1944_2B9A*/static SPELL_CreateFood(int spellNum) {
-	int portions;
+/*C_1944_2B9A*/static SPELL_CreateFood(int16 spellNum) {
+	int16 portions;
 
 	SPELL_CastEffect(MK_CIRCLE(spellNum));
 	MagicalHalo(Party[Active], 0);
@@ -1852,9 +1852,9 @@ C_22A9:
 /*"conjure" (random troll/giant rat/giant spider/giant bat/snake) or
   "summon" (daemon) a creature near the party; it fights for the caster.
   A summoned daemon that passes an intelligence test is hostile*/
-/*C_1944_2BFD*/static SPELL_DoSummon(int spellNum, int caster) {
-	int npc, i;
-	int monsterType, dx, dy, alignment;
+/*C_1944_2BFD*/static SPELL_DoSummon(int16 spellNum, int16 caster) {
+	int16 npc, i;
+	int16 monsterType, dx, dy, alignment;
 
 	i = OSI_rand(0, 15);
 	if(i <= 3)
@@ -1901,9 +1901,9 @@ C_22A9:
 
 /*"telekinesis": operate a crank/lever or move an object one tile in a
   chosen direction*/
-/*C_1944_2DA7*/static SPELL_DoTelekinesis(int targetPreset) {
-	int objType, x;
-	int caster, newX, newY, y, reached;
+/*C_1944_2DA7*/static SPELL_DoTelekinesis(int16 targetPreset) {
+	int16 objType, x;
+	int16 caster, newX, newY, y, reached;
 
 	caster = Party[Active];
 	if(IsPlrControl(Party[Active]))
@@ -1974,7 +1974,7 @@ C_22A9:
 /*"gate travel": asks for a moon phase (1..8) and travels to that
   moonstone's location (MoonstonePos) if it has been placed*/
 /*C_1944_305A*/static SPELL_GateTravel() {
-	int phase;
+	int16 phase;
 	char input[5];
 
 	CON_printf(/*15FE*/"To phase ");
@@ -1997,8 +1997,8 @@ C_22A9:
 
 /*"x-ray": see through walls (XRayView) during 100 animation steps
   (also used by objcmd.c)*/
-/*C_1944_310C*/SPELL_XRay(int spellNum) {
-	int i;
+/*C_1944_310C*/SPELL_XRay(int16 spellNum) {
+	int16 i;
 
 	SPELL_CastEffect(MK_CIRCLE(spellNum));
 	MagicalHalo(Party[Active], 0);
@@ -2021,9 +2021,9 @@ extern unsigned char __ShowNPCInven;*/
 /*"pickpocket": shows the inventory of the target NPC and lets the caster
   take one item from it (costs 5 karma). PickpocketActive is set while the
   victim's inventory is displayed*/
-/*C_1944_3175*/static SPELL_DoPickpocket(int targetPreset) {
-	int caster, victim;
-	int reached, casterX, casterY, key, savedSelectMode, cantTake, objType;
+/*C_1944_3175*/static SPELL_DoPickpocket(int16 targetPreset) {
+	int16 caster, victim;
+	int16 reached, casterX, casterY, key, savedSelectMode, cantTake, objType;
 
 	savedSelectMode = 0;
 	cantTake = 0;
@@ -2108,9 +2108,9 @@ extern unsigned char __ShowNPCInven;*/
 }
 
 /*"insect swarm": generate 8 insect swarms around the party*/
-/*C_1944_34CF*/static SPELL_InsectSwarm(int spellNum) {
-	int npc, tries;
-	int swarm, dx, dy;
+/*C_1944_34CF*/static SPELL_InsectSwarm(int16 spellNum) {
+	int16 npc, tries;
+	int16 swarm, dx, dy;
 
 	SPELL_CastEffect(MK_CIRCLE(spellNum));
 	MagicalHalo(Party[Active], 0);
@@ -2134,9 +2134,9 @@ extern unsigned char __ShowNPCInven;*/
 }
 
 /*"web": put webs on the 3x3 tiles around the selected location*/
-/*C_1944_35EC*/static SPELL_DoWeb(int targetPreset) {
-	int x, y;
-	int caster, web;
+/*C_1944_35EC*/static SPELL_DoWeb(int16 targetPreset) {
+	int16 x, y;
+	int16 caster, web;
 	struct coord xyz;
 
 	if(IsPlrControl(Party[Active]))
@@ -2175,10 +2175,10 @@ extern unsigned char __ShowNPCInven;*/
 
 /*"enchant": put a charge of a spell (chosen from the spellbook) into a
   staff (10 charges max)*/
-/*C_1944_3750*/static SPELL_DoEnchant(int targetPreset) {
-	int item, i;
+/*C_1944_3750*/static SPELL_DoEnchant(int16 targetPreset) {
+	int16 item, i;
 	unsigned char ch;
-	int foundBook, book0, book1, staff, spellNum;
+	int16 foundBook, book0, book1, staff, spellNum;
 
 	foundBook = 0;
 	book0 = 0;
@@ -2248,9 +2248,9 @@ extern unsigned char __ShowNPCInven;*/
 /*"wizard eye": move a wizard's eye from (x,y) for up to 40 steps
   (until Esc or a blocking tile). isSpell = play the casting effect.
   (also used by objcmd.c with a computed location)*/
-/*C_1944_39A1*/SPELL_WizardEye(int x, int y, int isSpell) {
-	int numTile, key;
-	int movesLeft, sav_x, sav_y, eye;
+/*C_1944_39A1*/SPELL_WizardEye(int16 x, int16 y, int16 isSpell) {
+	int16 numTile, key;
+	int16 movesLeft, sav_x, sav_y, eye;
 	struct coord xyz;
 
 	movesLeft = 40;
@@ -2304,8 +2304,8 @@ extern unsigned char __ShowNPCInven;*/
 
 /*"tremor": 1d30 damage to every evil, non-flying NPC within 5 tiles*/
 /*C_1944_3B2D*/static SPELL_DoTremor() {
-	int npc, x;
-	int y, xp;
+	int16 npc, x;
+	int16 y, xp;
 
 	MagicalHalo(Party[Active], 0);
 	ShakeScreen(20, 3);
@@ -2327,8 +2327,8 @@ extern unsigned char __ShowNPCInven;*/
 }
 
 /*"seance": talk to the dead NPC whose body is selected*/
-/*C_1944_3C30*/static SPELL_DoSeance(int targetPreset) {
-	int objType;
+/*C_1944_3C30*/static SPELL_DoSeance(int16 targetPreset) {
+	int16 objType;
 
 	CON_printf(/*149D*/"%s", SpellMessages[9]);
 	if(!targetPreset) {
@@ -2351,7 +2351,7 @@ extern unsigned char __ShowNPCInven;*/
 }
 
 /*"hail storm" at the selected location*/
-/*C_1944_3D0F*/static SPELL_HailStorm(int targetPreset) {
+/*C_1944_3D0F*/static SPELL_HailStorm(int16 targetPreset) {
 	if(IsPlrControl(Party[Active]))
 		CON_printf(/*149D*/"%s", SpellMessages[10]);
 	if(!targetPreset) {
@@ -2371,9 +2371,9 @@ extern unsigned char __ShowNPCInven;*/
 
 /*"flame|poison|energy|death wind": a wind of windTile from the caster
   toward the selected location affects every NPC on its path*/
-/*C_1944_3DB8*/static SPELL_CastWind(int spellNum, int windTile, int targetPreset) {
-	int caster, xp;
-	int far *victimPtr;
+/*C_1944_3DB8*/static SPELL_CastWind(int16 spellNum, int16 windTile, int16 targetPreset) {
+	int16 caster, xp;
+	int16 far *victimPtr;
 
 	caster = Party[Active];
 	if(IsPlrControl(Party[Active]))
@@ -2413,14 +2413,14 @@ extern unsigned char __ShowNPCInven;*/
   a dragon (2 objects, one per wing) flies across the screen row and
   deals 1d20 damage when passing over it*/
 /*C_1944_3F6C*/SPELL_WingStrike() {
-	int objNum, hDir;
-	int x, y;
-	int distLeft, distRight;
-	int i;
-	int dragon0, dragon1;
-	int hitPts;
+	int16 objNum, hDir;
+	int16 x, y;
+	int16 distLeft, distRight;
+	int16 i;
+	int16 dragon0, dragon1;
+	int16 hitPts;
 	struct coord xyz;
-	int hasHit;
+	int16 hasHit;
 
 	hasHit = 0;
 	MagicalHalo(Party[Active], 0);
@@ -2475,7 +2475,7 @@ extern unsigned char __ShowNPCInven;*/
 /*SPELL_SELF_INVISIBILITY: makes the caster invisible (spell used by monsters, see
   monsdata.c)*/
 /*C_1944_4260*/static SPELL_SelfInvisibility() {
-	int caster;
+	int16 caster;
 
 	caster = Party[Active];
 	if(!IsInvisible(caster)) {
@@ -2491,8 +2491,8 @@ extern unsigned char __ShowNPCInven;*/
   degree glyph); 8 tiles per degree, origin at (0x130,0x168);
   underground coordinates are scaled by 4. (also used by the sextant)*/
 /*C_1944_42AC*/SPELL_PrintLocation() {
-	int x, y;
-	int lat, lon;
+	int16 x, y;
+	int16 lat, lon;
 
 	x = MapX;
 	y = MapY;
@@ -2527,7 +2527,7 @@ extern unsigned char __ShowNPCInven;*/
 
 /*"armageddon": delete every NPC except the Avatar (1) and Lord British (5)*/
 /*C_1944_43A3*/SPELL_DoArmageddon() {
-	int objNum;
+	int16 objNum;
 
 	for(objNum = 0; objNum < 0xff; objNum ++) {
 		if(objNum != 1 && objNum != 5)/*Avatar, Lord British*/
@@ -2542,7 +2542,7 @@ extern unsigned char __ShowNPCInven;*/
 /*cast spellNum (spell effect only: reagents/magic points are handled by
   the caller). targetPreset = target already in Selection, do not prompt.
   Also called for monsters/wands (combat.c, objcmd.c)*/
-/*C_1944_43D5*/SPELL_Execute(int spellNum, int targetPreset) {
+/*C_1944_43D5*/SPELL_Execute(int16 spellNum, int16 targetPreset) {
 	CON_printf(/*14A6*/"\n");
 	switch(spellNum) {
 		case SPELL_DOUSE:/*"douse"*/ SPELL_CastMissile(spellNum, TIL_MISSILE_3, 8, -1, targetPreset); break;
@@ -2675,10 +2675,10 @@ extern unsigned char __ShowNPCInven;*/
 /*cast a spell from the readied spellbook(s) book0/book1: show the
   spellbook, let the player choose a spell, print its incantation, check
   level, magic points and reagents, then take them and cast it*/
-/*C_1944_4926*/static SPELL_CastFromBook(int book0, int book1) {
-	int i, caster;
+/*C_1944_4926*/static SPELL_CastFromBook(int16 book0, int16 book1) {
+	int16 i, caster;
 	unsigned char ch;
-	int spellNum, circle, targetPreset, casted;
+	int16 spellNum, circle, targetPreset, casted;
 
 	targetPreset = 0;
 	casted = 0;
@@ -2778,7 +2778,7 @@ extern unsigned char __ShowNPCInven;*/
 
 /*"Cast" command: find the spellbook(s) readied by the active character*/
 /*C_1944_4C2F*/CMD_CastSpell() {
-	int item, type0, type1, book0, book1;
+	int16 item, type0, type1, book0, book1;
 
 	type0 = 0;
 	type1 = 0;

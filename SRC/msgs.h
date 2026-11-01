@@ -6,6 +6,8 @@
 #ifndef __SEG_356A_H__
 #define __SEG_356A_H__
 
+#include "portable.h"
+
 extern char far SlimeDividesMsg[];
 extern char far CriticalMsg[];
 extern char far HeavilyMsg[];

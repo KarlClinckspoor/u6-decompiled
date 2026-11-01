@@ -1,0 +1,495 @@
+;----------------------------------------
+;OSI library (U.EXE): file routines (pascal), in _TEXT at 0000:09F0
+;(the same as GAME.EXE's OSI_FILE.ASM; the labels are U.EXE's offsets in _TEXT)
+;----------------------------------------
+INCLUDE OSI.INC
+
+DSegStart
+
+PUBLIC OSI_ErrorHandler,OSI_ErrorCode,OSI_ErrorFunc,OSI_ErrorFile
+
+OSI_ErrorHandler	dw OSI_callback,SEG OSI_callback	;D_45D8
+OSI_ErrorCode	dw 0	;D_45DC error code
+OSI_ErrorFunc	dw 0	;D_45DE error origin
+OSI_ErrorFile	dw 0	;D_45E0 last filename
+
+DSegEnd
+
+OSIERR_CB	MACRO fctNum,errNum
+	MOV	DS,CS:C_09F0
+	MOV	OSI_ErrorCode,errNum
+	MOV	OSI_ErrorFunc,fctNum
+	CALL	DWORD PTR OSI_ErrorHandler
+ENDM
+
+
+OSIERR_1	MACRO errNum,retry
+	LOCAL _skip_,_noErr_
+
+	JNB	_noErr_
+	PUSH	DS
+	OSIERR_CB	errNum,AX
+	TEST	OSI_ErrorCode,0FFFFh
+	POP	DS
+	JZ	retry
+	MOV	AX,-1
+	STC
+_noErr_:
+ENDM
+
+OSIERR_2	MACRO errNum,retry
+	LOCAL _skip_,_noErr_
+
+	JNB	_noErr_
+
+	OSIERR_CB	errNum,AX
+	TEST	OSI_ErrorCode,0FFFFh
+
+	JZ	retry
+
+
+_noErr_:
+ENDM
+
+
+;an empty code segment of its own, word aligned: in U.EXE it leaves the pad byte
+;between VSYNC_TEXT and FADE_TEXT (the modules on each side of it in the library)
+OSI_FILE_TEXT	SEGMENT PUBLIC WORD 'CODE'
+OSI_FILE_TEXT	ENDS
+
+_TEXT	SEGMENT PUBLIC BYTE 'CODE'
+	ASSUME CS:_TEXT,DS:DGROUP
+
+C_09F0	dw DGROUP
+
+PUBLIC OSI_callback
+OSI_callback	PROC FAR
+	RET
+OSI_callback	ENDP
+
+
+PUBLIC OSI_open
+OSI_open	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	SI
+	PUSH	DI
+	;--
+	MOV	ES,CS:C_09F0
+C_09FD:
+	MOV	DX,[BP+06]
+	MOV	ES:OSI_ErrorFile,DX
+	;--
+	MOV	AX,(3Dh SHL 8) OR 2	;open file
+	INT	21h
+	;--
+	OSIERR_1	1,C_09FD
+	;--
+	POP	DI
+	POP	SI
+	POP	BP
+	RET	2
+OSI_open	ENDP
+
+
+PUBLIC OSI_close
+OSI_close	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	SI
+	PUSH	DI
+C_0A37:	;--
+	MOV	BX,[BP+06]
+	MOV	AH,3Eh	;close file
+	INT	21h
+	;--
+	OSIERR_1	2,C_0A37
+	;--
+	POP	DI
+	POP	SI
+	POP	BP
+	RET	2
+OSI_close	ENDP
+
+
+PUBLIC OSI_create
+OSI_create	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	SI
+	PUSH	DI
+	;--
+	MOV	DX,DGROUP
+	MOV	ES,DX
+C_0A70:
+	MOV	AH,3Ch	;create file
+	XOR	CX,CX
+	MOV	DX,[BP+06]
+	MOV	ES:OSI_ErrorFile,DX
+	INT	21h
+	;--
+	OSIERR_1	3,C_0A70
+	;--
+	POP	DI
+	POP	SI
+	POP	BP
+	RET	2
+OSI_create	ENDP
+
+
+PUBLIC OSI_delete
+OSI_delete	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	SI
+	PUSH	DI
+	;--
+	MOV	DX,DGROUP
+	MOV	ES,DX
+C_0AB0:
+	MOV	AH,41h	;delete file
+	MOV	DX,[BP+06]
+	MOV	ES:OSI_ErrorFile,DX
+	INT	21h
+	;--
+	OSIERR_1	4,C_0AB0
+	;--
+	POP	DI
+	POP	SI
+	POP	BP
+	RET	2
+OSI_delete	ENDP
+
+
+PUBLIC OSI_read
+OSI_read	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	SUB	SP,4
+	PUSH	SI
+	PUSH	DI
+	PUSH	DS
+	;--
+	MOV	WORD PTR [BP-04],0
+	MOV	WORD PTR [BP-02],0
+	MOV	BX,[BP+12h]
+	MOV	CX,[BP+10h]
+	OR	CX,CX
+	JL	C_0B20
+	MOV	DX,[BP+0Eh]
+	MOV	AX,(42h SHL 8) OR 0	;move file pointer
+	INT	21h
+	JNB	C_0B20
+	OSIERR_CB	5,AX
+	JMPN	C_0BBB
+C_0B20:	;--
+	TEST	WORD PTR [BP+0Ch],0FFFFh
+	JNZ	C_0B2D
+	CMP	WORD PTR [BP+0Ah],0FFF0h
+	JBE	C_0B71
+C_0B2D:	;--
+	MOV	AH,3Fh	;read file
+	MOV	BX,[BP+12h]
+	MOV	CX,0FFF0h
+	LDS	DX,[BP+06]
+	INT	21h
+	;--
+	OSIERR_2	5,C_0B2D
+	;--
+	ADD	[BP-04],AX
+	ADC	WORD PTR [BP-02],0
+	CMP	AX,0FFF0h
+	JNZ	C_0BA6
+	SUB	WORD PTR [BP+0Ah],0FFF0h
+	SBB	WORD PTR [BP+0Ch],0
+	ADD	WORD PTR [BP+08],0FFFh
+	JMP	C_0B20
+C_0B71:	;--
+	MOV	AH,3Fh	;read file
+	MOV	BX,[BP+12h]
+	MOV	CX,[BP+0Ah]
+	LDS	DX,[BP+06]
+	INT	21h
+	;--
+	OSIERR_2	5,C_0B71
+	;--
+	ADD	[BP-04],AX
+	ADC	WORD PTR [BP-02],0
+	CMP	AX,[BP+0Ah]
+	JZ	C_0BBB
+C_0BA6:
+	OSIERR_CB	5,-1
+C_0BBB:	;--
+	MOV	AX,[BP-04]
+	MOV	DX,[BP-02]
+	;--
+	POP	DS
+	POP	DI
+	POP	SI
+	MOV	SP,BP
+	POP	BP
+	RET	0Eh
+OSI_read	ENDP
+
+
+PUBLIC OSI_write
+OSI_write	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	SI
+	PUSH	DI
+	PUSH	DS
+	;--
+	MOV	BX,[BP+12h]
+	MOV	CX,[BP+10h]
+	OR	CX,CX
+	JL	C_0BF9
+	MOV	DX,[BP+0Eh]
+	MOV	AX,(42h SHL 8) OR 0	;move file pointer
+	INT	21h
+	JNB	C_0BF9
+	OSIERR_CB	6,AX
+	JMPN	C_0C86
+C_0BF9:	;--
+	TEST	WORD PTR [BP+0Ch],0FFFFh
+	JNZ	C_0C06
+	CMP	WORD PTR [BP+0Ah],0FFF0h
+	JBE	C_0C43
+C_0C06:
+	MOV	AH,40h	;write file
+	MOV	BX,[BP+12h]
+	MOV	CX,0FFF0h
+	LDS	DX,[BP+06]
+	INT	21h
+	;--
+	OSIERR_2	6,C_0C06
+	;--
+	CMP	AX,0FFF0h
+	JNZ	C_0C71
+	SUB	WORD PTR [BP+0Ah],0FFF0h
+	SBB	WORD PTR [BP+0Ch],0
+	ADD	WORD PTR [BP+08],0FFFh
+	JMP	C_0BF9
+C_0C43:	;--
+	MOV	AH,40h	;write file
+	MOV	BX,[BP+12h]
+	MOV	CX,[BP+0Ah]
+	LDS	DX,[BP+06]
+	INT	21h
+	;--
+	OSIERR_2	6,C_0C43
+	;--
+	CMP	AX,[BP+0Ah]
+	JZ	C_0C86
+C_0C71:
+	OSIERR_CB	6,-1
+C_0C86:	;--
+	POP	DS
+	POP	DI
+	POP	SI
+	MOV	SP,BP
+	POP	BP
+	RET	0Eh
+OSI_write	ENDP
+
+
+PUBLIC OSI_rename
+OSI_rename	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	SI
+	PUSH	DI
+C_0C94:	;--
+	MOV	AH,56h
+	MOV	ES,CS:C_09F0
+	MOV	DX,[BP+08]
+	MOV	ES:OSI_ErrorFile,DX
+	MOV	DI,DS
+	MOV	ES,DI
+	MOV	DI,[BP+06]
+	INT	21h
+	;--
+	OSIERR_1	7,C_0C94
+	;--
+	POP	DI
+	POP	SI
+	POP	BP
+	RET	4
+OSI_rename	ENDP
+
+PUBLIC OSI_copy
+OSI_copy	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	SUB	SP,0Eh
+	PUSH	SI
+	PUSH	DI
+	PUSH	DS
+	;--
+	MOV	AH,48h	;allocate memory
+	MOV	BX,0FFFFh
+	INT	21h
+	JNB	C_0D29
+	CMP	AX,8
+	JNZ	C_0D29
+	MOV	[BP-06],BX
+	;--
+	MOV	AH,48h	;allocate memory
+	INT	21h
+	JB	C_0D29
+	MOV	[BP-02],AX
+	;--
+	MOV	AX,[BP-06]
+	MOV	CL,4
+	ROL	AX,CL
+	MOV	[BP-06],AX
+	;--
+	db 83h,66h,0FAh,0F0h	;AND WORD PTR [BP-06],NOT 0Fh (MASM 3 has no short form for AND)
+	AND	AX,0Fh
+	MOV	[BP-04],AX
+	;--
+	MOV	AX,[BP+08]                         
+	PUSH	AX
+	CALL	OSI_open
+	JB	C_0D29
+	MOV	[BP-0Ch],AX
+	;--
+	MOV	AH,3Ch	;create file
+	XOR	CX,CX
+	MOV	DX,[BP+06]
+	INT	21h
+	JB	C_0D29
+	MOV	[BP-0Eh],AX
+	;--
+	JMP	SHORT C_0D44
+C_0D29:
+	OSIERR_CB	8,AX
+	MOV	AH,49h	;free memory
+	MOV	ES,[BP-02]
+	INT	21h
+	;--
+	JMP	SHORT C_0DC1
+C_0D44:	;--
+	MOV	AX,[BP-0Ch]
+	PUSH	AX
+	MOV	AX,0FFFFh
+	PUSH	AX
+	PUSH	AX
+	MOV	AX,[BP-04]
+	PUSH	AX
+	MOV	AX,[BP-06]
+	PUSH	AX
+	MOV	AX,[BP-02]
+	PUSH	AX
+	XOR	AX,AX
+	PUSH	AX
+	CALL	OSI_read
+	MOV	[BP-0Ah],AX
+	MOV	[BP-08],DX
+	;--
+	MOV	AX,[BP-0Eh]
+	PUSH	AX
+	MOV	AX,0FFFFh
+	PUSH	AX
+	PUSH	AX
+	MOV	AX,[BP-08]
+	PUSH	AX
+	MOV	AX,[BP-0Ah]
+	PUSH	AX
+	MOV	AX,[BP-02]
+	PUSH	AX
+	XOR	AX,AX
+	PUSH	AX
+	CALL	OSI_write
+	;--
+	MOV	AX,[BP-08]
+	CMP	AX,[BP-04]
+	JB	C_0D94
+	;--
+	MOV	AX,[BP-0Ah]
+	CMP	AX,[BP-06]
+	JNB	C_0D44
+C_0D94:	;--
+	MOV	AX,[BP-0Ch]
+	PUSH	AX
+	CALL	OSI_close
+	;--
+	MOV	AX,[BP-0Eh]
+	PUSH	AX
+	CALL	OSI_close
+	;--
+	MOV	AH,49h	;free memory
+	MOV	ES,[BP-02]
+	INT	21h
+	JNB	C_0DC1
+	OSIERR_CB	8,AX
+C_0DC1:	;--
+	POP	DS
+	POP	DI
+	POP	SI
+	MOV	SP,BP
+	POP	BP
+	RET	4
+OSI_copy	ENDP
+
+
+PUBLIC OSI_fileSize
+OSI_fileSize	PROC FAR
+	PUSH	BP
+	MOV	BP,SP
+	PUSH	SI
+	PUSH	DI
+	;--
+	MOV	BX,[BP+06]
+	MOV	AX,(42h SHL 8) OR 2	;move file pointer(seek_end)
+	XOR	CX,CX
+	MOV	DX,CX
+	INT	21h
+	JNB	C_0DE1
+	;--
+	XOR	AX,AX
+	MOV	DX,AX
+C_0DE1:	;--
+	POP	DI
+	POP	SI
+	POP	BP
+	RET	2
+OSI_fileSize	ENDP
+
+
+PUBLIC OSI_memory
+OSI_memory	PROC FAR
+	PUSH	BP
+	PUSH	SI
+	PUSH	DI
+	PUSH	DS
+	;--
+	MOV	AH,48h	;allocate memory
+	MOV	BX,0FFFFh
+	INT	21h
+	JNB	C_0E0D
+	CMP	AX,8
+	JNZ	C_0E0D
+	MOV	AX,BX
+	ROL	AX,1
+	ROL	AX,1
+	ROL	AX,1
+	ROL	AX,1
+	MOV	DX,AX
+	AND	AX,NOT 0Fh
+	db 83h,0E2h,0Fh	;AND DX,0Fh
+	JMP	SHORT C_0E11
+C_0E0D:	;--
+	XOR	AX,AX
+	XOR	DX,DX
+C_0E11:	;--
+	POP	DS
+	POP	DI
+	POP	SI
+	POP	BP
+	RET
+OSI_memory	ENDP
+
+_TEXT	ENDS
+
+END

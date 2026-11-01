@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Build U.EXE from SRC_U/ (or END.EXE from SRC_END/, with U6_PROG=end) with the original
+tools in a headless DOSBox, and compare it with the original.
+
+    [U6_PROG=end] python3 tools/u/ubuild.py [--keep DIR] [--log]
+
+SRC_U/u.lnk (SRC_END/end.lnk) lists the objects in link order (after C0M: a module is
+taken from the program's folder, else from SRC_U, as END.EXE shares lzw.asm);
+SRC_U/OSILIB/osilib.lst lists
+the library modules (their sources in SRC_U/OSILIB) in the order they are put into
+OSILIB.LIB, which is linked after Turbo C's CM.LIB, as the original was. C files are
+compiled with `tcc -mm -c -O -G`, assembly with MASM 3.0 /Mx.
+
+The result is compared with U.EXE byte for byte (header, relocations, image); the first
+differences are shown with the module they fall in.
+"""
+import argparse, hashlib, os, shutil, struct, subprocess, sys, tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import tcc  # noqa: E402
+import omf  # noqa: E402
+import tasmorder  # noqa: E402
+import prog  # noqa: E402
+from ucmp import find_uexe  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(HERE))
+SRC = prog.SRC_U          # the OSI library and the shared headers
+PSRC = prog.SRC           # the program's own modules
+EXE = prog.EXE
+BASE = EXE.split('.')[0]
+FLAGS = '-mm -c -O -G'
+LIBFLAGS = '-mm -c -G'   # the library's C was compiled without -O
+CM_REPLACED = ['CLREOL', 'GOTOXY']
+
+
+def crlf(path, dst):
+    b = open(path, 'rb').read().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
+    open(dst, 'wb').write(b)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--keep')
+    ap.add_argument('--log', action='store_true')
+    a = ap.parse_args()
+    tools = os.environ.get('U6_DOSTOOLS') or next(
+        (d for d in (os.path.join(ROOT, 'tools'), '/home/claude/dostools')
+         if os.path.isdir(os.path.join(d, 'turboc20'))))
+    objs = open(os.path.join(PSRC, prog.P['lnk'])).read().split()
+    libmods = open(os.path.join(SRC, 'OSILIB', 'osilib.lst')).read().split()
+    with tempfile.TemporaryDirectory() as tmp:
+        c = os.path.join(tmp, 'c')
+        os.makedirs(os.path.join(c, 'TOOLS'))
+        shutil.copytree(os.path.join(tools, 'turboc20'), os.path.join(c, 'TOOLS', 'TURBOC20'))
+        mdir = os.path.join(tools, 'masm300')
+        exe = [n for n in os.listdir(mdir) if n.upper() == 'MASM.EXE']
+        if exe:
+            shutil.copy(os.path.join(mdir, exe[0]), os.path.join(c, 'TOOLS', 'MASM.EXE'))
+        else:
+            img = [n for n in os.listdir(mdir) if n.lower().endswith('.img')][0]
+            subprocess.run(['mcopy', '-i', os.path.join(mdir, img), '::MASM.EXE',
+                            os.path.join(c, 'TOOLS', 'MASM.EXE')], check=True)
+        s = os.path.join(c, 'S')
+        os.makedirs(os.path.join(s, 'L'))
+        for fn in os.listdir(SRC):
+            if fn.lower().endswith(('.c', '.h', '.asm', '.inc')):
+                crlf(os.path.join(SRC, fn), os.path.join(s, fn.upper()))
+        for fn in os.listdir(os.path.join(SRC, 'OSILIB')):
+            if fn.lower().endswith(('.c', '.h', '.asm', '.inc')):
+                crlf(os.path.join(SRC, 'OSILIB', fn), os.path.join(s, 'L', fn.upper()))
+        if PSRC != SRC:  # the program's own sources (they take precedence)
+            for fn in os.listdir(PSRC):
+                if fn.lower().endswith(('.c', '.h', '.asm', '.inc')):
+                    crlf(os.path.join(PSRC, fn), os.path.join(s, fn.upper()))
+        for fn in os.listdir(SRC):  # headers the library's C may include
+            if fn.lower().endswith('.h'):
+                crlf(os.path.join(SRC, fn), os.path.join(s, 'L', fn.upper()))
+        lines = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S\\L']
+        for m in libmods:
+            base = m.upper()
+            src = next((os.path.join(SRC, 'OSILIB', m + e) for e in ('.c', '.C')
+                        if os.path.exists(os.path.join(SRC, 'OSILIB', m + e))), None)
+            if src and tcc.has_inline_asm(src):
+                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s -S %s.C >> \\BUILD.LOG' % (LIBFLAGS.replace('-c ', ''), base))
+                lines.append('\\TOOLS\\MASM /Mx %s.ASM; >> \\BUILD.LOG' % base)
+            elif src:
+                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s %s.C >> \\BUILD.LOG' % (LIBFLAGS, base))
+            else:
+                lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % base)
+        link = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S\\L']
+        # (a response file: DOS command lines stop at 127 characters)
+        rsp = []
+        for i in range(0, len(libmods), 8):
+            rsp.append(' '.join('+' + x.upper() for x in libmods[i:i + 8]) + (' &' if i + 8 < len(libmods) else ''))
+        open(os.path.join(s, 'L', 'OSILIB.RSP'), 'w', newline='').write('\r\n'.join(rsp) + '\r\n')
+        link.append('TLIB OSILIB.LIB @OSILIB.RSP >> \\BUILD.LOG')
+        # Origin's CM.LIB: Turbo C's, with CLREOL and GOTOXY replaced by OSI versions in
+        # their places (TLINK lays library modules out in library order)
+        for m in CM_REPLACED:
+            lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % m)
+        cmmods = [x.name for x in omf.parse_lib(os.path.join(tools, 'turboc20', 'LIB', 'CM.LIB'))]
+        os.makedirs(os.path.join(s, 'L', 'CM'))
+        link.append('cd CM')
+        link.append('copy \\TOOLS\\TURBOC20\\LIB\\CM.LIB CM.LIB > NUL')
+        ext = [x for x in cmmods if x not in CM_REPLACED]
+        for i in range(0, len(ext), 12):
+            link.append('TLIB CM.LIB %s >> \\BUILD.LOG' % ' '.join('*' + x for x in ext[i:i + 12]))
+        for x in CM_REPLACED:
+            link.append('copy ..\\%s.OBJ %s.OBJ > NUL' % (x, x))
+        rsp = []
+        for i in range(0, len(cmmods), 8):
+            rsp.append(' '.join('+' + x for x in cmmods[i:i + 8]) + (' &' if i + 8 < len(cmmods) else ''))
+        open(os.path.join(s, 'L', 'CM', 'CMU.RSP'), 'w', newline='').write('\r\n'.join(rsp) + '\r\n')
+        link.append('TLIB CMU.LIB @CMU.RSP >> \\BUILD.LOG')
+        lines.append('cd \\S')
+        for o in objs:
+            base = o.upper()
+            src = prog.source(o)
+            if src and src.lower().endswith('.c') and tcc.has_inline_asm(src):
+                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s -S %s.C >> \\BUILD.LOG' % (FLAGS.replace('-c ', ''), base))
+                lines.append('\\TOOLS\\MASM /Mx %s.ASM; >> \\BUILD.LOG' % base)
+            elif src and src.lower().endswith('.c'):
+                lines.append('TCC -I\\TOOLS\\TURBOC20\\INCLUDE %s %s.C >> \\BUILD.LOG' % (FLAGS, base))
+            else:
+                lines.append('\\TOOLS\\MASM /Mx %s; >> \\BUILD.LOG' % base)
+        open(os.path.join(s, 'U.RSP'), 'w', newline='').write(
+            '\\TOOLS\\TURBOC20\\LIB\\C0M ' + ' '.join(o.upper() for o in objs) +
+            ',%s,%s.MAP,%s\r\n' % (EXE, BASE, prog.P['libs']))
+        link.append('cd \\S')
+        link.append('TLINK /m @U.RSP >> \\BUILD.LOG')
+
+        def run(batch):
+            open(os.path.join(c, 'BUILD.BAT'), 'w', newline='').write('\r\n'.join(batch) + '\r\n')
+            conf = os.path.join(tmp, 'dosbox.conf')
+            open(conf, 'w').write('[sdl]\noutput=surface\n[dosbox]\nmemsize=16\n[cpu]\ncycles=max\n'
+                                  '[autoexec]\nmount c "%s"\nc:\ncall \\BUILD.BAT\nexit\n' % c)
+            env = dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy')
+            db = tcc.dosbox()
+            args = [db, '-conf', conf, '-noconsole'] if 'dosbox-x' not in os.path.basename(db).lower() \
+                else [db, '-conf', conf, '-nogui', '-exit']
+            subprocess.run(args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1800)
+        run(lines)
+        # the hand-written assembly was assembled with TASM: its fixups in TASM's order
+        for m in libmods + CM_REPLACED:
+            for e in ('.ASM', '.asm'):
+                if os.path.exists(os.path.join(SRC, 'OSILIB', m + e)):
+                    tasmorder.fix(os.path.join(SRC, 'OSILIB', m + e), os.path.join(s, 'L', m.upper() + '.OBJ'))
+        for o in objs:
+            src = prog.source(o)
+            if src and src.lower().endswith('.asm'):
+                tasmorder.fix(src, os.path.join(s, o.upper() + '.OBJ'))
+        run(link)
+        log = open(os.path.join(c, 'BUILD.LOG'), encoding='latin-1').read() if os.path.exists(os.path.join(c, 'BUILD.LOG')) else ''
+        if a.log:
+            print(log)
+        for l in log.splitlines():
+            if l.startswith(('Error', 'Fatal', 'Warning:', 'Undefined')) or 'Undefined symbol' in l or 'rror' in l:
+                print(l)
+        if a.keep:
+            shutil.copytree(s, a.keep, dirs_exist_ok=True)
+        built = os.path.join(s, EXE)
+        if not os.path.exists(built):
+            sys.exit('no %s was built' % EXE)
+        new = open(built, 'rb').read()
+        mapf = open(os.path.join(s, BASE + '.MAP'), encoding='latin-1').read() if os.path.exists(os.path.join(s, BASE + '.MAP')) else ''
+    old = open(find_uexe(), 'rb').read()
+    print(EXE + ' %d bytes sha1 %s; original %d bytes sha1 %s' % (
+        len(new), hashlib.sha1(new).hexdigest(), len(old), hashlib.sha1(old).hexdigest()))
+    if new == old:
+        print('identical to the original')
+        return
+    hn, ho = struct.unpack_from('<H', new, 8)[0] * 16, struct.unpack_from('<H', old, 8)[0] * 16
+    if new[:hn] != old[:ho]:
+        print('headers/relocations differ (header %x vs %x bytes)' % (hn, ho))
+    ni, oi = new[hn:], old[ho:]
+    diffs = [i for i in range(min(len(ni), len(oi))) if ni[i] != oi[i]]
+    print('image: %d vs %d bytes, %d bytes differ' % (len(ni), len(oi), len(diffs)))
+    shown = 0
+    last = -100
+    for i in diffs:
+        if i - last > 16 and shown < 12:
+            print('  at image %05X: %s | original %s' % (i, ni[i:i + 8].hex(), oi[i:i + 8].hex()))
+            shown += 1
+        last = i
+    if mapf and a.log:
+        print(mapf)
+    sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

@@ -21,7 +21,7 @@
 #include "u6.h"
 
 /*====---- ----====*/
-/*0194*/int IsZFile = 0;/*1: LoadFile() decompresses LZW (".z") files*/
+/*0194*/int16 IsZFile = 0;/*1: LoadFile() decompresses LZW (".z") files*/
 /*list of file names the OSI loader (LOW.ASM C_049C) would treat as
   compressed; empty list (only the "" terminator)*/
 /*0196*/char *CompressedFileList[] = {
@@ -47,13 +47,13 @@
 	/*0255*/"West",
 	/*025A*/"Northwest"
 };
-int Unused01C2 = 0;/*unused*/
-int Unused01C4 = 0;/*unused*/
-/*01C6*/int IgnoreShortRead = 1;/*1: ignore "short read" errors (OSI_read hit end of file)*/
-/*01C8*/int GrAdapter = 0;/*graphic adapter: 0 VGA/MCGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
-/*01CA*/int MusicAdapter = 0;/*music adapter: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
-/*01CC*/int MusicPort = 0x388;/*music card i/o port*/
-/*01CE*/int GrDriverOption = 0;/*'$' config flag, added to the init parameter of the graphic driver (see InitGraphicsDriver); meaning unknown*/
+int16 Unused01C2 = 0;/*unused*/
+int16 Unused01C4 = 0;/*unused*/
+/*01C6*/int16 IgnoreShortRead = 1;/*1: ignore "short read" errors (OSI_read hit end of file)*/
+/*01C8*/int16 GrAdapter = 0;/*graphic adapter: 0 VGA/MCGA, 1 EGA, 2 Tandy, 3 CGA, 4 Hercules*/
+/*01CA*/int16 MusicAdapter = 0;/*music adapter: 0 none, 1 AdLib, 2 CMS, 3 Tandy, 4 Roland, 5 Covox, 6 Innovation*/
+/*01CC*/int16 MusicPort = 0x388;/*music card i/o port*/
+/*01CE*/int16 GrDriverOption = 0;/*'$' config flag, added to the init parameter of the graphic driver (see InitGraphicsDriver); meaning unknown*/
 /*01D0*/unsigned char MouseOn = 1;
 /*01D1*/char ConsoleReady = 0;/*1 once the console can display messages (error handler)*/
 /*01D2*/unsigned char PaletteCycle = 0;/*palette cycling counter*/
@@ -62,14 +62,14 @@ int Unused01C4 = 0;/*unused*/
 /*====---- ----====*/
 
 /*far pointer <-> 20-bit linear address*/
-#define PTR2NORM(p) (((unsigned long)FP_SEG(p) << 4) + FP_OFF(p))
+#define PTR2NORM(p) (((uint32)FP_SEG(p) << 4) + FP_OFF(p))
 #define NORM2PTR(n) (MK_FP((n) >> 4, (n) & 0xf))
 
 /*allocate "size" zeroed bytes from the far heap block (Mem_BP/Mem_Remain);
   exits to DOS if there is not enough memory.
   The allocator never frees: memory is handed out once at startup*/
-/*C_0903_0001*/static __MemAlloc(char huge **pptr, unsigned long size) {
-	unsigned long offset, linearAddr;
+/*C_0903_0001*/static __MemAlloc(char huge **pptr, uint32 size) {
+	uint32 offset, linearAddr;
 
 	if(size > Mem_Remain) {
 		/*not enough memory*/
@@ -98,11 +98,11 @@ int Unused01C4 = 0;/*unused*/
   uncompressed size and decompress() needs a work area (hash table, input
   buffer) given as a segment located after the destination data*/
 /*C_0903_00DE*/void far *LoadFile(char *fname, void far *pBuffer) {
-	int fileHandle;
-	unsigned aSegment;
+	int16 fileHandle;
+	uint16 aSegment;
 	void far *pRetBuff;
-	long linearAddr;
-	long fsize;
+	int32 linearAddr;
+	int32 fsize;
 
 	if(pBuffer == 0) {
 		/*para align*/
@@ -171,11 +171,11 @@ int Unused01C4 = 0;/*unused*/
   same as the "pBuffer != 0" part of LoadFile, but the file name is a far
   string (copied locally) and the compression flag is a parameter.
   Returns nothing (pRetBuff is computed but unused)*/
-/*C_0903_033A*/LoadFileGr(char far *fn, void far *pBuffer, int isZ) {
-	int fileHandle, i;
+/*C_0903_033A*/LoadFileGr(char far *fn, void far *pBuffer, int16 isZ) {
+	int16 fileHandle, i;
 	void far *pRetBuff;
-	long fsize;
-	unsigned aSegment;
+	int32 fsize;
+	uint16 aSegment;
 	char fname[14];
 
 	for(i = 0; i < 13; i++)
@@ -212,7 +212,7 @@ int Unused01C4 = 0;/*unused*/
   a key is awaited: <CTRL+C>/<ESC> give up, any other key retries.
   Note: "key" is not initialized on the "silent" and "disk full" paths.*/
 /*C_0903_0430*/void FileErrorHandler() {
-	int key;
+	int16 key;
 	struct tClipInfo *savedClip;
 
 	/*end of file reached: not an error*/
@@ -246,9 +246,9 @@ int Unused01C4 = 0;/*unused*/
   then load the tile animation table "animdata" and the tile/type
   property tables "tileflag"*/
 /*C_0903_04DB*/static InitGraphicsData() {
-	int animFile, flagFile;
-	unsigned aSegment;
-	long linearAddr;
+	int16 animFile, flagFile;
+	uint16 aSegment;
+	int32 linearAddr;
 
 	linearAddr = PTR2NORM(Mem_BP);
 	if(linearAddr & 0xf) {
@@ -258,21 +258,21 @@ int Unused01C4 = 0;/*unused*/
 	}
 	aSegment = linearAddr >> 4;
 	DISK_confirm(DISK_GAME);
-	GR_INIT_MEMORY(aSegment, (unsigned)(Mem_Remain >> 4));
+	GR_INIT_MEMORY(aSegment, (uint16)(Mem_Remain >> 4));
 	GrMemory = GrInfo->pDriverMem;
 	if(GrMemory == 0) {
 		OSI_delay_clean();
 		GR_SHUTDOWN();
 		exit(1);
 	}
-	GrMemorySeg = FP_SEG(GrMemory) + (((long)GrMemory & 0xffff) >> 4);/*unused?*/
+	GrMemorySeg = FP_SEG(GrMemory) + (((int32)GrMemory & 0xffff) >> 4);/*unused?*/
 
 	/*animated tiles: count, tile number, first frame, frame mask, shift*/
 	DISK_confirm(DISK_GAME);
 	animFile = OSI_open(/*0295*/"animdata");
 	OSI_read(animFile, 0, 2, &NumAnimData);
-	OSI_read(animFile, -1, MAX_ANIM * sizeof(int), AnimTile);
-	OSI_read(animFile, -1, MAX_ANIM * sizeof(int), AnimFirstFrame);
+	OSI_read(animFile, -1, MAX_ANIM * sizeof(int16), AnimTile);
+	OSI_read(animFile, -1, MAX_ANIM * sizeof(int16), AnimFirstFrame);
 	OSI_read(animFile, -1, MAX_ANIM, AnimFrameMask);/*anim tile mask*/
 	OSI_read(animFile, -1, MAX_ANIM, AnimFrameShift);/*anim tile shift*/
 	OSI_close(animFile);
@@ -291,7 +291,7 @@ int Unused01C4 = 0;/*unused*/
 /*display the main screen background "paper.bmp" (decompressed into the
   free far memory, which is not reserved)*/
 /*C_0903_070B*/ShowMainScreen() {
-	int fileHandle;
+	int16 fileHandle;
 	struct tPixmap far *pixmap;
 
 	DISK_confirm(DISK_GAME);
@@ -324,7 +324,7 @@ int Unused01C4 = 0;/*unused*/
 
 /*load and set the palette ("u6pal" for VGA, by the driver otherwise)*/
 /*C_0903_07C4*/LoadPalette() {
-	int fileHandle;
+	int16 fileHandle;
 
 	if(GrAdapter == 0) {
 		__MemAlloc(&VGAPalette, 0x100 * 3);
@@ -344,9 +344,9 @@ int Unused01C4 = 0;/*unused*/
   0xf8-0xfb every second call (values taken from the VGAPalette palette).
   Other adapters: done by the graphic driver*/
 /*C_0903_0820*/PaletteAnimation() {
-	int rgb;
+	int16 rgb;
 	union REGS regs;
-	int step;
+	int16 step;
 
 	if(SpellFx[14] != 0)
 		return;
@@ -411,7 +411,7 @@ int Unused01C4 = 0;/*unused*/
   in Britannia since 4/7/161 (years, months, days) - never returns*/
 /*C_0903_0A1E*/LaunchEndGame() {
 	char param_str[8],y_str[6],m_str[6],d_str[6];
-	int years,monthes,days;
+	int16 years,monthes,days;
 
 	years = Date_Y - 161;
 	monthes = Date_M - 7;
@@ -442,7 +442,7 @@ int Unused01C4 = 0;/*unused*/
 /*parse an hexadecimal music i/o port (e.g. "A388") into MusicPort;
   returns the pointer to the first non hex digit*/
 /*C_0903_0AE6*/char *ParseHexPort(unsigned char *str/*bp06*/) {
-	int ch;
+	int16 ch;
 
 	for(MusicPort = 0; ((ch = toupper(*str)) >= '0' && ch <= '9') || (ch >= 'A' && ch <='F'); str ++) {
 		MusicPort <<= 4;
@@ -501,10 +501,10 @@ int Unused01C4 = 0;/*unused*/
 };
 
 /*program entry: initialization, game loop, exit*/
-/*C_0903_0C5E*/cdecl main(int argc, char **argv) {
-	int i, fileHandle;
+/*C_0903_0C5E*/cdecl main(int16 argc, char **argv) {
+	int16 i, fileHandle;
 	char cfgString[7];
-	int hercRow;
+	int16 hercRow;
 
 	/*seed the random generator from the time of day*/
 	OSI_randomize(OSI_timeSeed());
@@ -659,7 +659,7 @@ int Unused01C4 = 0;/*unused*/
 	__MemAlloc(&SchedIndex, 0x100);
 	__MemAlloc(&Leader, 0x100);
 	__MemAlloc(&NPCFlag, 0x100);
-	__MemAlloc(&OrigShapeType, 0x100 * sizeof(int));
+	__MemAlloc(&OrigShapeType, 0x100 * sizeof(int16));
 	__MemAlloc(&Level, 0x100);
 	__MemAlloc(&PathData, 0x100);
 	__MemAlloc(&ChunkIndexBuf, 0x600);

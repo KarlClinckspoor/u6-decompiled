@@ -27,7 +27,7 @@
 #include <math.h>
 
 /*edible items*/
-/*2CCE*/int EdibleTypes[] = {
+/*2CCE*/int16 EdibleTypes[] = {
 	OBJ_LOAF_OF_BREAD,OBJ_PORTION_OF_MEAT,
 	OBJ_ROLLS,OBJ_CAKE,
 	OBJ_CHEESE,OBJ_HAM,
@@ -38,8 +38,8 @@
 };
 
 /*returns 1 if objType is one of the 14 edible types of EdibleTypes*/
-static /*C_3200_000E*/IsEdible(int objType) {
-	int i;
+static /*C_3200_000E*/IsEdible(int16 objType) {
+	int16 i;
 
 	for(i = 0; i < 14; i ++) {
 		if(EdibleTypes[i] == objType)
@@ -50,8 +50,8 @@ static /*C_3200_000E*/IsEdible(int objType) {
 
 /*look for food in the inventory of party member objNum only;
   if found, one unit of that food type is consumed (TakeObj) and 1 is returned*/
-static /*C_3200_0035*/TryEatExclusive(int objNum) {
-	int item, itemType;
+static /*C_3200_0035*/TryEatExclusive(int16 objNum) {
+	int16 item, itemType;
 
 	/*walk the objects linked after objNum as long as they are
 	  (recursively) contained in objNum's inventory*/
@@ -68,8 +68,8 @@ static /*C_3200_0035*/TryEatExclusive(int objNum) {
 /*party member #partyNum eats: first from his own pack,
   else from the first party member who has some food.
   returns 1 if something was eaten*/
-static /*C_3200_0094*/TryEat(int partyNum) {
-	int i;
+static /*C_3200_0094*/TryEat(int16 partyNum) {
+	int16 i;
 
 	if(TryEatExclusive(Party[partyNum]))
 		return 1;
@@ -85,7 +85,7 @@ static /*C_3200_0094*/TryEat(int partyNum) {
   (TERRAIN_WALL_W..80, i.e. a building wall) is in the 11x11 view, or if
   the party stands on a wet tile without being in a vehicle*/
 /*C_3200_00D3*/static REST_NotInWilderness() {
-	int x, y, numTile;
+	int16 x, y, numTile;
 
 	for(x = MapX - 5; x <= MapX + 5; x ++) {
 		for(y = MapY - 5; y <= MapY + 5; y ++) {
@@ -104,8 +104,8 @@ static /*C_3200_0094*/TryEat(int partyNum) {
   39x39 tiles square starting at the 8-aligned corner 16 tiles up-left of
   the party (roughly the loaded 40x40 area)*/
 /*C_3200_0160*/static REST_FoesNear() {
-	int objNum, coordMask;
-	int areaX0, areaY0;
+	int16 objNum, coordMask;
+	int16 areaX0, areaY0;
 
 	/*map width: 256 underground, 1024 on the surface*/
 	if(MapZ)
@@ -129,7 +129,7 @@ static /*C_3200_0094*/TryEat(int partyNum) {
 /*check others near:
   returns 1 if a non party NPC (horses excepted) is within 5 tiles*/
 /*C_3200_0226*/static REST_OthersNear() {
-	int objNum;
+	int16 objNum;
 
 	for(objNum = 0; objNum < 0x100; objNum ++) {
 		if(
@@ -147,7 +147,7 @@ static /*C_3200_0094*/TryEat(int partyNum) {
   returns 1 (=NOT enough room) if one of the 3x3 tiles centered on the
   party is not passable for the active party member*/
 /*C_3200_02C4*/static REST_NoRoom() {
-	int dx, dy;
+	int16 dx, dy;
 
 	for(dx = 0; dx < 3; dx ++) {
 		for(dy = 0; dy < 3; dy ++) {
@@ -162,8 +162,8 @@ static /*C_3200_0094*/TryEat(int partyNum) {
   gremlin) just outside the 11x11 view, on a random side.
   returns 1 if at least one monster could be placed*/
 static /*C_3200_0309*/HasNightEncounter() {
-	int objNum, objType, numMonsters, i, tries;
-	int pos, incr, x, y, ret;
+	int16 objNum, objType, numMonsters, i, tries;
+	int16 pos, incr, x, y, ret;
 
 	ret = 0;
 	switch(OSI_rand(0, 3)) {
@@ -205,8 +205,8 @@ static /*C_3200_0309*/HasNightEncounter() {
   (capped at MaxHP) and fully restores magic points.
   verbose: print "<name> has healed."
   (also called by the OP_REST conversation opcode, i.e. inns)*/
-/*C_3200_0467*/HealPartyMember(int partyIdx, int verbose) {
-	int npc, missingHP, healAmount;
+/*C_3200_0467*/HealPartyMember(int16 partyIdx, int16 verbose) {
+	int16 npc, missingHP, healAmount;
 
 	npc = Party[partyIdx];
 	missingHP = MaxHP(npc) - HitPoints[npc];
@@ -229,7 +229,7 @@ static /*C_3200_0309*/HasNightEncounter() {
 /*repair hull: "rest" aboard a ship adds 5% to the hull strength
   (the ship's HitPoints, max 100) and lets 5 minutes pass*/
 /*C_3200_0514*/static REST_RepairHull() {
-	int ship, unused;
+	int16 ship, unused;
 
 	ship = Party[Active];
 	if(HitPoints[ship] + 5 >= 100)
@@ -257,11 +257,11 @@ static /*C_3200_0309*/HasNightEncounter() {
 
 /*"rest" command*/
 /*C_3200_055D*/REST_Command() {
-	int i, npc;
+	int16 i, npc;
 	struct coord xyz;
-	int ch, sleepTime, campFire;
-	int someoneCannotMove, cannotMove, gatherTries, noMeal, guardNum;
-	int eaterIdx, guardMode, mouseState, wakeReason, wasSelectMode;
+	int16 ch, sleepTime, campFire;
+	int16 someoneCannotMove, cannotMove, gatherTries, noMeal, guardNum;
+	int16 eaterIdx, guardMode, mouseState, wakeReason, wasSelectMode;
 
 	someoneCannotMove = 1;
 	gatherTries = 20;

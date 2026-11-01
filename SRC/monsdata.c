@@ -25,7 +25,7 @@
 #include "spells.h"
 
 /*classes: object type of each monster class (0 terminated)*/
-/*3522:0000*/int MonsterTypes[] = {
+/*3522:0000*/int16 MonsterTypes[] = {
 /*0x00*/	OBJ_ACID_SLUG,OBJ_ALLIGATOR,OBJ_GIANT_ANT,OBJ_AVATAR,OBJ_GIANT_BAT,OBJ_PEASANT,OBJ_BIRD,OBJ_CHILD,
 /*0x08*/	OBJ_CORPSER,OBJ_COW,OBJ_CYCLOPS,OBJ_DAEMON,OBJ_DEER,OBJ_DOG,OBJ_DRAGON,OBJ_DRAKE,
 /*0x10*/	OBJ_WOMAN,OBJ_FARMER,OBJ_FIGHTER,OBJ_WINGED_GARGOYLE,OBJ_GARGOYLE,OBJ_GAZER,OBJ_GHOST,OBJ_GREMLIN,
@@ -97,7 +97,7 @@
 	CHAOTIC,CHAOTIC,CHAOTIC,CHAOTIC,CHAOTIC,CHAOTIC,NEUTRAL,CHAOTIC
 };
 /*SPECIAL: MONSTER_xxx ability flags (see monsdata.h)*/
-/*3522:0242*/int MonsterFlags[] = {
+/*3522:0242*/int16 MonsterFlags[] = {
 /*0x00*/
 	MONSTER_VANISHES|MONSTER_DOUBLE_FIRE_DMG|MONSTER_IMMUNE_SLEEP,/*00 acid_slug*/
 	MONSTER_BLEEDS|MONSTER_NO_CORPSE|MONSTER_STR_ATTACK|MONSTER_IMMUNE_POISON,/*01 alligator*/
@@ -169,7 +169,7 @@
 };
 /*spells/weapons/armors/treasures:
 indexes in MonsterInvLists (0: nothing)*/
-/*3522:02C2*/int MonsterInvIndex[] = {
+/*3522:02C2*/int16 MonsterInvIndex[] = {
 	0x000,0x000,0x000,0x000,0x000,0x004,0x000,0x000,
 	0x000,0x00B,0x010,0x01B,0x023,0x000,0x028,0x034,
 	0x03C,0x043,0x04B,0x057,0x065,0x070,0x077,0x000,
