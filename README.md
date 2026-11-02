@@ -132,6 +132,15 @@ object code, data and relocations against the original image, one module at a ti
 These were last run on the sources of this branch, with the Turbo C 2.0 and MASM 3.0 provided
 for the project.
 
+## Lessons learned
+
+- [docs/LESSONS_DECOMPILATION.md](docs/LESSONS_DECOMPILATION.md): rebuilding the three
+  programs byte for byte with Turbo C 2.0 and MASM 3.0 (the loop, Turbo C's habits, the
+  data segment, TASM vs MASM, the linker, tools, parallel agents, readability).
+- [docs/LESSONS_PORT.md](docs/LESSONS_PORT.md): the native Windows/Linux port (one source
+  for DOS and the host, the 16-bit world on a 64-bit machine, the drivers in C tested in an
+  emulator, three programs in one executable, exact replays, sound).
+
 ## U.EXE decompiled
 
 `SRC_U/` is the decompilation of `U.EXE`, the other big program of the game: the main menu,
