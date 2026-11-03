@@ -90,7 +90,7 @@ Confidence varies. Items marked *(unsure)* were not fully confirmed.
 * **Moons:** each moon's phase comes from a 28-day table. Its sky position (0..23) is the number of hours until it sets, and it is drawn when ≤ 14. Moongates exist at the 8 `MoonstonePos` spots. Which variable is Trammel and which is Felucca was not verified *(unsure)*.
 * **Eclipse:** day 1 of every third month, or the Eclipse spell. Dawn and dusk are at hours 5 and 19.
 * **Magic regeneration:** only the Avatar, Mage, Swashbuckler and Musician (long cape) object types regain magic every hour.
-* **Karma:** `AddKarma` is never called; karma only ever decreases.
+* **Karma:** the C function `AddKarma` is never called: the C code only lowers karma. It goes up through the conversation opcode `OP_ADDKARMA` (+10 for each altar meditation and for the Singularity, and a few NPCs), capped at 99. See [docs/GAME_MECHANICS.md](docs/GAME_MECHANICS.md#karma).
 * **Schedules:** `SchedPointer[n]` is the first schedule entry of NPC n, and `SchedIndex[n]` is the current entry relative to it. `Schedule.time` holds the hour in bits 0-4 and the weekday in bits 5-7 (0 = daily).
 * **Leader[]** has several jobs. In combat-type modes it holds the leader or target (and the melee opponent, which drives the "interference" check). In path modes it holds the path slot, and in `AI_SEEKOBJ` it holds the furniture kind.
 * **Combat formation:** `PartyFrontMember`, `PartyFlankPos`/`PartyFlankNeg` and the enemy counterparts are the front and flank members of each side. They are computed in npctrack.c and are not targets.
@@ -100,6 +100,39 @@ Confidence varies. Items marked *(unsure)* were not fully confirmed.
 * **Graphics driver:** sprite drawing goes save background (`GR_SAVE_SPRITE_BG`), draw (`GR_DRAW_SPRITE`), copy to screen (`GR_COPY_TO_SCREEN`), then restore. The mouse driver uses the same scheme: driver functions 0x0C/0x30/0x0F.
 * **Music:** the musician's melody only plays through the PC speaker when no music card is present.
 * **Spellbook buttons:** 0xA2..0xA5 are previous circle, previous page, next page and next circle (`CMD_SPELLBOOK_*`).
+
+## Found while documenting the mechanics
+
+These came up while writing [docs/GAME_MECHANICS.md](docs/GAME_MECHANICS.md), which has the
+details. As above, nothing was changed in the code.
+
+### Time, rest and status
+* `REST_Command`: the guard is chosen with `ch < PartySize + '0'`, so the last party member cannot be picked as guard by number (the game loop's solo test uses `+ '1'`).
+* `PassTime`: `wearsInvisRing` is only reset in the party-member branch. For other actors the invisibility wear-off uses the value left by the last party member (uninitialised for object 0), so an invisible monster never becomes visible while that member wears an invisibility ring.
+* `SPELL_DoPickpocket`: `KARMA -= 5` without the clamp `SubKarma` has. `KARMA` is unsigned, so below 5 it wraps to 251-255; the shrines then praise the Avatar and resurrection no longer costs experience.
+* `PartyResurrect` gives the Avatar `MAGIC = INTEL`, not `MaxMagic` (2×INT). Camping only gives sleepers the unconscious shape; it never sets ASLEEP. A natural eclipse hides the moons but moongates still open. Terrain movement cost is charged for the square being left.
+* `ComputeLevel` is never called: levels rise only through the conversation opcode `OP_ADDLVL` (the altars).
+
+### Conversation and quest
+* `OP_IF` does not handle nesting. In Beh Lem's script (npc 164) an inner `LEAVEPARTY` can never run, and the routine also starts at a party index one past the last member, so his "send a companion away" logic does nothing *(from the bytecode, not tested in the game)*.
+* The generic gargoyle entry (0x68) of the shipped CONVERSE.B is empty and winged gargoyles are not mapped, so temporary gargoyles always say "Funny, no response."
+* `CON_gets(TalkInput, 50)` can write one byte past the 50-byte `TalkInput`, into `TalkNpcName[0]`.
+* A string `LET` from an array works by accident: `DATA` in `parse_factor` reads and writes `lstack[-1]`.
+* `TALK_initTalk` reads `NPCMode[objNum]` out of bounds for shrines and statues (no script reads it).
+* `LeaveParty` does not adjust `Active` or `SoloMember` *(consequences not checked)*.
+* Latent: the IF and keyword skip loops do not skip 4-byte address operands; `TalkKeyword` (10 bytes) has no length check.
+* Script bug in Peer (npc 53): the carry check uses `$9` where `#9` was meant.
+* A negative `days` from `LaunchEndGame` reaches END.EXE, which then indexes `numberWords[]` out of bounds *(probable)*.
+* Iolo's script holds a debug menu: "spam" three times, then "humbug" (edit stats, level, experience, `#Q`, karma; heal; horse).
+
+### Combat and eggs
+* `EGG_hatches`: `npcMod` is taken from the first embryo with a non-zero quality and never reset, so later embryos of the same egg get that first combat mode.
+* `__DoHit`: drag-under, acid, food theft and poison apply even when armour reduced the damage to 0, and the poison ignores `IMMUNE_POISON` and Protection.
+* `COMBAT_AI_Berserk` charges 5 extra points after every action (a berserk attack costs 15). A GOOD berserker ignores CHAOTIC enemies while any EVIL one is visible; `COMBAT_AI_Flank` lets CHAOTIC flankers target NEUTRAL actors.
+* Monster wound messages, the flee threshold and retreat healing use `MaxHP = Level*30`, not the spawned HP.
+* A missed ranged shot drifts by -1..1 on each axis, so 1 miss in 9 is re-rolled against the original target.
+* `MonsterArmor` is used only in the XP formula; the paralyze, lightning, chain bolt and energy wind spells have no resistance roll.
+* `COMBAT_AI_Assault` reads `ObjPos[-1]` when there is no opponent; `SPELL_FireDamage` and `TerrainDamage` read `MonsterFlags[-1]` for actors without a class (both harmless). `ComputeCombatGeometry` never resets the party's front/flank members *(unsure whether it shows)*.
 
 ## Still unknown
 * Ground tiles `TIL_001`..`TIL_0FC`, `TIL_17D`, `TIL_17F` and `TIL_1B8`..`TIL_1BB` keep their numeric names.

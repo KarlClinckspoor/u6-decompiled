@@ -132,6 +132,12 @@ object code, data and relocations against the original image, one module at a ti
 These were last run on the sources of this branch, with the Turbo C 2.0 and MASM 3.0 provided
 for the project.
 
+## How the game works
+
+[docs/GAME_MECHANICS.md](docs/GAME_MECHANICS.md) describes, from the code and the game's
+conversation scripts, how conversations, time, quest progression, character stats and combat
+work: formulas, tables and the functions that implement them.
+
 ## Lessons learned
 
 - [docs/LESSONS_DECOMPILATION.md](docs/LESSONS_DECOMPILATION.md): rebuilding the three
