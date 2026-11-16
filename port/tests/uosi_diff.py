@@ -198,6 +198,7 @@ def build_lib(tmp):
                                '-I', os.path.join(ROOT, 'SRC_U'), '-I', os.path.join(PORT, 'u'),
                                '-I', os.path.join(PORT, 'include'), '-I', os.path.join(PORT, 'sys'),
                                '-I', os.path.join(PORT, 'platform'),
+                               '-I', os.path.join(ROOT, 'exhume', 'runtime', 'include'),
                                '-c', os.path.join(PORT, 'u', 'osilib', f), '-o', o])
         objs.append(o)
     for f in PLAIN_C:

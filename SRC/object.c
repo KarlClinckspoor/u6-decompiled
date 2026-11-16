@@ -1341,7 +1341,7 @@
 	struct coord containerPos;
 	int16 containerIdx;
 
-	PORT_ZERO(containerPos)/*its third byte is never set*/
+	STACK_JUNK_SET(containerPos.raw[2], 0);/*its third byte is never set*/
 	if(GetCoordUse(objNum) != LOCXYZ) {
 		if((int16)GetAssoc(objNum) < 0x100) {
 			if(GetCoordUse(objNum) == CONTAINED)

@@ -2,7 +2,7 @@
  * replaces gamestat.c on the host: its variables as one packed block, in DOS's order
  * and at DOS's offsets, so the saved game's state block reads and writes as in DOS. */
 #include <stddef.h>
-#include "portable.h"
+#include "u6port.h"
 
 
 #pragma pack(push, 1)

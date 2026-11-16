@@ -5,7 +5,7 @@
 #ifndef OSILIB_H
 #define OSILIB_H
 
-#include "portable.h"
+#include "u6port.h"
 
 /*a drawing surface: a bitmap in memory (or the screen) with its clipping window*/
 struct tSurface {

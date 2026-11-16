@@ -127,7 +127,7 @@ recording made on Windows replays identically on Linux and the other way round.
 
 ## How it is put together
 
-- `SRC/portable.h`: the only kind of change to the shared sources. Explicit widths
+- `SRC/u6port.h` (over Exhume's `portable.h`, from the `exhume/` submodule): the only kind of change to the shared sources. Explicit widths
   (`int16`, `uint32`, ...) and a few macros (varargs, a pointer kept in an integer, the
   music driver's far call, a string literal the game writes into) that expand to exactly
   the original tokens under Turbo C. `SRC/u6.h` includes the port's prototypes on the host
@@ -143,7 +143,7 @@ recording made on Windows replays identically on Linux and the other way round.
   the DOS file system and interrupts, in C (`docs/port/OSILIB.md`); `portmain.c` (start-up)
   and `session.c` (home folder, recordings, replays).
 - `port/gfx/mcga.c`: the MCGA driver U6MCGA.DRV in C (`docs/port/MCGA_DRIVER.md`).
-- `port/u/`: `U.EXE` in the port. Its C (`SRC_U/`, with `SRC_U/portable.h` as `SRC/` has)
+- `port/u/`: `U.EXE` in the port. Its C (`SRC_U/`, with `SRC_U/u6port.h` as `SRC/` has)
   is compiled with its public names renamed `U_*` (`uport.h`, `urename.h`), so that both
   programs live in one executable; `uprot.h` (prototypes) and `ubss.c` (its uninitialised
   data in DOS's order) come from `port/tools/gen_u.py`. `ugfx.c` is its graphics driver

@@ -10,7 +10,7 @@
  *
  * Types are U's (SRC_U/u.h: struct tSurface, tText, tMouse as the host compiles them:
  * far pointers are host pointers, every struct packed) and the explicit widths of
- * SRC_U/portable.h, so that the arithmetic wraps as in DOS. A routine U's C sees as
+ * SRC_U/u6port.h, so that the arithmetic wraps as in DOS. A routine U's C sees as
  * returning int (implicit int, no prototype) returns int.
  *
  * What each module does, in DOS and here: docs/port/U_OSILIB.md.

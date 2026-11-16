@@ -67,6 +67,13 @@ def main():
             subprocess.run(['mcopy', '-i', img, '::MASM.EXE', dst], check=True)
         shutil.copy(dst, os.path.join(c, 'TOOLS', 'TASM200.EXE'))
         shutil.copytree(a.src, os.path.join(c, 'S'), ignore=shutil.ignore_patterns('*.OBJ', '*.obj', '*.EXE', '*.exe', '*.LIB'))
+        # Exhume's portable.h, in place from the submodule, staged beside the sources with
+        # CRLF line ends (Turbo C 2.0 misreads bare LF); SRC/u6port.h includes it
+        exhume_portable = os.path.join(ROOT, 'exhume', 'runtime', 'include', 'portable.h')
+        if not os.path.exists(exhume_portable):
+            sys.exit('exhume/runtime/include/portable.h is missing: git submodule update --init')
+        open(os.path.join(c, 'S', 'PORTABLE.H'), 'wb').write(
+            open(exhume_portable, 'rb').read().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
         lines = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S\\OSILIB']
         for name, asm in OSILIB_STEPS:
             tool = 'TASM200' if asm == 'TASM' else 'MASM300'

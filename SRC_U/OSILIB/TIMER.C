@@ -5,7 +5,7 @@
 /*the library was compiled through the assembler (tcc -B): this does the same*/
 #pragma inline
 #include <dos.h>
-#include "portable.h"
+#include "u6port.h"
 
 /*this module's variables: its _DATA (int timerInstalled = 0;) and its _BSS, in this order
   (Turbo C puts the _BSS variables in the order of its hash of their names: the sum of

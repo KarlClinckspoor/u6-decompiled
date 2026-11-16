@@ -6,7 +6,7 @@
 #ifndef __D_2C4A_H__
 #define __D_2C4A_H__
 
-#include "portable.h"
+#include "u6port.h"
 
 /*__2C4A*/extern unsigned char IsOnQuest;
 /*__2C4B*/extern unsigned char NextSleep;

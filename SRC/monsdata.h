@@ -6,7 +6,7 @@
 #ifndef __SEG_3522_H__
 #define __SEG_3522_H__
 
-#include "portable.h"
+#include "u6port.h"
 
 /*3522:0000*/extern int16 far MonsterTypes[];/*object type of each monster class, 0-terminated*/
 

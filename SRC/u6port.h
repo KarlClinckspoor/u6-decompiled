@@ -4,29 +4,22 @@
  * reverse-coded by Ergonomy Joe in 2013
  */
 /*
-	Types and macros shared by the DOS build and the native port.
+	The project's own macros shared by the DOS build and the native port, kept
+	underneath Exhume's runtime/include/portable.h (which this file includes, and
+	which defines int16, uint16, int32, uint32, NEARPTR, STACK_JUNK_SET, ...).
+	It is called u6port.h because a project header named portable.h would shadow
+	Exhume's. Every shared source includes this file, never Exhume's directly.
 
 	Under Turbo C every one is the original type or tokens, so the DOS build
 	compiles to the same bytes (tools/dosbuild.py checks GAME.EXE). On a
 	modern host int is 32 bits and long 64 (32 on Windows), so the game's
-	integers are written with explicit widths: int16 for Turbo C's int,
-	uint16 for unsigned, int32 for long, uint32 for unsigned long.
+	integers are written with explicit widths (Exhume's portable.h): int16 for
+	Turbo C's int, uint16 for unsigned, int32 for long, uint32 for unsigned long.
 */
-#ifndef __PORTABLE_H__
-#define __PORTABLE_H__
+#ifndef __U6PORT_H__
+#define __U6PORT_H__
 
-#ifdef __TURBOC__
-typedef int int16;
-typedef unsigned uint16;
-typedef long int32;
-typedef unsigned long uint32;
-#else
-#include <stdint.h>
-typedef int16_t int16;
-typedef uint16_t uint16;
-typedef int32_t int32;
-typedef uint32_t uint32;
-#endif
+#include "portable.h"
 
 /*CON_printf's variable arguments: Turbo C takes their address with "...";
   each is a 16-bit word (a near pointer for %s)*/
@@ -54,13 +47,11 @@ typedef uint32_t uint32;
 #endif
 
 /*a near pointer kept in an integer (16 bits in DOS): the conversation
-  interpreter keeps string pointers on its value stack*/
+  interpreter keeps string pointers on its value stack (NEARPTR itself is Exhume's)*/
 #ifdef __TURBOC__
-typedef int16 NEARPTR;
 typedef int32 NEARLONG;
 #define PTR2INT16(p) (int16)p
 #else
-typedef intptr_t NEARPTR;
 typedef int64_t NEARLONG;
 #define PTR2INT16(p) (intptr_t)(p)
 #endif
@@ -75,19 +66,15 @@ typedef int64_t NEARLONG;
 #endif
 
 /*a string literal the game writes into (DOS has no read-only data; a host keeps
-  literals read-only): the port gives it a writable copy of its own*/
+  literals read-only): the port gives it a writable copy of its own. Exhume's
+  WRITABLE_STR is a block-scope compound literal, which dies with its block; this one
+  is static, so the pointer may outlive the block (talk.c keeps it in VarStr[]), hence
+  the project's definition replaces Exhume's on the host (the same `s` under Turbo C)*/
 #ifdef __TURBOC__
 #define WRITABLE_STR(s) s
 #else
+#undef WRITABLE_STR
 #define WRITABLE_STR(s) ({ static char writable_[] = s; writable_; })
-#endif
-
-/*a local the game only partly sets (DOS keeps whatever the stack held in the rest):
-  the port zeroes it, so that what reaches a file does not depend on the compiler*/
-#ifdef __TURBOC__
-#define PORT_ZERO(v)
-#else
-#define PORT_ZERO(v) memset(&(v), 0, sizeof(v));
 #endif
 
 #endif

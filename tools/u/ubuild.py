@@ -76,6 +76,13 @@ def main():
         for fn in os.listdir(SRC):  # headers the library's C may include
             if fn.lower().endswith('.h'):
                 crlf(os.path.join(SRC, fn), os.path.join(s, 'L', fn.upper()))
+        # Exhume's portable.h, in place from the submodule, beside the sources and the library's
+        # headers, with CRLF line ends (u6port.h includes it, and it includes hookgame.h)
+        exhume_portable = os.path.join(ROOT, 'exhume', 'runtime', 'include', 'portable.h')
+        if not os.path.exists(exhume_portable):
+            sys.exit('exhume/runtime/include/portable.h is missing: git submodule update --init')
+        for d in (s, os.path.join(s, 'L')):
+            crlf(exhume_portable, os.path.join(d, 'PORTABLE.H'))
         lines = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S\\L']
         for m in libmods:
             base = m.upper()

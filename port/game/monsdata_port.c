@@ -2,7 +2,7 @@
  * replaces monsdata.c on the host: its variables as one packed block, in DOS's order
  * and at DOS's offsets, so that reads past a table (class -1) find what DOS finds. */
 #include <stddef.h>
-#include "portable.h"
+#include "u6port.h"
 #include "monsdata.h"
 #include "obj.h"
 #include "spells.h"

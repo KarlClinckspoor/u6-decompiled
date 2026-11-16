@@ -53,7 +53,7 @@ Most crashes and most replay divergences came from the same root: the game assum
   that wraps from line 103, so those stars land 16 pixels to the left, as in DOS.
 - **Stack garbage.** The game serialised a local whose third byte it never set, so object
   files carried whatever was on the stack: replays differed between `-O0` and `-O3`. The
-  port zeroes it (`PORT_ZERO`, nothing for Turbo C).
+  port zeroes it (first `PORT_ZERO`, now Exhume's `STACK_JUNK_SET`: nothing for Turbo C).
 - **String literals are read-only on the host.** The conversation driver writes an NPC's
   name into a literal; the host gets a writable copy (`WRITABLE_STR`).
 - **Reading its own code.** `U.EXE`'s monitor noise and the gypsy's pattern are random bytes

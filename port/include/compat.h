@@ -60,7 +60,7 @@ void port_srand(unsigned seed);
 #define exit port_exit
 void port_exit(int code);
 
-/* ---- the music driver's entries (port/sys/musdrv.c, portable.h's MUS_DRV) ---- */
+/* ---- the music driver's entries (port/sys/musdrv.c, u6port.h's MUS_DRV) ---- */
 void MUSDRV_0(int port);
 void MUSDRV_6(void *song);
 void MUSDRV_9(void);

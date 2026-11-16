@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ctok
 
 KW = {'signed', 'unsigned', 'short', 'int', 'long'}
-SKIP_FILES = {'portable.h'}
+SKIP_FILES = {'portable.h', 'u6port.h'}
 
 
 def width(words):

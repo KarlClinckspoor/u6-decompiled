@@ -6,7 +6,7 @@
 #ifndef __U6_H__
 #define __U6_H__
 
-#include "portable.h"
+#include "u6port.h"
 
 union tHandler {
 	struct {

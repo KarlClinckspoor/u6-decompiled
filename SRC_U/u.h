@@ -6,7 +6,7 @@
 #define U_H
 
 #include <dos.h>
-#include "portable.h"
+#include "u6port.h"
 
 /*OSI file library (assembly, pascal convention), the same as GAME.EXE's OSI_FILE.ASM*/
 int16 pascal OSI_open(char *name);/*OSI_open*/

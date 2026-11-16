@@ -35,7 +35,7 @@ memory helpers. Test: `python3 port/tests/uosi_diff.py` (see [Tests](#tests)).
   functions the library calls (`decompress`, `osi_ticks_live`, `osi_poll_idle`,
   `dos_divide_error`, `dosfs_*`, `plat_*`, `vga_dac_*`).
 * **Types** are U's (`SRC_U/u.h`: `struct tSurface`, `tText`, `tMouse` packed, far pointers
-  as host pointers) with the explicit widths of `SRC_U/portable.h`; registers are `uint16`
+  as host pointers) with the explicit widths of `SRC_U/u6port.h`; registers are `uint16`
   locals, compares signed where the assembly uses JL/JG and unsigned for JB/JA, offsets
   wrap at 64 KB. Routines U's C sees as returning `int` return `int`; where the original's
   AX is not meaningful (MOUSE_POINTER, MOUSE_NOINIT, SURF_alloc...) they return 0.
