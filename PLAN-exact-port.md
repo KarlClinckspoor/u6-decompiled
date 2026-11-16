@@ -261,3 +261,27 @@ sessions grow.
 
 Rerun: scratch only (`probe_patch.py`, `sessions.py`, `static.py`); the method moves into
 the replay build in task 6, not into the tree as is.
+
+## 10. Phase 1 task 3: `replay.c` for Ultima VI (2026-11-16)
+
+In the fork, commit `e0039a6` (local; the submodule is pinned to it). With
+`-DRP_FAR_STORAGE` the harness keeps every variable and string in a far segment `RP_FAR`
+(`runtime/replay/rpfar.asm`, class `'CODE'` so that TLINK places it before DGROUP), does
+its file I/O through int 21h and has no near data: linked into GAME.EXE with a stub
+caller, `_DATA` (3228h), `_BSS` (BBCCh) and `_BSSEND` (EDFAh) are unchanged and all 340
+DGROUP publics keep their offsets. Stack per entry point: at most 236 bytes (static, every
+path), 154 measured in emu2.
+
+Bindings for the later tasks: `RP_RAND_SEED()`, `RP_NULL_SUM` 0DFAh with
+`RP_NULL_SUM_TO`, `RP_STOP_KEY(r)`, `RP_SRAND`, `RP_WALL_READ`, the I/O and buffer-size
+macros, `RP_MAGIC_TAG`; in `hookgame.h`, `HOOK_KEY_ARG` (the hook is `KEY(a)`) and
+`HOOK_RECORDED` (`RECORDED(id, x)`, `rp_value`, MISC tag 10).
+
+Underworld: its replay objects are identical but for COMENT records (review made
+`rp_value` conditional on `HOOK_RECORDED` to get that); the UW1 and UW2 ports replay all
+17 and 13 sessions identical to DOS. Not run: Underworld's own DOS-side golden check.
+
+Open for tasks 4 to 7: `RP_KEYSTATE_LEN` must be at least 1 and Ultima VI keeps no key
+state; `RP_FAR_SIZE` lives in both `replay.c` and `rpfar.asm` (MASM 3.00 has no `/D`);
+in far mode the harness's variable names are macros and can capture a game variable of the
+same name inside a binding's `RP_DUMP`; `rpfar.asm` is not yet in `tools/replay.py build`.
