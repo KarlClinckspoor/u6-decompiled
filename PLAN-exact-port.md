@@ -230,3 +230,34 @@ already-linked `intdos`, so no library data is pulled in. Exit test for that: th
    saved game with a character. Exit: `replay.py build` and `dos` run. *Medium (Sonnet).*
 8. First real session: record in js-dos, replay twice in DOSBox-X, identical. *Hard
    (Opus).*
+
+## 9. Phase 1 task 2: GAME's stack depth (2026-11-16)
+
+Measured with a probe build (pattern A5 filled below the frame at the start of `main` and
+again before `GameLoop`; the lowest overwritten byte read at every `CON_getch` and every
+turn), headless DOSBox-X, AdLib music on, a saved game with a party of four in a fight.
+The probe adds no data: `_BSSEND` is at DGROUP:EDFAh in both maps (checked in review).
+
+- **Room.** The stack runs from 10000h down; the near heap above EDFAh holds only C0's
+  copies of the arguments and environment (160 bytes under DOSBox-X, more with a larger
+  environment), and the game never calls `malloc`. Usable: 4,454 bytes here.
+- **Measured.** Deepest seen 1,004 bytes; every run that drew a missile 956 to 990;
+  walking, time passing and conversation without one 255 to 409. The peak is `Missiles()`
+  (`gfx.c`), a 616-byte frame.
+- **Not reached by any run:** spell casting, rest, a town, save and load, explosion chains.
+  The measured figure is therefore a floor, not a ceiling.
+- **Static.** Longest simple call path 2,134 bytes (not feasible as a whole; plausible
+  chains about 1,600 to 1,900). Recursion exists (a 69-function component; the cheapest
+  cycle is 44 bytes a level, the one through `Missiles` 878) and its depth is not bounded.
+  203 indirect call sites and the drivers' interrupt handlers are not followed.
+
+**Budget for the harness (coordinator's reading, stricter than the worker's 1 KB):** a
+hook may use at most **256 bytes** of stack including its callees and the DOS call, never
+recurse, never call `printf`-class library routines. With far buffers nothing more is
+needed, and 2,134 + 256 + interrupts stays under 2.6 KB of 4,454. Task 6 adds a stack
+check to the replay build (the same pattern fill, lowest address written to the dump), so
+every recorded session measures its own depth and the unreached paths get covered as the
+sessions grow.
+
+Rerun: scratch only (`probe_patch.py`, `sessions.py`, `static.py`); the method moves into
+the replay build in task 6, not into the tree as is.
