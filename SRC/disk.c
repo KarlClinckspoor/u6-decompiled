@@ -180,8 +180,8 @@
 	/*get dos version*/
 	regs.h.ah = 0x30;
 	intdos(&regs, &regs);
-	DosVerMajor = regs.h.al;
-	DosVerMinor = regs.h.ah;
+	DosVerMajor = RECORDED16(RV_DOSVER_MAJOR, regs.h.al);
+	DosVerMinor = RECORDED16(RV_DOSVER_MINOR, regs.h.ah);
 
 	if(DosVerMajor >= 3) {
 		for(drive = 0; drive < 26; drive++) {
@@ -190,9 +190,9 @@
 			regs.h.al = 8;
 			regs.h.bl = drive + 1;
 			intdos(&regs, &regs);
-			if(regs.x.cflag != 0)
+			if(RECORDED16(RV_DRV_ERROR, regs.x.cflag) != 0)
 				continue;
-			if(regs.x.ax)
+			if(RECORDED16(RV_DRV_FIXED, regs.x.ax))
 				DriveType[drive] = 1;
 			else
 				DriveType[drive] = 2;
@@ -204,7 +204,7 @@
 				regs.h.al = 0xe;
 				regs.h.bl = drive + 1;
 				intdos(&regs, &regs);
-				if(regs.h.al && regs.h.al != drive + 1)
+				if(RECORDED16(RV_DRV_ALIAS, regs.h.al) && RECORDED16(RV_DRV_ALIAS, regs.h.al) != drive + 1)
 					DriveType[drive] = 0;
 			}
 		}
@@ -214,20 +214,20 @@
 	  considered fixed if it is not A: or B:*/
 	if(DosVerMajor < 3 || (DosVerMajor == 3 && DosVerMinor < 20)) {
 		int86(0x11, &regs, &regs);
-		if(regs.x.ax & 1) {
+		if(RECORDED16(RV_EQUIPMENT, regs.x.ax) & 1) {
 			DriveType[0] = 2;
-			if(regs.x.ax & 0xc0)
+			if(RECORDED16(RV_EQUIPMENT, regs.x.ax) & 0xc0)
 				DriveType[1] = 2;
 		} else {
 			DriveType[0] =
 			DriveType[1] = 0;
 		}
-		drive = /*getDefaultDrive*/OSI_getDrive();
+		drive = /*getDefaultDrive*/RECORDED16(RV_CUR_DRIVE, OSI_getDrive());
 		if(drive > 'B')
 			DriveType[drive - 'A'] = 1;
 	}
 
 	CurrentDisk = DISK_GAME;
-	DiskDrive[DISK_GAME] = /*getDefaultDrive*/OSI_getDrive() + 1 - 'A';
+	DiskDrive[DISK_GAME] = /*getDefaultDrive*/RECORDED16(RV_CUR_DRIVE, OSI_getDrive()) + 1 - 'A';
 	DISK_ScanDrive(DISK_GAME);
 }

@@ -74,6 +74,9 @@ def main():
             sys.exit('exhume/runtime/include/portable.h is missing: git submodule update --init')
         open(os.path.join(c, 'S', 'PORTABLE.H'), 'wb').write(
             open(exhume_portable, 'rb').read().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
+        # hookgame.h the same: git may check it out with bare LF (the other sources are stored CRLF)
+        open(os.path.join(c, 'S', 'hookgame.h'), 'wb').write(
+            open(os.path.join(a.src, 'hookgame.h'), 'rb').read().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
         lines = ['@echo off', 'set PATH=\\TOOLS\\TURBOC20', 'cd \\S\\OSILIB']
         for name, asm in OSILIB_STEPS:
             tool = 'TASM200' if asm == 'TASM' else 'MASM300'

@@ -285,3 +285,33 @@ Open for tasks 4 to 7: `RP_KEYSTATE_LEN` must be at least 1 and Ultima VI keeps 
 state; `RP_FAR_SIZE` lives in both `replay.c` and `rpfar.asm` (MASM 3.00 has no `/D`);
 in far mode the harness's variable names are macros and can capture a game variable of the
 same name inside a binding's `RP_DUMP`; `rpfar.asm` is not yet in `tools/replay.py build`.
+
+## 11. Phase 1 task 4: the hooks in GAME's C (2026-11-16, done by the coordinator)
+
+`SRC/hookgame.h` now defines `HOOK_KEY_ARG`, `ORIG_KEY(a)`, `HOOK_RECORDED`, the ids of
+the recorded values and `RECORDED16` (a recorded value cast back to int: `rp_value` gives
+a long, which Turbo C would push whole to a function without a prototype).
+
+| Where | What | Hook |
+|---|---|---|
+| `console.c` `CON_getch`, `main.c` the disk error prompt | `KBD_GetKey(a)` | `KEY(a)` |
+| `main.c` `main` | `OSI_timeSeed()` | `RECORDED16(RV_SEED, ...)` |
+| `main.c` `main` | `farcoreleft()` | `RECORDED(RV_FARCORE, ...)` |
+| `disk.c` `DISK_init` | DOS version (AL, AH); per drive IOCTL 4408h carry and AX, 440Eh AL; int 11h AX; `OSI_getDrive()` twice | `RECORDED16(RV_..., ...)` at each use |
+
+Nothing else in GAME's C reads from outside the program: the two int 10h calls in `main.c`
+set the palette and read nothing back; every other read is in the assembly library
+(task 5: the clock, the mouse, the delay calibration, the file reads' errors).
+
+Exit tests: the gate passes (the hooks are the original tokens in the DOS build). The three
+files and `replay.c` compile with `-DREPLAY` under Turbo C 2.0 and link into GAME.EXE with
+`rpfar.asm`: `_DATA`, `_BSS`, `_BSSEND` and all 340 DGROUP publics unmoved. The port builds
+with pass-through `rp_key` and `rp_value` (`port/sys/rphooks.c`, until Phase 2 links
+`replay.c`) and replays a scripted session with all 225 checkpoints identical.
+
+Not proven here: that the hooks record and replay correctly in DOS. No replay build runs
+yet (it needs task 5's modules and task 6's `rpgame.h`; the link above used task 3's stub
+bindings).
+
+`tools/dosbuild.py` now stages `hookgame.h` with CRLF line ends: git stores this one file
+with LF, and Turbo C 2.0 reads an LF-only header as one line.

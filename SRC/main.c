@@ -232,7 +232,7 @@ int16 Unused01C4 = 0;/*unused*/
 			CON_printf(OSI_ErrorFile);
 			CON_printf("\n");
 			/*wait for a key (flushing the keyboard buffer)*/
-			while(!(key = KBD_GetKey(1)));
+			while(!(key = KEY(1)));
 		}
 		CON_setClip(savedClip);
 	}
@@ -507,7 +507,7 @@ int16 Unused01C4 = 0;/*unused*/
 	int16 hercRow;
 
 	/*seed the random generator from the time of day*/
-	OSI_randomize(OSI_timeSeed());
+	OSI_randomize(RECORDED16(RV_SEED, OSI_timeSeed()));
 	/*config: CONFIG.U6 (6 characters) then the command line arguments*/
 	fileHandle = OSI_open(/*02E1*/"config.u6");
 	if(fileHandle >= 0) {
@@ -519,7 +519,7 @@ int16 Unused01C4 = 0;/*unused*/
 	for(i = 1; i < argc; i ++)
 		cfg_parse(argv[i]);
 	/*memory: take the whole far heap, __MemAlloc() hands it out*/
-	FarHeapSize = farcoreleft();
+	FarHeapSize = RECORDED(RV_FARCORE, farcoreleft());
 	FarHeap = farmalloc(FarHeapSize);
 	if(!FarHeap)
 		goto c_12ef;

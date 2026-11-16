@@ -561,7 +561,7 @@ extended keys/keypad) or 0 if none*/
 		CON_putch0(0);/*line full: new line*/
 	promptX = CurClip->curX + CurClip->originX;
 	promptY = CurClip->curY + CurClip->originY;
-	ch = KBD_GetKey(KbdKeepLastOnly);/*keyboard function*/
+	ch = KEY(KbdKeepLastOnly);/*keyboard function*/
 	if(ch == 0) {/*animated cursor*/
 		(*CON_PutCharFn)(PromptCh + ((PromptCnt ++) & 3), promptX, promptY);
 		IdleAnimTick = 1;
