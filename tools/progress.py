@@ -34,7 +34,7 @@ CAPTION = ('Function map: 1 function per tile (C and assembly), in order GAME.EX
 COLORS = dict(matched='#2a8c3c', attempt='#b8860b', open='#64748b', aside='#b94a53')
 LABELS = dict(matched='Matched', attempt='Attempt', open='Open', aside='Aside')
 PLACEHOLDER = re.compile(r'^_*(?:C|MUS|SEG)?_*(?:[0-9A-Fa-f]{4}_)?[0-9A-Fa-f]{4}$')
-MARKER = re.compile(r'/\*C_([0-9A-Fa-f]{4})_([0-9A-Fa-f]{4})\*/[ \t]*((?:(?:unsigned|static|register|struct|char|int|long|short|void|int16|uint16|u8|u16)\b[ \t*]*)*)\**[ \t]*(\w+)[ \t]*\(')
+MARKER = re.compile(r'/\*C_([0-9A-Fa-f]{4})_([0-9A-Fa-f]{4})\*/[ \t]*((?:\w+[ \t*]+)*)\**[ \t]*(\w+)[ \t]*\(')
 PROCSTART = re.compile(r'^ProcStart[ \t]+(\w+)[ \t]*(?:;[ \t]*([0-9A-Fa-f]{4}):([0-9A-Fa-f]{4}))?', re.M)
 PROC = re.compile(r'^(\w+)[ \t]+PROC\b', re.M | re.I)
 

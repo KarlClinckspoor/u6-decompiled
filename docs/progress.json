@@ -1,18 +1,18 @@
 {
  "GAME": {
-  "matched": 510,
+  "matched": 513,
   "attempt": 0,
   "open": 12,
   "aside": 0,
-  "total": 522,
+  "total": 525,
   "percent": 97.7
  },
  "U": {
-  "matched": 149,
+  "matched": 151,
   "attempt": 0,
   "open": 0,
   "aside": 0,
-  "total": 149,
+  "total": 151,
   "percent": 100.0
  },
  "END": {
@@ -24,11 +24,11 @@
   "percent": 100.0
  },
  "all": {
-  "matched": 686,
+  "matched": 691,
   "attempt": 0,
   "open": 12,
   "aside": 0,
-  "total": 698,
+  "total": 703,
   "percent": 98.3
  }
 }
