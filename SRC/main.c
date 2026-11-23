@@ -22,7 +22,7 @@
 
 /*====---- ----====*/
 /*0194*/int16 IsZFile = 0;/*1: LoadFile() decompresses LZW (".z") files*/
-/*list of file names the OSI loader (LOW.ASM C_049C) would treat as
+/*list of file names the OSI loader (LOW.ASM LOAD_isZFile) would treat as
   compressed; empty list (only the "" terminator)*/
 /*0196*/char *CompressedFileList[] = {
 	/*01EB*/""

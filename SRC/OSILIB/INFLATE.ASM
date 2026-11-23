@@ -52,7 +52,7 @@ ProcStart	_decompress	;32FD:0000
 	;-- --
 	MOV	AX,[BP+06]	;opened file handle
 	MOV	BX,AX
-	CALL	FAR PTR C_32FD_028C	;load&inflate?
+	CALL	FAR PTR LZW_loadHandle	;load&inflate?
 	JB	C_0059
 	;--
 	MOV	DX,lpDest
@@ -70,8 +70,10 @@ C_0059:	;--
 
 INCLUDE LZ.INC
 
-;load&inflate?
-C_32FD_028C	PROC FAR
+;decompress from the open file BX (already positioned): read the 4-byte size,
+;then decompress into output_segment:output_offset; BX = lpDest, CF set on
+;error (U.EXE's LZW_loadFile without the open and the allocation)
+LZW_loadHandle	PROC FAR	;C_32FD_028C
 
 
 
@@ -141,7 +143,7 @@ C_02D1:
 C_02DA:	;--
 	MOV	BX,lpDest
 	RET
-C_32FD_028C	ENDP
+LZW_loadHandle	ENDP	;C_32FD_028C
 
 CSegEnd	C_32FD_TEXT
 
