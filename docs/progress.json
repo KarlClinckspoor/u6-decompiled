@@ -1,11 +1,11 @@
 {
  "GAME": {
-  "matched": 513,
+  "matched": 525,
   "attempt": 0,
-  "open": 12,
+  "open": 0,
   "aside": 0,
   "total": 525,
-  "percent": 97.7
+  "percent": 100.0
  },
  "U": {
   "matched": 151,
@@ -24,11 +24,11 @@
   "percent": 100.0
  },
  "all": {
-  "matched": 691,
+  "matched": 703,
   "attempt": 0,
-  "open": 12,
+  "open": 0,
   "aside": 0,
   "total": 703,
-  "percent": 98.3
+  "percent": 100.0
  }
 }
