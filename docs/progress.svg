@@ -11,7 +11,7 @@
 <text x="246" y="113" font-size="12" fill="#e5e7eb">Attempt: 0</text>
 <rect x="430" y="104" width="10" height="10" fill="#64748b"/>
 <text x="444" y="113" font-size="12" fill="#e5e7eb">Open: 12</text>
-<rect x="628" y="104" width="10" height="10" fill="#b94a53"/>
+<rect x="628" y="104" width="10" height="10" fill="#3b5b8a"/>
 <text x="642" y="113" font-size="12" fill="#e5e7eb">Aside: 0</text>
 <text x="20" y="140" font-size="11" fill="#e5e7eb">Function map: 1 function per tile (C and assembly), in order GAME.EXE, U.EXE, END.EXE, then by frame and offset</text>
 <rect x="20.00" y="160.00" width="11.11" height="11.11" fill="#2a8c3c" stroke="#0f172a" stroke-width="1"><title>GAME SRC/OSILIB/DELAY.ASM 0000:0000 OSI_delay_clean (matched)</title></rect>
