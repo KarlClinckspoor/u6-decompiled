@@ -309,7 +309,7 @@ static uint16_t crit_error;      /* D_2FCC: set by the int 24h handler */
 
 int OSI_selectDrive(int letter)
 {
-	int8_t al = (int8_t)(uint8_t)letter;   /* C_0008 compares AL as signed */
+	int8_t al = (int8_t)(uint8_t)letter;   /* letterToDrive compares AL as signed */
 
 	crit_error = 0;
 	if (al >= 'a' && al <= 'z')

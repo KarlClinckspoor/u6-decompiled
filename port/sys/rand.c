@@ -1,7 +1,7 @@
 /* RAND.ASM: the random generator.
  *
  * The state is a 32-bit number held in two words, D_308A:D_3088 (high:low), initially
- * 0:1. Each draw multiplies it by 65539 (RANDU): C_33C5_000C computes 3*state with
+ * 0:1. Each draw multiplies it by 65539 (RANDU): randStep (C_33C5_000C) computes 3*state with
  * add/rcl/add/adc and adds the old low word to the high word. OSI_rand(a, b) draws, then
  * returns min + high % (max - min + 1), unsigned, with min/max = the smaller/larger of a
  * and b; when the range is the whole 64K (a = 0, b = FFFFh) it returns min. OSI_randomize
@@ -15,7 +15,7 @@
 static uint16_t seed_lo = 1;   /* D_3088 */
 static uint16_t seed_hi = 0;   /* D_308A */
 
-/* C_33C5_000C */
+/* randStep, C_33C5_000C */
 static void rand_step(void)
 {
 	uint32_t t;

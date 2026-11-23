@@ -8,9 +8,9 @@ calls directly (`int86`, `intdos`, `outportb`, `farmalloc`, `execl`, `exit`).
 | DOS source | port | contents |
 |---|---|---|
 | OSI_FILE.ASM | `osi.c` (on `dosfs.c`) | OSI_open/close/create/delete/read/write/rename/copy/fileSize/memory, error handler protocol |
-| LOW.ASM | `osi.c` | OSI_selectDrive, OSI_getDrive, OSI_lowInit, CpuSpeed and the other globals |
+| LOW.ASM | `osi.c` | OSI_selectDrive, OSI_getDrive, OSI_lowInit, CpuSpeed and the other globals (not ported: the file loader the game never calls, LOAD_file, LOAD_size, LOAD_toSeg, LZW_loadFile) |
 | KBD.ASM | `kbd.c` | KBD_GetKey |
-| INFLATE.ASM + LZ.INC | `lzw.c` | decompress |
+| INFLATE.ASM + LZ.INC | `lzw.c` | decompress (with LZW_loadHandle) |
 | MOUSE.ASM | `mouse.c` | MOUSE_INIT/POINTER/SERVE/SHOW/HIDE/DRAW/SAVE_BG/IN_AREA |
 | DELAY.ASM, DELAY2.ASM | `timer.c` | OSI_delay_init/clean, OSI_delay, OSI_sDelay, the tick counter |
 | RAND.ASM | `rand.c` | OSI_rand, OSI_randomize, OSI_timeSeed |

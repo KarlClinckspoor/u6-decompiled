@@ -7,7 +7,8 @@ DSegEnd
 
 CSegStart	SEG_33C5_TEXT
 	
-C_33C5_000C	PROC FAR
+;one step of the generator: seed (D_308A:D_3088) *= 65539; AX = the high word
+randStep	PROC FAR	;C_33C5_000C
 	MOV	CX,D_3088
 	MOV	BX,CX
 	MOV	AX,D_308A
@@ -19,14 +20,14 @@ C_33C5_000C	PROC FAR
 	MOV	D_3088,CX
 	MOV	D_308A,AX
 	RET
-C_33C5_000C	ENDP
+randStep	ENDP	;C_33C5_000C
 
 PUBLIC OSI_rand
 OSI_rand	PROC FAR
 	PUSH	BP
 	MOV	BP,SP
 	;--
-	CALL	C_33C5_000C
+	CALL	randStep
 	;--
 	MOV	BX,[BP+06]
 	MOV	CX,[BP+08]
