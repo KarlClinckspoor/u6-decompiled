@@ -36,6 +36,7 @@ int16_t OSI_ErrorFunc = 0;     /* D_0334 */
 char *OSI_ErrorFile = 0;       /* D_0336 */
 
 uint16_t CpuSpeed = 0;         /* D_2FC6 */
+uint16_t D_2FC8 = 0;           /* int 12h's memory size in KB, read nowhere (main.c records it) */
 int16_t OSI_Started = 0;       /* D_2FFC */
 int16_t TextIdle = 1;          /* D_2FFE */
 
@@ -335,9 +336,11 @@ int OSI_getDrive(void)
 
 /* Installs the critical error (24h) and Ctrl-Break (23h) handlers, which the port does
  * not need, clears some unused state and measures CpuSpeed: the port sets
- * osi_cpu_speed instead (a measure would differ from run to run). */
+ * osi_cpu_speed instead (a measure would differ from run to run). Int 12h's memory
+ * size: 640 KB, what DOSBox and most machines answer. */
 void OSI_lowInit(void)
 {
 	dosmem_init();
 	CpuSpeed = osi_cpu_speed;
+	D_2FC8 = 640;
 }

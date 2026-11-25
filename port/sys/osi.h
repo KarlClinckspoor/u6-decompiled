@@ -117,6 +117,7 @@ int16_t MOUSE_02CF(struct tSurface *area, void *shapes, uint16_t shapeIndex, int
 
 /* ==== LOW.ASM ==== */
 extern uint16_t CpuSpeed;                /* D_2FC6: delay loop iterations per 1/41.67 tick */
+extern uint16_t D_2FC8;                  /* int 12h: the memory size in KB (OSI_lowInit), read nowhere */
 extern int16_t OSI_Started;              /* D_2FFC */
 extern int16_t TextIdle;                 /* D_2FFE, initially 1 */
 extern void (*DriveErrorCallback)();     /* D_3004, initially OSI_nullCallback */

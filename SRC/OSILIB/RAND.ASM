@@ -1,6 +1,7 @@
 INCLUDE OSI.INC
 
 DSegStart
+PUBLIC D_3088	;the replay build's RAND section reads both words (rpgame.h)
 D_3088	dw 1	;random seed 1
 D_308A	dw 0	;random seed 2
 DSegEnd

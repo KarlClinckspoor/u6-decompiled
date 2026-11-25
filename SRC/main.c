@@ -500,6 +500,24 @@ int16 Unused01C4 = 0;/*unused*/
 	/*02D6*/"u6curs.cga"
 };
 
+/*set by OSI_lowInit (LOW.ASM) from outside the program, recorded below
+  (RECORD_VAR, hookgame.h) in the replay build and the port*/
+#if !defined(__TURBOC__) || defined(REPLAY)
+extern uint16 CpuSpeed;/*D_2FC6: the delay loop calibration, timed on int 1Ch*/
+extern uint16 D_2FC8;/*int 12h: the memory size in KB, read nowhere*/
+#endif
+
+#ifdef REPLAY
+/*the replay build: what main does at its end (below), which Exhume's replay.c
+  calls when a recording or a replay stops (RP_SHUTDOWN, rpgame.h)*/
+rp_u6_shutdown() {
+	MUS_PlaySong(0);
+	OBJ_DeleteTmpBlocks();
+	OSI_delay_clean();
+	GR_SHUTDOWN();
+}
+#endif
+
 /*program entry: initialization, game loop, exit*/
 /*C_0903_0C5E*/cdecl main(int16 argc, char **argv) {
 	int16 i, fileHandle;
@@ -528,6 +546,8 @@ int16 Unused01C4 = 0;/*unused*/
 
 	DISK_init();
 	OSI_lowInit();/*init LOW?*/
+	RECORD_VAR(RV_CPUSPEED, CpuSpeed);
+	RECORD_VAR(RV_MEMSIZE, D_2FC8);
 	OSI_delay_init();
 	/*install the file error handler*/
 	OSI_ErrorHandler.f = FileErrorHandler;

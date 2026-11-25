@@ -12,7 +12,8 @@ __2FC3	db 0
 segment_0	dw 0
 PUBLIC CpuSpeed
 CpuSpeed	dw 0	;D_2FC6 computer speed?
-D_2FC8	dw 0	;equipment flags?
+PUBLIC D_2FC8	;recorded in the replay build (main.c, RECORD_VAR)
+D_2FC8	dw 0	;int 12h: memory size in KB (C_005E), read nowhere
 D_2FCA	dw 0
 D_2FCC	dw 0
 D_2FCE	db 8 dup(0)

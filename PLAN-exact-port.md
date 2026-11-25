@@ -315,3 +315,39 @@ bindings).
 
 `tools/dosbuild.py` now stages `hookgame.h` with CRLF line ends: git stores this one file
 with LF, and Turbo C 2.0 reads an LF-only header as one line.
+
+## 12. Phase 1 task 5: the assembly library's outside reads (2026-11-25)
+
+Done by one worker, reviewed; the gate and the map check rerun by the coordinator.
+
+- `SRC/OSILIB/MOUSERP.ASM`, the replay build's MOUSE.ASM (its data segment the same byte for
+  byte): the reset's AX and BX through `rp_value` (`RV_MOUSE_RESET`, `RV_MOUSE_NBTN`); each
+  poll through `rp_mouse` then `rp_mbuttons`, the one int 33h made by `u6_mouse_poll`
+  (`RP_MOUSE_READ`) into three words in the code segment. x is stored halved, as the game uses
+  it, so the stream is in 320-pixel coordinates the port can give.
+- `SRC/OSILIB/DELAYRP.ASM`: the int 1Ch handler counts in a code-segment word, so `D_305A`
+  stays 0 in every dump. `OSI_delay` still waits in real time while replaying (follow-up: an
+  `rp_mode` accessor in the fork would let it return at once).
+- `RECORD_VAR(id, lv)` (hookgame.h), empty in the DOS build: `CpuSpeed` (`RV_CPUSPEED`) and
+  int 12h's `D_2FC8` (`RV_MEMSIZE`, read nowhere but in the dumps) after `OSI_lowInit`.
+  `D_2FC8` and `D_3088` (the rand state, for `RP_RAND_SEED`) made PUBLIC; the EXE is unchanged.
+- `SRC/rpgame.h`, minimal: stop key F9 (143h; int 16h AH=0 never gives F11/F12), the mouse,
+  key state and joystick lvalues outside DGROUP, `RP_SHUTDOWN` = `rp_u6_shutdown` (main.c,
+  REPLAY only). `RP_CLOCK`, `RP_TICK_US`, `RP_PIT_DIVISOR` and the dump (DS:0..EDFAh plus the
+  common sections) are placeholders marked TASK 6.
+
+Exit tests: gate PASS (3 of 3). Replay link: `_DATA`, `_BSS`, `_BSSEND` and all 342 DGROUP
+publics unmoved. Headless DOSBox-X, a staged character (an OBJLIST made by the port): recorded
+`space up up left f9`, stopped at hook call 153198, RECORD.OUT 338 bytes with every VALUE
+(CpuSpeed 672, memory 640, mouse FFFFh/3 buttons) and the MOUSE and BUTTONS streams. Replayed
+from it: ran to the end, no desync; all 6 dumps equal to the recording's, VGA, PAL and RAND
+included, except DS:0098, C0's `__STARTTIME` (the BIOS tick at start-up): task 6 masks it.
+Port: builds, a scripted session 707 of 707 checkpoints identical. Stack (static, every path):
+rp_mouse 212, rp_mbuttons 208, rp_value 168 bytes, within 256.
+
+Other outside reads found, left for later: the int 24h handler's `D_2FCC`, write errors via
+the OSI_FILE callbacks, LOW's calibration counter `D_2FCA` (ends at 1), the music driver's
+timer service and the graphics driver (task 6).
+
+Rerun: scratch only (`rpbuild.py`, `rprun.py`, `rpdecode.py`, `rpcmp.py`, `rpstack.py`); the
+link becomes task 7's.
