@@ -317,8 +317,8 @@ docs/CODE_REVIEW.md (146 findings, by an Opus worker) ranks the port hazards. Th
   or a push onto a cube on the ground puts any item in (a port trial dropped six potions in);
   only putting it in from the inventory refuses non-moonstones. UseVortexCube checks only that
   frames 0..7 are inside: with the eight potions (113h, one of each colour) in the cube and no
-  moonstone, the Codex vanished and GAME ran END.EXE. Session `[potions]` written; not yet
-  recorded in DOS.
+  moonstone, the Codex vanished and GAME ran END.EXE. Session `[potions]`: confirmed in DOS
+  too (below).
 - **The review's other critical claims:**
   - **CR-004, the powder keg: confirmed in DOS.** Session `[keg]` (tests/replay/keg.rec): a keg lit
     in the castle's northwest tower, then down the ladder; the surface area is unloaded and the
