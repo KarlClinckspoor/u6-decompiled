@@ -351,3 +351,61 @@ timer service and the graphics driver (task 6).
 
 Rerun: scratch only (`rpbuild.py`, `rprun.py`, `rpdecode.py`, `rpcmp.py`, `rpstack.py`); the
 link becomes task 7's.
+
+## 13. Phase 1 task 6: the dump (2026-11-26)
+
+Done by one worker, reviewed; the gate, the map check and the replays rerun by the coordinator,
+who changed the stack fill (below).
+
+`SRC/rpgame.h` dumps, in order (bytes with VGA, mouse, AdLib under DOSBox-X):
+- **Once the graphics driver has its memory (`RP_LEVEL`):** GSTA (DS:2C4A..2CCB, 130), OBJS (the
+  five object arrays, 30720) and NPCS (the rest of OBJLIST's NPC tables and the party, 5105).
+  Together they are a saved game's OBJLIST byte for byte.
+- **Always:** DATA (DS:0..322D, 12846) and BSS (DS:322E..EDF9, 48076).
+- **The far heap, once the graphics driver has its memory:**
+  - SEGS: 30 segment words, for `[replay.segments]`.
+  - GDRV (the mouse buffers and the graphics driver, 16888).
+  - MDRV (the music driver, 1662).
+  - FARB (the game's far blocks, 60098).
+  - GRMM (the graphics driver's tile cache, 270544).
+- **Always:** STAK (the stack check, 6), RAND, NULL, CNTS.
+- **In every dump, since every Ultima VI dump is full:** PAL and SCRN, a linear
+  A000:0000 frame of 64000 bytes. Chain-4 makes `dump_screen`'s four planes the same 64 KB four
+  times, and `replay.py`'s scanout cannot draw them; `replay.py` needs a SCRN reader (task 7
+  or Phase 2).
+
+Masks, listed for `[[replay.mask]]` (task 7 writes them into `exhume.toml`), none zeroed:
+- DATA 98h..9Bh, C0's `__STARTTIME`, which nothing reads.
+- MDRV 0Ch..161h, U6ADLIB.DRV's variables, stepped by its 60 Hz int 8 handler. The offsets are
+  AdLib's; another music driver needs its own.
+- STAK 4..5, the lowest address written, which is a measurement.
+
+`RP_CLOCK` is the BIOS tick, but no hook reads it: Ultima VI never calls GAME_TIME, so there
+are no periodic dumps. Dumps come at each key, each button change and the end; `UWRPHOOK`
+bisects. Possible later: a CHECKPOINT at each turn, for long AI-only stretches.
+
+Stack check: `SRC/OSILIB/STACKRP.ASM` (replay build only, code-segment storage) fills from
+`__brklvl` (EE9Ah) to 40 bytes below the first hook's SP (FFB0h), through a new optional binding
+`RP_START()` in the fork (`46c7857` on `u6-tc20`, +5 lines, Underworld unaffected). The worker
+filled with A5h. The coordinator changed it to **zeros**: any pattern changes what the game's
+uninitialised locals read, so the replay build would no longer behave as GAME.EXE (DOSBox-X's
+memory is zero there, and the port's stack junk is 0). The lowest non-zero byte is a floor, and
+it reads the same here: lowest FC22h, 990 bytes below 10000h, matching section 9.
+
+Exit tests:
+- Gate PASS.
+- `_DATA`, `_BSS`, `_BSSEND` and all 342 DGROUP publics unmoved.
+- Worker's session `rec7` (moves, a look, a failed talk, turns passing; 27 dumps of 512 KB):
+  two replays identical apart from the masks, and so are the recording and its replay
+  (rerun by the coordinator).
+- After the zero fill, the coordinator's session `z1` (moves, a look, a conversation with
+  name, job and bye, turns passing; 30 dumps): the same result.
+- The port builds; a 60 s scripted session matched at 927 of 927 checkpoints (worker).
+
+Open:
+- One live recording by the worker hung after "bye" (A5h fill, killed at 400 s, no
+  recording). The same keys completed on both fills afterwards; the cause is unknown.
+- Only AdLib and VGA were tried.
+
+Rerun: scratch (`task6/RERUN.txt`: rpbuild, rprun, rpcmp, rpdecode, rpstack, shots); the build
+becomes task 7's.
