@@ -190,7 +190,10 @@ working platform, so the proof comes first and then guards the platform swap.
       DOS recording = replay 1 = replay 2, the port identical to DOS in all four builds.
     - **The balloon:** its plans (10Eh) with the four parts (mammoth silk bag, balloon basket,
       cauldron, rope: objcmd.c's UseBalloonPlans), the deflated balloon set up, inflated,
-      boarded, flown with the wind, landed.
+      boarded, flown with the wind, landed. **Done: `[balloon]`** (tests/replay/balloon.rec):
+      the plans on the ground, the parts with Dupre, the wind from the west; the Avatar
+      (330, 419, 0) -> aboard (off the map, z 15) -> landed at (334, 419, 0). DOS recording =
+      replay 1 = replay 2; the port identical to DOS in all four builds.
     - **Every spell:** a level-8 Avatar with full magic points, a spellbook holding every spell
       and reagents for all; each cast by its incantation (c, the syllable letters of spell.c's
       SpellCode, Enter: console.c's SelectMode 3), then its target. Several sessions by circle;

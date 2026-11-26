@@ -137,6 +137,19 @@ feed = 40
 setup = ["teleport 234 410 0"]
 keys = "b up space space space u enter space space"
 
+# The balloon: its plans (10Eh) on the ground east of the party at (330, 419), on the open ground
+# south of Britain; the four parts with Dupre (mammoth silk bag 1A5h, balloon basket 1A6h,
+# cauldron 093h, rope 11Ch: UseBalloonPlans looks through the whole party); the wind from the
+# west (WindDir 6), so the balloon drifts east (npctrack.c: dir = WindDir ^ 4). Use the plans
+# (east): the deflated balloon under the Avatar; use it (own tile): inflated on the first free
+# neighbouring tile, west; board it (Use, west); five passes, drifting east; leave it (Use, own
+# tile: Unboard, deflated again), at (334, 419)
+[balloon]
+feed = 40
+setup = ["teleport 330 419 0", "place 0x10E 331 419 0", "give Dupre 0x1A5 0", "give Dupre 0x1A6 0",
+         "give Dupre 0x093 0", "give Dupre 0x11C 0", "set WindDir 6"]
+keys = "u right space u enter space u left space space space space space u enter space space"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no
