@@ -341,7 +341,7 @@ class Save:
                 p = (xx, yy, z)
                 f = t.flags[t.tile(xx, yy, z)]
                 row += '@' if (xx, yy) == (x, y) else 'P' if p in party else 'E' if p in eggs else \
-                    '#' if f & Terrain.IMPASSABLE else '~' if f & Terrain.WET else '.'
+                    '~' if f & Terrain.WET else '#' if f & Terrain.IMPASSABLE else '.'
             print('%4d %s' % (yy, row))
 
     def cmd_teleport(self, x, y, z, force=None):

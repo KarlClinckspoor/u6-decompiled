@@ -150,6 +150,19 @@ setup = ["teleport 330 419 0", "place 0x10E 331 419 0", "give Dupre 0x1A5 0", "g
          "give Dupre 0x093 0", "give Dupre 0x11C 0", "set WindDir 6"]
 keys = "u right space u enter space u left space space space space space u enter space space"
 
+# Ships and skiffs in Britain's harbour: the party on the pier (walkway objects over the water,
+# hence `force`) at (311, 444), with the deeds (095h) of the ship at (310..312, 445) (quality 8)
+# and of the skiff at (307, 439) (quality 135); UseVehicle refuses a vehicle with a quality
+# without the deed of that quality. b out of combat; board the ship (Use, south); sail south two
+# and back north two (it turns to face where it goes); west one, so that it lies along the pier
+# again: a ship can be left only on its sides (CanLeaveVehicleAt), and leave it. Then along the
+# pier and the shore to (306, 439); board the skiff (Use, east); row east two and back; leave it
+# (any neighbouring tile will do for a skiff)
+[ships]
+feed = 40
+setup = ["teleport 311 444 0 force", "give avatar 0x095 0 8", "give avatar 0x095 0 135"]
+keys = "b u down space down down space up up space left space u enter space up left left left left up up left up up up right space u right space right right space left left space u enter space"
+
 # Every spell (the 80 a player can cast, spells.h 00h..79h), in three sessions by circle (magic
 # points are a byte: all 80 need 360). The Avatar in the castle courtyard at (309, 379), level 8,
 # 255 magic points, a readied spellbook with the session's spells and 99 of each reagent. Each
