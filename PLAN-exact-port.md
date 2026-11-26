@@ -194,6 +194,18 @@ working platform, so the proof comes first and then guards the platform swap.
       the plans on the ground, the parts with Dupre, the wind from the west; the Avatar
       (330, 419, 0) -> aboard (off the map, z 15) -> landed at (334, 419, 0). DOS recording =
       replay 1 = replay 2; the port identical to DOS in all four builds.
+    - **Ships and skiffs, and the balloon on level 5** (the user's): **`[ships]`**
+      (tests/replay/ships.rec): from Britain's pier with the deeds (a vehicle with a quality
+      needs its deed), the ship boarded, sailed south and back, turned west to lie along the pier
+      (a ship is left only on its sides), left; then the skiff boarded, rowed out and back, left.
+      **`[balloon5]`** (tests/replay/balloon5.rec): a flood fill of level 5's walkable terrain
+      finds one large region apart from the mainland, the gargoyles' shrine area around
+      (127, 47), ringed by mountains; the balloon (flying: anything but wall terrain) after Wind
+      Change south flies from (131, 80) over the mountains to (131, 65) and lands there. Both:
+      DOS recording = replay 1 = replay 2; the port identical to DOS in all four builds. On
+      level 5 the wind changes by itself (1 in 64), and the random generator also drives the
+      animations, so a port trial on real time drew other numbers than DOS: only the DOS
+      recording shows the real path.
     - **Every spell:** a level-8 Avatar with full magic points, a spellbook holding every spell
       and reagents for all; each cast by its incantation (c, the syllable letters of spell.c's
       SpellCode, Enter: console.c's SelectMode 3), then its target. Several sessions by circle;

@@ -163,6 +163,24 @@ feed = 40
 setup = ["teleport 311 444 0 force", "give avatar 0x095 0 8", "give avatar 0x095 0 135"]
 keys = "b u down space down down space up up space left space u enter space up left left left left up up left up up up right space u right space right right space left left space u enter space"
 
+# The balloon on level 5, the gargoyles' land, to a place no one can walk to: the shrine area around
+# (127, 47) (the shrine, the Altar of Spirituality, the Book of Circles), a region of 490 walkable
+# tiles ringed by mountains (rows 69..74), which a flood fill of the level's walkable terrain
+# finds apart from the mainland. The balloon counts as flying (npctrack.c's CanMoveTo: anything
+# but wall terrain), so it crosses the mountains, but it goes where the wind blows (dir = WindDir
+# ^ 4), and on level 5 the wind changes by itself (gameloop.c's UpdateWind, 1 in 64). Setup: the
+# party at (132, 80), south of the mountains, a deflated balloon (1A4h) under it, the Avatar at
+# level 4 with a readied spellbook holding Wind Change (39h) and reagents. Inflate the balloon (own
+# tile: it goes to the first free neighbouring tile, west); cast Wind Change south (WindDir 4,
+# the wind from the south, so north; no casting aboard a vehicle); board (west); drift north;
+# leave it
+[balloon5]
+feed = 40
+setup = ["teleport 132 80 5", "place 0x1A4 132 80 5", "npc avatar level 4", "give avatar 0x39 0 0 0 equip", "put 0x3A 0 0x39",
+         "give avatar 0x41 9", "give avatar 0x42 9", "give avatar 0x43 9", "give avatar 0x44 9",
+         "give avatar 0x45 9", "give avatar 0x46 9", "give avatar 0x47 9", "give avatar 0x48 9"]
+keys = "u enter space c r h enter down u left space space space space space space space space space space space space space space space u enter space"
+
 # Every spell (the 80 a player can cast, spells.h 00h..79h), in three sessions by circle (magic
 # points are a byte: all 80 need 360). The Avatar in the castle courtyard at (309, 379), level 8,
 # 255 magic points, a readied spellbook with the session's spells and 99 of each reagent. Each
