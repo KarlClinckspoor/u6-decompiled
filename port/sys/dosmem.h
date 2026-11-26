@@ -32,6 +32,9 @@
 extern uint8_t *dos_base;
 
 void dosmem_init(void);
+/* A new DOS program starts (an exec: U.EXE runs GAME.EXE, GAME.EXE runs END.EXE): DOS frees the
+ * old program's memory, so the arena is zeroed and the far heap is empty again. */
+void dosmem_reset(void);
 void *dos_mk_fp(uint16_t seg, uint16_t off);
 uint16_t dos_fp_seg(const volatile void *p);
 uint16_t dos_fp_off(const volatile void *p);

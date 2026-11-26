@@ -189,6 +189,30 @@ working platform, so the proof comes first and then guards the platform swap.
       before replay.c writes its last chunks;
     - the cutscene itself is END.EXE, proved in Phase 4. In the port, a replay already stops
       at the exec (portmain.c's on_exec).
+    **`[endgame]`, tests/replay/endgame.rec:**
+    - setup: the party on the carpet at (923, 856), five tiles south of the Codex; the Avatar
+      with both lenses and the vortex cube holding the eight moonstones (u6save's `put`);
+    - keys: to (921, 852), drop the Britannia lens north; to (925, 852), drop the Gargoyle lens
+      north; use the cube (Tab to the inventory). Found by trying in the port: the inventory's
+      slot cursor keeps its place between commands, so after the two drops it is on the cube;
+    - **HOOK_EXEC** (SRC/hookgame.h, at the start of main.c's LaunchEndGame) calls Exhume's new
+      `rp_exec`. It counts as a hook call and ends a recording or a replay there with a last
+      dump, as the stop key does; the port's black box goes on, so the player sees the ending.
+      It is nothing under Turbo C (gate 3 of 3). The replay build grew 32 bytes (DGROUP at
+      32A1h, RGAME.EXE `b2975855`), so every recording was made again;
+    - DOS: recording = replay 1 = replay 2, saves identical. All six recordings were made
+      again for the grown build (endgame b7a8df86..., first e01afca1..., smoke 38457496...,
+      setup bc9cc110..., shrine 484d23bc..., drake 3e4fb65e...), each recording = replay 1 =
+      replay 2 in DOS, saves identical.
+    - **Not yet run:** port-check `--all` of the six new recordings. Claude Code stopped the run
+      (low memory) at its first port check.
+    - **A port bug the session found:** the port's END.EXE, run from a game, failed at once
+      ("LZW_load(brit.m): no far memory") and the port exited with code 3. GAME's main takes
+      the whole far heap, and `dosmem_init`, which on_exec called before END, does nothing once
+      the arena exists; DOS frees the old program's memory at an exec. The new
+      `dosmem_reset` zeroes the arena and empties the far heap, before END.EXE and before
+      GAME.EXE (after U.EXE). The ending now plays ("A glowing portal springs from the
+      floor!").
 - Goldens from DOS (twice, identical) committed with their recordings.
 - `make test` = gate + port build + every session against its golden; pre-push hook; CI
   on Linux and Windows from an encrypted bundle (Exhume's ci-bundle).

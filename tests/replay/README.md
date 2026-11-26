@@ -7,11 +7,12 @@ What the replay DOS build's runs read (docs/replay.md):
 - `first.rec`: the first real session's recording (`[first]`; Exhume's layout, `NAME.rec` in
   `[replay] sessions`). `python tools/rp.py check OUT --rec tests/replay/first.rec` replays it
   twice and compares.
-- `smoke.rec`: `[smoke]`'s recording (sha1 cdd0e19c...). `python tools/rp.py port-check OUT --rec
+- `smoke.rec`: `[smoke]`'s recording (sha1 38457496...). `python tools/rp.py port-check OUT --rec
   tests/replay/smoke.rec --all` checks it against the port, like first.rec.
-- `setup.rec`: `[setup]`'s recording (sha1 98f395d1...), from its edited saved game; replay it
-  with `--session setup`. Likewise `shrine.rec` (`[shrine]`, 1241ae55...) and `drake.rec`
-  (`[drake]`, a5871274...).
+- `setup.rec`: `[setup]`'s recording (sha1 bc9cc110...), from its edited saved game; replay it
+  with `--session setup`. Likewise `shrine.rec` (`[shrine]`, 484d23bc...), `drake.rec`
+  (`[drake]`, 3e4fb65e...) and `endgame.rec` (`[endgame]`, b7a8df86...). first.rec is
+  e01afca1....
 - All of them were made with the replay build as it is: a change to that build's code size
   changes the far memory GAME records (farcoreleft), so the recordings are made again
   (`python tools/rp.py check OUT --session NAME`, then copy OUT/rec/RECORD.OUT here).

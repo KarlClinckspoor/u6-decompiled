@@ -168,6 +168,17 @@ void *dos_farmalloc(unsigned long size)
 	return dos_base + heap_top - need + HEAP_HDR;
 }
 
+void dosmem_reset(void)
+{
+	if (!dos_base) {
+		dosmem_init();
+		return;
+	}
+	memset(dos_base, 0, DOS_ARENA_SIZE + DOS_ARENA_SLACK);
+	nblocks = 0;
+	heap_top = DOS_HEAP_START;
+}
+
 void dos_farfree(void *p)
 {
 	long lin;

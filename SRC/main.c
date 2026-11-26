@@ -413,6 +413,7 @@ int16 Unused01C4 = 0;/*unused*/
 	char param_str[8],y_str[6],m_str[6],d_str[6];
 	int16 years,monthes,days;
 
+	HOOK_EXEC();/*the replay build and the port: a session ends here (hookgame.h)*/
 	years = Date_Y - 161;
 	monthes = Date_M - 7;
 	days = Date_D - 4;

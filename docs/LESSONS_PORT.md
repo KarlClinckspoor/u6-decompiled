@@ -196,6 +196,10 @@ program's input:
   more copies of the same number turned up, in a static function's address and in the
   comparison's segment rules, and every recording had to be made again, since GAME records how
   much memory is left above it. Keep one copy of such a number, and check the others against it.
+- **An exec frees memory.** In DOS, a program that runs another gives its memory back. The
+  port runs U.EXE, GAME.EXE and END.EXE in one process, and GAME takes the whole far heap. Its
+  "init" before END.EXE did nothing once the arena existed, so the ending failed with no
+  memory. Nothing tested it until a session reached the end of the game.
 - **Don't cache inside a folder the build empties.** The character stage lived in the replay
   build's folder. A rebuild that happened after the cache check deleted it, and the replay
   failed now and then, which looked like flakiness.

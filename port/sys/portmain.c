@@ -117,7 +117,7 @@ static void on_exec(const char *path, int argc, const char *const *argv)
 		session_end();
 		MUSDRV_9();
 		plat_speaker(0);
-		dosmem_init();
+		dosmem_reset();	/* DOS frees GAME's memory, which GAME's main took whole */
 		dos_set_exec_handler(on_exec_end);
 		e_run(argc, (char **)argv);
 		port_exit(0);	/* END's main returned */
@@ -467,7 +467,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "cannot use the game folder %s\n", settings.data);
 		return 1;
 	}
-	dosmem_init();
+	dosmem_reset();	/* GAME.EXE starts with DOS's memory free, whatever U.EXE left in it */
 	dos_set_exec_handler(on_exec);
 	dos_exit_hook = port_exit;
 	if (dos_replay || replay_out)

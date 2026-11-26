@@ -42,6 +42,17 @@
 #define RECORDED16(id, x) ((int16)RECORDED(id, x))
 #endif
 
+/* HOOK_EXEC(): a statement, `HOOK_EXEC();`, where GAME is about to run END.EXE (main.c's
+   LaunchEndGame): nothing in the DOS build (the gate proves it), and in the replay build and the
+   port Exhume's rp_exec, which ends a recording or a replay there with a last dump, as the stop
+   key does (in DOS the exec would replace the program before replay.c writes its last chunks) */
+#if defined(__TURBOC__) && !defined(REPLAY)
+#define HOOK_EXEC()
+#else
+void far rp_exec(void);
+#define HOOK_EXEC() rp_exec()
+#endif
+
 /* RECORD_VAR(id, lv): a statement, `RECORD_VAR(RV_CPUSPEED, CpuSpeed);`, for a variable that
    the assembly library set from outside the program (OSI_lowInit's timing loop and int 12h):
    nothing in the DOS build (an empty statement, no code; the gate proves it), and in the

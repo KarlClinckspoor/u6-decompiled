@@ -68,6 +68,22 @@ feed = 40
 setup = ["teleport 575 350 0", "unequip avatar 0x2B", "give avatar 0x2F 0 0 0 equip", "place 0xDD 571 340 0 0 0 3"]
 keys = "up up up up up up left left left left u up up up up u up space a left left up enter space a left left up enter space u up space a left left up enter space a left left up enter space a left left up enter space a left left up enter space space space space ctrl+s Y"
 
+# The endgame (PLAN-exact-port.md, Phase 3): the Codex at (923, 851), in its chamber at the Shrine
+# of Singularity. The party starts on the carpet at (923, 856), the Avatar with the Britannia lens
+# (18Ah), the Gargoyle lens (18Ch) and the vortex cube (3Eh) holding the eight moonstones (49h,
+# frames 0..7). Up three, left two, up to (921, 852): drop the Britannia lens north, on
+# (921, 851) (Drop: the inventory's slot cursor two right to the lens, then the map cursor up).
+# Right four to (925, 852): drop the Gargoyle lens north, on (925, 851). Use (Tab to the
+# inventory, where the slot cursor is on the cube) the cube: objcmd.c's UseVortexCube finds the
+# moonstones, the lenses and the Codex within 5 tiles; "The Codex has vanished!", a key, and
+# LaunchEndGame, where HOOK_EXEC ends the session before GAME runs END.EXE (the ending, Phase 4)
+[endgame]
+feed = 40
+setup = ["teleport 923 856 0", "give avatar 0x18A 0", "give avatar 0x18C 0", "give avatar 0x3E 0",
+         "put 0x49 0 0 0", "put 0x49 0 0 1", "put 0x49 0 0 2", "put 0x49 0 0 3",
+         "put 0x49 0 0 4", "put 0x49 0 0 5", "put 0x49 0 0 6", "put 0x49 0 0 7"]
+keys = "up up up left left up d right right enter up enter right right right right d right right enter up enter u tab enter space space"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no

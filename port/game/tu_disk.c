@@ -10,5 +10,5 @@ const struct u6_dgs u6_dgs_disk[] = {
 /* its static functions a far code pointer may name: RGAME.MAP's segment (from DGROUP's
  * paragraph) and offset, as the replay DOS build's dumps show them */
 const struct dg_fn u6_dgf_disk[] = {
-	{(const void *)DISK_NullCallback, 0xF7F6, 0x0007},
+	{(const void *)DISK_NullCallback, 0xF7F4, 0x000B},
 };
