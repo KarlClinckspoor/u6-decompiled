@@ -200,6 +200,28 @@ program's input:
   port runs U.EXE, GAME.EXE and END.EXE in one process, and GAME takes the whole far heap. Its
   "init" before END.EXE did nothing once the arena existed, so the ending failed with no
   memory. Nothing tested it until a session reached the end of the game.
+- **The calling convention decides the argument order.** GAME is compiled with `-p`, so
+  Turbo C evaluates arguments left to right, and U.EXE (cdecl) right to left. C leaves the order
+  open: clang went left to right and matched GAME by luck, gcc went right to left. Two random
+  draws passed as x and y came out swapped (Negate Magic's static pixels), and a monster's food
+  and its quantity would have too. Read the order from the compiled code, then scan every
+  statement for two side effects with the preprocessor already run (a clang AST does it).
+- **Out of bounds in the original means "what does the compiled code put there".** `lstack[-1]`
+  in the talk interpreter is the caller's saved DI and SI, not a spare slot: only the
+  disassembly of the frame says so. The port has to reproduce the effect, so it needs the
+  binary's answer, not the source's.
+- **Test scripts need the game's own keys.** The inventory's slot cursor keeps its place between
+  commands; Use and Talk take a direction at once or a cursor plus Enter; walking onto an
+  entrance does nothing in combat mode; Help takes the party out of combat mode, after which a
+  number key makes that member the solo character. Each surprise cost a trial run: run a script
+  in the port with `--record` and read the screens (`rp.py show`) before recording it in DOS.
+- **A port trial is not the DOS run.** The random generator also draws for animations each
+  frame, so a trial keyed by real time draws other numbers than DOS keyed by its own polls. The
+  balloon's wind changed in one and not the other. Only the DOS recording says what happens.
+- **A save editor is a good test harness.** Writing the game's own formats (OBJLIST, the area
+  files with their stack-junk bytes) lets a session start anywhere with anything, and DOS and the
+  port start from the same files. It also turns claims about the original into reproducible
+  sessions: the vortex cube taking potions, the powder keg's stale object number.
 - **Don't cache inside a folder the build empties.** The character stage lived in the replay
   build's folder. A rebuild that happened after the cache check deleted it, and the replay
   failed now and then, which looked like flakiness.

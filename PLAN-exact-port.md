@@ -331,9 +331,13 @@ docs/CODE_REVIEW.md (146 findings, by an Opus worker) ranks the port hazards. Th
     open container is still the bag), then down past the bottom row: the game reads the third
     down and never another key, in DOS (`rp.py record --timeout 120` timed out; STATE.OUT shows
     the last key read) and in the port (no exit after 60 s, after the same key).
-  - **CR-003, casting at a map target:** needs a mouse click on the map with the spellbook open
-    (in cast mode the keys only pick spell lines), and the sessions can only type keys in DOS.
-    Open until the DOS side can script the mouse.
+  - **CR-003, casting at a map target:** needs a mouse click on the map with the spellbook open.
+    Checked whether the keys can do it (the user asked): the Cast command sets SelectMode 3
+    (gameloop.c:1177), where console.c handles only incantation letters, Backspace, Space/Esc,
+    Enter (Selection.x/y set to -1) and the arrows, which go to SpellbookKeyNav (spell lines and
+    pages). Tab's free aiming is refused while the spellbook shows, and the number keys (a party
+    member as target) are only read in SelectMode 1. So no key sets a map target there: mouse
+    only. Open until the DOS side can script the mouse.
   - **CR-005, the healer's resurrect:** Tiberius (NPC 26, Britain) only offers it with a dead
     party member; the setup needs a dead companion and a temporary creature's corpse ahead of
     its body in the object chain. Open.
@@ -946,3 +950,91 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
   
   The recording is `tests/replay/setup.rec` (sha1 781b5582...; 98f395d1... since the drake's fix, recorded again: Phase 3's drake session).
 - **Result in the port** (`rp.py port-check OUT --rec tests/replay/setup.rec --session setup --all`): all 16 checkpoints identical to DOS in all four builds. The saved games are identical too: the 4 files DOS changed, and the 6 in the port's home.
+
+## 23. Where things stand, and what comes next (2026-11-26)
+
+### What is proved
+
+- **The port is DOS's program, session by session.** 18 sessions, each recorded in the replay DOS
+  build (recording = replay 1 = replay 2) and identical to DOS in all four port builds (Linux and
+  Windows, gcc and clang), every checkpoint and the saved games:
+  - first, smoke: ordinary play;
+  - setup: a session from an edited saved game;
+  - shrine: melee, ranged, spells, the party's death and resurrection;
+  - drake: a halberd and a cannon at a jailed drake;
+  - endgame, potions: the Codex vanishing, by moonstones and by eight potions;
+  - fountain, shop: two port hazards;
+  - ladders, dungeon: map transitions;
+  - balloon, balloon5: the balloon, and on level 5 over the mountains to the shrine area;
+  - ships: ships and skiffs;
+  - keg: the powder keg's stale object number;
+  - spells1, spells2, spells3: every one of the 80 player spells.
+- **The port's own recorder is Exhume's** (Phase 2 task 4). The black box records every player
+  session, and `rp.py port-self` proves the port against itself.
+- **Test set-ups go through the saved game** (tools/u6save.py, section 21):
+  - teleport, set, npc, give/put/equip/unequip, place;
+  - map, the terrain around a place.
+  
+  All 69 area files read and write back byte for byte.
+
+### What was learned about the original (docs/CODE_REVIEW.md, 146 findings; FINDINGS.md)
+
+- **Confirmed in DOS:**
+  - CR-001: the vortex cube takes any item dropped onto it and checks only frames 0..7, so eight
+    potions end the game;
+  - CR-002: the inventory hangs for good after readying from a small bag and scrolling;
+  - CR-004: the powder keg's fuse deletes whatever takes its object slot;
+  - CR-008: an empty wish at a fountain matches, through pointers read past the wish table.
+- **Moonstones:** burying is reversible (Get), and a buried stone can be found by its moongate,
+  by the moongates of its phase and by Gate Travel.
+- **Uninitialised or out-of-bounds reads** that DOS and the port must agree on:
+  - gfx.c's never-drawn missile position (STACK_JUNK_FILL);
+  - the talk interpreter's lstack[-1], which is the caller's saved registers;
+  - the fountain's table.
+- **Argument order:** GAME is -p (left to right), U.EXE cdecl (right to left). None are left in
+  GAME after the three fixed.
+- **The user's GOG GAME.EXE** is the same 4.5 program, EXEPACKed.
+
+### What was fixed in the port
+
+- **Hazards:** CR-020 (AddObj's return), CR-008, CR-009, the argument order in three places, and
+  STACK_JUNK_FILL in gfx.c. Each fix keeps the original text under Turbo C (gate 3 of 3).
+- **END.EXE after a game:** it had no free memory (dosmem_reset).
+- **The tools:**
+  - DGROUP's paragraph is read from RGAME.MAP;
+  - `rp.py port-check` checks exhume.toml's copy of it;
+  - `--keys` waits for the game to take each key.
+
+### Next steps
+
+1. **The rest of the review's claims:**
+   - CR-005, the healer's resurrect: needs a dead companion and a temporary creature's corpse in
+     the chain; play it out in a session.
+   - CR-003: needs mouse input on the DOS side. KEYFEED types keys only; a mouse feeder, or a way
+     to replay a port-recorded MOUSE stream into DOS, would also open other mouse-only paths.
+   - The high and medium findings, in order. Each is confirmed or refuted by a session where it
+     can be reached, and the result noted in CODE_REVIEW.md's table.
+2. **Phase 3's remaining sessions:**
+   - walking and day/night, a long conversation, camping;
+   - save and reload (ctrl+r);
+   - a quest flag, set by the editor and then played through.
+3. **Phase 3's test gate:**
+   - goldens from DOS for every session, committed with the recordings;
+   - `make test` (gate, port build, every session against its golden), a pre-push hook;
+   - CI on Linux and Windows from an encrypted bundle.
+   
+   The port checks take about 1.5 minutes per session for all four builds. Run them one at a
+   time: the machine runs low on memory, and Claude Code has stopped longer background runs.
+4. **Phase 4: U.EXE and END.EXE under the same proof:**
+   - a replay build for each and sessions (the gypsy, the introduction, the ending);
+   - fix SRC_U/intro.c's four cdecl argument-order cases.
+   
+   END.EXE runs after the endgame session in the port now, but nothing proves it yet.
+5. **Phase 7, enhancements:**
+   - the registry (Exhume's enhance.c), with every flag off by default (the user: no exception);
+   - the moonstone burial guard first, then the fixes the review ranks highest (CR-001, CR-002,
+     CR-004, CR-005), each with a port session that has the flag on.
+6. **Keep in mind:**
+   - any change to the replay build's code size changes farcoreleft(), so every recording is
+     made again (`rp.py check OUT --session NAME`, copy rec/RECORD.OUT to tests/replay/);
+   - exhume.toml's first_block_para must follow RGAME.MAP's DGROUP (port-check checks it).
