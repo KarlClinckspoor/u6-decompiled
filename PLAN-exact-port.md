@@ -259,8 +259,21 @@ docs/CODE_REVIEW.md (146 findings, by an Opus worker) ranks the port hazards. Th
 - u6save's `place` now puts the object in front of those already on its tile, as AddMapObj
   does (the first FindLoc finds, which a drop onto the tile takes as its container); `behind`
   keeps the old order, which [drake]'s stage uses (byte-identical, so drake.rec stays valid).
-- Noted on the way: the user's gamedata/GAME.EXE (sha1 360a999a...) is another version than the
-  one the sources rebuild (5129af96...); the disassembly used build/dos/game/GAME.EXE.
+- Noted on the way, then corrected (an Opus worker checked it): the user's gamedata/GAME.EXE (the
+  GOG copy, sha1 360a999a...) is the same program as the build (5129af96...), compressed by
+  Microsoft EXEPACK (no relocations, the "RB" stub, "Packed file is corrupt"). Unpacked
+  (`python tools/exepack.py gamedata/GAME.EXE build/dos/game/GAME.EXE`): the same 199,296-byte
+  image (the build's other 47,770 bytes are zeros EXEPACK drops), the same 3328 relocations,
+  CS:IP and SS:SP: "identical to the original". Both say "Version 4.5". The gate already compares
+  that way (tools/dosbuild.py unpacks it; tools/game.sha1 is the link before EXEPACK). U.EXE and
+  END.EXE are not packed and match byte for byte. The port never opens GAME.EXE. The disassembly
+  used build/dos/game/GAME.EXE because it is not packed.
+- **Re-checked after the three fixes** (one at a time, after the memory stops): potions, drake,
+  endgame and fountain identical to DOS in all four builds, saves identical. With first, smoke,
+  setup, shrine and shop above, all nine sessions pass.
+- **`[potions]` in DOS** (tests/replay/potions.rec): recording = replay 1 = replay 2; "Use-Vortex
+  Cube ... The Codex has vanished!" with eight potions in the cube and no moonstone. **CR-001 is
+  confirmed in the original program.** The port is identical to DOS in all four builds.
 - Goldens from DOS (twice, identical) committed with their recordings.
 - `make test` = gate + port build + every session against its golden; pre-push hook; CI
   on Linux and Windows from an encrypted bundle (Exhume's ci-bundle).
