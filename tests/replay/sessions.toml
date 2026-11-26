@@ -38,6 +38,22 @@ setup = ["teleport 0x3A7 0x106 0", "give avatar 0x58 100", "npc avatar str 30", 
          "set KARMA 99", "set Time_H 12"]
 keys = "down down left left up f1/60 f1/60 f10/60 space space space space ctrl+s Y"
 
+# Combat at a shrine the gargoyles hold (PLAN-exact-port.md, Phase 3): the one at (503, 359),
+# its egg at (503, 361). The party starts 10 tiles east, on grass at (513, 361): loading the save
+# builds the area, and the egg, more than 8 tiles off and out of sight, hatches (egg.c's
+# EGG_hatchArea). The Avatar gets a readied spellbook with Magic Arrow (11h) and Fireball (22h)
+# and reagents (black pearl, blood moss, sulfurous ash). Melee (Dupre, Shamino, the Avatar's
+# attack), ranged (Iolo's crossbow), the Avatar's Magic Arrow (the target cursor starts on the
+# caster: three tiles west), the winged gargoyles' own spells; then passes and the game saved.
+# What happens (tests/replay/shrine.rec): a gargoyle killed, Dupre paralyzed, Dupre and Shamino
+# killed, then the Avatar: the resurrection at Lord British's castle (307, 352), experience and
+# magic points lost, and the game saved there
+[shrine]
+feed = 40
+setup = ["teleport 513 361 0", "give avatar 0x39 0 0 0 equip", "put 0x3A 0 0x11", "put 0x3A 0 0x22",
+         "give avatar 0x41 20", "give avatar 0x42 20", "give avatar 0x48 20"]
+keys = "space space space space space space c enter left left left enter space space space space space space space space a left enter space space space space space space space space space space ctrl+s Y"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no

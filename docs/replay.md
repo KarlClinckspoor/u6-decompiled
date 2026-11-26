@@ -275,8 +275,19 @@ The commands:
   IsOnQuest, MoonstonePos[3] ...);
 - `npc WHO FIELD VALUE`: str, dex, int, magic, hp, exp, level, movepts, status, talkflags,
   mode, commode, flag, schedindex, or name for a party member;
-- `teleport X Y Z`: the party, with their belongings;
-- `give WHO TYPE [QUANTITY [QUALITY [FRAME]]]`.
+- `teleport X Y Z [force]`: the party, with their belongings. It refuses a tile whose terrain
+  is impassable unless `force` is given;
+- `give WHO TYPE [QUANTITY [QUALITY [FRAME]]] [equip]`: `equip` readies it (casting needs a
+  readied spellbook);
+- `put TYPE [QUANTITY [QUALITY [FRAME]]]`: inside the item the last `give` made: a spell (3Ah,
+  quality its number) in a spellbook (39h), or a moonstone (49h, frame its phase) in the vortex
+  cube (3Eh);
+- `map X Y Z [R]`: the terrain around a place, read from the game's MAP, CHUNKS and TILEFLAG
+  (`.` passable, `~` water, `#` impassable, `E` an egg, `P` the party).
+
+An egg hatches only when its area is built and it is more than 8 tiles from the party, out of
+sight (egg.c's EGG_hatchArea). Loading a save builds the area, so a set-up that wants an egg's
+creatures starts the party more than 8 tiles from the egg (`[shrine]`).
 
 WHO is an NPC number, `avatar`, or a party member's name.
 

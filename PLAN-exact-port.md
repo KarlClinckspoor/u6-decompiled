@@ -129,11 +129,21 @@ working platform, so the proof comes first and then guards the platform swap.
   section 21). The user's suggestions (2026-11-26):
   - **A shrine the gargoyles occupy** for combat: many enemies, melee, ranged and spells in one
     place. Each surface shrine has a gargoyle egg (gargoyles and winged gargoyles) a few tiles
-    off. Chosen: the one due east of the start, the shrine at (1F7h, 167h) (OBJBLKDC), with
+    off. Chosen (by the user): the shrine at (503, 359) = (1F7h, 167h) (OBJBLKDC), with
     its egg at (1F7h, 169h). Others: (3A7h, 107h) with (3ACh, FBh); (397h, 3A7h) with
     (39Eh, 3A7h). The setup gives arms, ammunition, reagents and magic points.
-  - **A jailed drake at a wizard's** for melee. Not yet found: no drake is an NPC, and no drake
-    egg is near Nystul, Nicodemus, Xiao, Mariah, Horance or Zellivan.
+    **Done: `[shrine]`, tests/replay/shrine.rec** (sha1 c844d4c6...):
+    - the party starts at (513, 361), 10 tiles east of the egg; loading the save builds the area,
+      which hatches eggs more than 8 tiles off (EGG_hatchArea), so the gargoyles come;
+    - the Avatar has a readied spellbook (Magic Arrow, Fireball) and reagents;
+    - what happens: melee, Iolo's crossbow, the Avatar's Magic Arrow, the gargoyles' spells (Dupre
+      paralyzed), a gargoyle killed, Dupre, Shamino and then the Avatar killed, and the
+      resurrection at Lord British's castle (experience and magic lost), saved there;
+    - DOS: recording = replay 1 = replay 2, saves identical;
+    - port: identical to DOS in all four builds, saves identical.
+  - **A jailed drake at a wizard's** for melee: the mage Rudyom's house (NPC 128, at (579, 348)).
+    An egg (100%, one drake) at (569, 340), behind bars with a steel door at (571, 343)
+    (OBJBLKEC).
   - **The endgame.** The cube and the lenses are placed, and the Codex vanishes
     (objcmd.c's UseVortexCube): all 8 moonstones in the vortex cube, the Britannia lens at
     (399h, 353h), the Gargoyle lens at (39Dh, 353h), and the Codex at (39Bh, 353h) within 5

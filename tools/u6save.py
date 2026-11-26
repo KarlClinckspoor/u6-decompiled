@@ -19,8 +19,13 @@ one argument (quote it):
     teleport X Y Z              the party to X, Y, Z (all on that tile, as the game's PartyExit
                                 puts them before they step out), with their belongings: their
                                 items move to the area file of the new place
-    give WHO TYPE [QUANTITY [QUALITY [FRAME]]]
-                                a new item (object type TYPE, 0..3FFh) in WHO's inventory
+    give WHO TYPE [QUANTITY [QUALITY [FRAME]]] [equip]
+                                a new item (object type TYPE, 0..3FFh) in WHO's inventory;
+                                equip readies it (a spellbook must be, to cast)
+    put TYPE [QUANTITY [QUALITY [FRAME]]]
+                                a new item inside the item the last give made: a spell
+                                (3Ah, quality its number) in a spellbook (39h), a moonstone
+                                (49h, frame its phase) in the vortex cube (3Eh)
 
 WHO is an NPC number (1 is the Avatar), `avatar`, or a party member's name. Numbers may be
 hex (0x...).
@@ -90,6 +95,36 @@ def raw_coord(x, y, z):
 
 def area_file(x, y, z):
     return 'OBJBLK' + (chr(65 + (x >> 7)) + chr(65 + (y >> 7)) if z == 0 else chr(65 + z - 1) + 'I')
+
+
+class Terrain:
+    """the map's tiles and their terrain flags, read from the game's MAP, CHUNKS and TILEFLAG
+    (SRC/map.c's getChunkIdxAt; main.c reads TILEFLAG's first 800h bytes as TerrainType)"""
+    IMPASSABLE, WET = 0x02, 0x01
+
+    def __init__(self, gamedir):
+        def f(n):
+            for x in os.listdir(gamedir):
+                if x.upper() == n:
+                    return open(os.path.join(gamedir, x), 'rb').read()
+            sys.exit('u6save: no %s in %s' % (n, gamedir))
+        self.map, self.chunks, self.flags = f('MAP'), f('CHUNKS'), f('TILEFLAG')[:0x800]
+
+    def tile(self, x, y, z):
+        x, y = x & 0x3FF, y & 0x3FF
+        if z == 0:
+            base = ((x >> 7) + ((y >> 7) << 3)) * 0x180
+            n = ((y >> 3) & 15) * 16 + ((x >> 3) & 15)
+        else:
+            base = 0x6000 + (z - 1) * 0x600
+            n = ((y >> 3) & 31) * 32 + ((x >> 3) & 31)
+        p = base + n * 3 // 2
+        w = self.map[p] | self.map[p + 1] << 8
+        chunk = w >> 4 if n & 1 else w & 0xFFF
+        return self.chunks[chunk * 64 + (y & 7) * 8 + (x & 7)]
+
+    def passable(self, x, y, z):
+        return not self.flags[self.tile(x, y, z)] & self.IMPASSABLE
 
 
 class Obj:
@@ -276,10 +311,38 @@ class Save:
         rest[i:i] = runs
         area.objs = [o for g in rest for o in g]
 
-    def cmd_teleport(self, x, y, z):
+    def terrain(self):
+        if not getattr(self, '_terrain', None):
+            self._terrain = Terrain(self.base or default_base())
+        return self._terrain
+
+    def cmd_map(self, x, y, z, r='8'):
+        """map X Y Z [R]: the terrain around X, Y: . passable, ~ wet (water), # impassable, @ the
+        place, P a party member, E an egg"""
+        x, y, z, r = num(x), num(y), num(z), num(r)
+        t = self.terrain()
+        party = {self.npc_pos(n) for n in self.party()}
+        eggs = set()
+        a = self.area(area_file(x, y, z))
+        for o in a.objs:
+            if o.use == LOCXYZ and o.shape & 0x3FF == 0x14F:
+                eggs.add(coord(o.pos))
+        for yy in range(y - r, y + r + 1):
+            row = ''
+            for xx in range(x - r, x + r + 1):
+                p = (xx, yy, z)
+                f = t.flags[t.tile(xx, yy, z)]
+                row += '@' if (xx, yy) == (x, y) else 'P' if p in party else 'E' if p in eggs else \
+                    '#' if f & Terrain.IMPASSABLE else '~' if f & Terrain.WET else '.'
+            print('%4d %s' % (yy, row))
+
+    def cmd_teleport(self, x, y, z, force=None):
         x, y, z = num(x), num(y), num(z)
         if not (0 <= x < 0x400 and 0 <= y < 0x400 and 0 <= z <= 5):
             sys.exit('u6save: %d,%d,%d is off the map' % (x, y, z))
+        if force != 'force' and not self.terrain().passable(x, y, z):
+            sys.exit('u6save: %d,%d,%d is impassable terrain (tile %02Xh); add "force" to teleport there '
+                     'anyway, or look with "map %d %d %d"' % (x, y, z, self.terrain().tile(x, y, z), x, y, z))
         if self.get(GSTA_AT + self.gsta['Active'][0], 1) == len(self.party()):
             sys.exit('u6save: the party is in a vehicle (Active = PartySize); not moved')
         moving = {}
@@ -301,14 +364,26 @@ class Save:
         for f, v in (('MapX', x), ('MapY', y), ('MapZ', z)):
             self.put(GSTA_AT + self.gsta[f][0], 2, v)
 
-    def cmd_give(self, who, typ, quantity='1', quality='0', frame='0'):
-        n = self.who(who)
+    @staticmethod
+    def item(status, typ, quantity, quality, frame, pos=b'\0\0\0'):
         t, q, ql, f = num(typ), num(quantity), num(quality), num(frame)
         if not (0 <= t < 0x400 and 0 <= q < 0x100 and 0 <= ql < 0x100 and 0 <= f < 0x40):
-            sys.exit('u6save: give: type 0..3FFh, quantity and quality 0..FFh, frame 0..3Fh')
+            sys.exit('u6save: type 0..3FFh, quantity and quality 0..FFh, frame 0..3Fh')
+        return Obj(bytes([status]) + pos + (t | f << 10).to_bytes(2, 'little') + bytes([q, ql]))
+
+    def cmd_give(self, who, typ, *rest):
+        """give WHO TYPE [QUANTITY [QUALITY [FRAME]]] [equip]: equip readies it (EQUIP; the
+        game works out the slot from the type, STAT_GetEquipSlot), which a spellbook needs"""
+        rest = list(rest)
+        equip = bool(rest) and rest[-1] == 'equip'
+        if equip:
+            rest.pop()
+        q, ql, f = (rest + ['1', '0', '0'][len(rest):])[:3] if len(rest) <= 3 else sys.exit('u6save: give: too many arguments')
+        n = self.who(who)
         name = area_file(*self.npc_pos(n))
         a = self.area(name)
-        o = Obj(bytes([INVEN | 1]) + bytes([n, 0, 0]) + (t | f << 10).to_bytes(2, 'little') + bytes([q, ql]))
+        o = self.item((EQUIP if equip else INVEN) | 1, typ, q, ql, f, bytes([n, 0, 0]))
+        self.last = (name, o)
         runs = self.held(a, n)
         if runs:                             # after the NPC's own items
             last = runs[-1][-1]
@@ -319,6 +394,30 @@ class Save:
         if len(a.objs) >= 0xC00:
             sys.exit('u6save: %s would hold too many objects' % name)
         self.changed.add(name)
+
+    def cmd_put(self, typ, quantity='1', quality='0', frame='0'):
+        """put TYPE [QUANTITY [QUALITY [FRAME]]]: a new item inside the item the last give made
+        (a spell in a spellbook: type 3Ah, quality the spell's number; a moonstone in the vortex
+        cube: type 49h, frame its phase), after what that item already holds"""
+        if not getattr(self, 'last', None):
+            sys.exit('u6save: put: no give before it to put into')
+        name, box = self.last
+        a = self.area(name)
+        o = self.item(CONTAINED | 1, typ, quantity, quality, frame)
+        o.parent = box
+        i = a.objs.index(box) + 1
+        while i < len(a.objs) and a.objs[i].use == CONTAINED and self._inside(a.objs[i], box):
+            i += 1
+        a.objs[i:i] = [o]
+        self.changed.add(name)
+
+    @staticmethod
+    def _inside(o, box):
+        while o.parent:
+            if o.parent is box:
+                return True
+            o = o.parent
+        return False
 
     def cmd_show(self):
         g = self.gsta
@@ -346,7 +445,7 @@ class Save:
             return
         fn = getattr(self, 'cmd_' + w[0], None)
         if not fn:
-            sys.exit('u6save: no command %s (show set npc teleport give)' % w[0])
+            sys.exit('u6save: no command %s (show set npc teleport give put map)' % w[0])
         try:
             fn(*w[1:])
         except TypeError:
@@ -375,7 +474,7 @@ def main():
     s = Save(a.dir, a.base)
     for c in a.commands:
         s.apply(c)
-    if any(not c.strip().startswith('show') for c in a.commands):
+    if any(c.split()[0] not in ('show', 'map') for c in a.commands if c.strip()):
         print('u6save: wrote %s' % ' '.join(s.write(a.out)))
     return 0
 
