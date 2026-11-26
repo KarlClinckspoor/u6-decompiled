@@ -150,6 +150,34 @@ setup = ["teleport 330 419 0", "place 0x10E 331 419 0", "give Dupre 0x1A5 0", "g
          "give Dupre 0x093 0", "give Dupre 0x11C 0", "set WindDir 6"]
 keys = "u right space u enter space u left space space space space space u enter space space"
 
+# Every spell (the 80 a player can cast, spells.h 00h..79h), in three sessions by circle (magic
+# points are a byte: all 80 need 360). The Avatar in the castle courtyard at (309, 379), level 8,
+# 255 magic points, a readied spellbook with the session's spells and 99 of each reagent. Each
+# cast: c, the incantation's letters (spell.c's SpellCode; console.c's SelectMode 3 builds a mask
+# of them), Enter; then 4, party member 4 (Iolo), as the target. A spell that asks for none takes
+# the 4 as a command, which in combat mode (the saved game's) only says "Not in combat mode!" and
+# does not move anyone; then a pass. Special: Help (07h) is PartyResurrect, which takes the party
+# to Lord British's castle and out of combat mode, so b brings combat back (else 4 makes Iolo the
+# solo, active member, who has no spellbook); Wind Change (39h) a direction; Peer (27h) a key to
+# close the map; Telekinesis (15h) and Pickpocket (46h) Escape after the target; Wizard Eye (69h)
+# Escape; Gate Travel (64h) phase 9, which does nothing. Negate Magic (56h) last of its session,
+# since it stops all magic for 20 turns; in the third, Kill before Resurrect, Time Stop and
+# Armageddon last. A port trial cast every spell (each cost its circle in magic points).
+[spells1]
+feed = 40
+setup = ["teleport 309 379 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 0 0 equip", "put 0x3A 0 0x00", "put 0x3A 0 0x01", "put 0x3A 0 0x02", "put 0x3A 0 0x03", "put 0x3A 0 0x04", "put 0x3A 0 0x05", "put 0x3A 0 0x06", "put 0x3A 0 0x07", "put 0x3A 0 0x08", "put 0x3A 0 0x09", "put 0x3A 0 0x10", "put 0x3A 0 0x11", "put 0x3A 0 0x12", "put 0x3A 0 0x13", "put 0x3A 0 0x14", "put 0x3A 0 0x15", "put 0x3A 0 0x16", "put 0x3A 0 0x17", "put 0x3A 0 0x18", "put 0x3A 0 0x19", "put 0x3A 0 0x20", "put 0x3A 0 0x21", "put 0x3A 0 0x22", "put 0x3A 0 0x23", "put 0x3A 0 0x24", "put 0x3A 0 0x25", "put 0x3A 0 0x26", "put 0x3A 0 0x27", "put 0x3A 0 0x28", "put 0x3A 0 0x29", "put 0x3A 0 0x30", "put 0x3A 0 0x31", "put 0x3A 0 0x32", "put 0x3A 0 0x33", "put 0x3A 0 0x34", "put 0x3A 0 0x35", "put 0x3A 0 0x36", "put 0x3A 0 0x37", "put 0x3A 0 0x38", "put 0x3A 0 0x39", "give avatar 0x41 99", "give avatar 0x42 99", "give avatar 0x43 99", "give avatar 0x44 99", "give avatar 0x45 99", "give avatar 0x46 99", "give avatar 0x47 99", "give avatar 0x48 99"]
+keys = "c i m y enter 4 space c w o enter 4 space c w j enter 4 space c a j o enter 4 space c a f enter 4 space c a m enter 4 space c i m enter 4 space c k l enter b space c i f enter 4 space c i l enter 4 space c q l enter 4 space c o j enter 4 space c i n p enter 4 space c i y enter 4 space c i z enter 4 space c o p y enter 4 esc space c i j enter 4 space c e p enter 4 space c a j enter 4 space c a y enter 4 space c a s enter 4 space c a g enter 4 space c p f enter 4 space c v l enter 4 space c a p enter 4 space c a v z enter 4 space c v z enter 4 space c v w y enter space space c i s enter 4 space c a x c enter 4 space c o y enter 4 space c k x enter 4 space c a v m enter 4 space c i f g enter 4 space c v m enter 4 space c i w enter 4 space c v a j o enter 4 space c i n g enter 4 space c i z g enter 4 space c r h enter right space"
+
+[spells2]
+feed = 40
+setup = ["teleport 309 379 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 0 0 equip", "put 0x3A 0 0x40", "put 0x3A 0 0x41", "put 0x3A 0 0x42", "put 0x3A 0 0x43", "put 0x3A 0 0x44", "put 0x3A 0 0x45", "put 0x3A 0 0x46", "put 0x3A 0 0x47", "put 0x3A 0 0x48", "put 0x3A 0 0x49", "put 0x3A 0 0x50", "put 0x3A 0 0x51", "put 0x3A 0 0x52", "put 0x3A 0 0x53", "put 0x3A 0 0x54", "put 0x3A 0 0x55", "put 0x3A 0 0x56", "put 0x3A 0 0x57", "put 0x3A 0 0x58", "put 0x3A 0 0x59", "give avatar 0x41 99", "give avatar 0x42 99", "give avatar 0x43 99", "give avatar 0x44 99", "give avatar 0x45 99", "give avatar 0x46 99", "give avatar 0x47 99", "give avatar 0x48 99"]
+keys = "c i s g enter 4 space c v p f enter 4 space c k b x enter 4 space c s l enter 4 space c o g enter 4 space c a x p enter 4 space c p y enter 4 esc space c a s l enter 4 space c k m c enter 4 space c w y enter 4 space c a x e enter 4 space c i q x enter 4 space c v q enter 4 space c f h enter 4 space c k d y enter 4 space c v i s enter 4 space c n h enter 4 space c i q y enter 4 space c i d p enter 4 space c a o enter 4 space"
+
+[spells3]
+feed = 40
+setup = ["teleport 309 379 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 0 0 equip", "put 0x3A 0 0x60", "put 0x3A 0 0x61", "put 0x3A 0 0x62", "put 0x3A 0 0x63", "put 0x3A 0 0x64", "put 0x3A 0 0x65", "put 0x3A 0 0x66", "put 0x3A 0 0x67", "put 0x3A 0 0x68", "put 0x3A 0 0x69", "put 0x3A 0 0x70", "put 0x3A 0 0x71", "put 0x3A 0 0x72", "put 0x3A 0 0x73", "put 0x3A 0 0x74", "put 0x3A 0 0x75", "put 0x3A 0 0x76", "put 0x3A 0 0x77", "put 0x3A 0 0x78", "put 0x3A 0 0x79", "give avatar 0x41 99", "give avatar 0x42 99", "give avatar 0x43 99", "give avatar 0x44 99", "give avatar 0x45 99", "give avatar 0x46 99", "give avatar 0x47 99", "give avatar 0x48 99"]
+keys = "c v o g enter 4 space c i o y enter 4 space c g h enter 4 space c q c enter 4 space c v r p enter t:9 enter space c v a s enter 4 space c v s l enter 4 space c k o x enter 4 space c p o w enter esc space c i c enter 4 space c i m c enter 4 space c c h enter 4 space c v a l enter 4 space c v a x e enter 4 space c v c enter 4 space c v r x enter 4 space c k x c enter 4 space c v p y enter 4 space c a t enter 4 space c v c b m enter 4 space"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no

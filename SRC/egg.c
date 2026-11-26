@@ -123,7 +123,15 @@ static /*C_2E2D_0088*/mkRandom(int16 val) {
 					if(OSI_rand(0, 3) != 0)
 						AddInvObj(OBJ_GOLD, LOCAL | CONTAINED | OWNED, OSI_rand(1, 100), chestObj);
 					if(OSI_rand(0, 3) != 0)
+#ifdef __TURBOC__
 						AddInvObj(LootFoodTypes[OSI_rand(0, 2)], LOCAL | CONTAINED | OWNED, OSI_rand(1, 10), chestObj);
+#else
+					{	/*-p (pascal calls): Turbo C evaluates the arguments left to right, the
+						  food's OSI_rand before the quantity's; gcc may not*/
+						int16 food_ = LootFoodTypes[OSI_rand(0, 2)];
+						AddInvObj(food_, LOCAL | CONTAINED | OWNED, OSI_rand(1, 10), chestObj);
+					}
+#endif
 					if(OSI_rand(0, 3) == 0)
 						AddInvObj(OBJ_TORCH, LOCAL | CONTAINED | OWNED, OSI_rand(1, 6), chestObj);
 					if(OSI_rand(0, 10) == 0)
@@ -133,7 +141,14 @@ static /*C_2E2D_0088*/mkRandom(int16 val) {
 				if(OSI_rand(0, 3) != 0 && !IsMonsterWingedGargoyle(objClass))
 					AddInvObj(OBJ_GOLD, LOCAL | INVEN | OWNED, OSI_rand(1, 100), objNum);
 				if(OSI_rand(0, 3) == 0)
+#ifdef __TURBOC__
 					AddInvObj(LootFoodTypes[OSI_rand(0, 2)], LOCAL | INVEN | OWNED, OSI_rand(1, 10), objNum);
+#else
+				{	/*-p: left to right, as above*/
+					int16 food_ = LootFoodTypes[OSI_rand(0, 2)];
+					AddInvObj(food_, LOCAL | INVEN | OWNED, OSI_rand(1, 10), objNum);
+				}
+#endif
 				if(OSI_rand(0, 3) == 0)
 					AddInvObj(TypeFrame(OBJ_POTION, OSI_rand(0, 7)), LOCAL | INVEN | OWNED, 1, objNum);
 			} else if(itemType == OBJ_GOLD) {

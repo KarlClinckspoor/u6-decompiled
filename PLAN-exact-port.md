@@ -199,6 +199,25 @@ working platform, so the proof comes first and then guards the platform swap.
       SpellCode, Enter: console.c's SelectMode 3), then its target. Several sessions by circle;
       the ones that end or upset a session (Armageddon, Kill, the winds, Gate Travel, Time Stop)
       in sessions of their own.
+      **Done: `[spells1]`, `[spells2]`, `[spells3]`** (circles 1-4, 5-6, 7-8; tests/replay/
+      spells*.rec): every one of the 80 cast in DOS (each costs its circle in magic points; in
+      spells1 Peer shows 0 because the magic regenerated in the same window). DOS recording =
+      replay 1 = replay 2 for all three; spells1 and spells3 identical to DOS in all four builds.
+      - **spells2 found a gcc-only port bug:** the gcc builds differed at Negate Magic, in 179
+        pixels of its "static" effect (gameloop.c: `GR_PUT_PIXEL(OSI_rand(8, 167),
+        OSI_rand(8, 167))`, 100 random pixels each frame while SpellFx[13] is set). GAME is
+        compiled with -p (pascal calls), so Turbo C evaluates arguments left to right (the
+        disassembly: the first OSI_rand's result is pushed first, the x); C leaves the order
+        open, clang takes left to right (and matched), gcc right to left (x and y swapped; the
+        same random draws, so the game state matched and only pixels differed). Fixed on the
+        host with a temporary for the first argument, here and in egg.c's two loot calls
+        (`AddInvObj(LootFoodTypes[OSI_rand(0, 2)], ..., OSI_rand(1, 10), ...)`), where gcc
+        would have swapped a monster's food and its quantity. A scan of every statement with two
+        OSI_rand found no other unordered pair (the rest are sums, `&&`, nested calls or separate
+        statements). Gate 3 of 3, RGAME.EXE unchanged; spells2 then identical in all four builds.
+      - **Open:** the same class with other side effects (two calls in one argument list that
+        both change state). The clang builds follow Turbo C's order by luck; the gcc ones do
+        not. A scan for calls whose arguments call anything but pure functions is still to do.
   - **The endgame.** The cube and the lenses are placed, and the Codex vanishes
     (objcmd.c's UseVortexCube): all 8 moonstones in the vortex cube, the Britannia lens at
     (399h, 353h), the Gargoyle lens at (39Dh, 353h), and the Codex at (39Bh, 353h) within 5

@@ -433,7 +433,15 @@ pointer, and copy (or fade in) the window to the screen.*/
 		GrInfo->toBackBuffer = 1;
 		GR_SET_COLOR(8);
 		for(i = 0; i < 100; i++)
+#ifdef __TURBOC__
 			GR_PUT_PIXEL(OSI_rand(8, 167), OSI_rand(8, 167));
+#else
+		{	/*GAME is compiled with -p (pascal calls): Turbo C evaluates the arguments left to
+			  right, x's OSI_rand before y's; C leaves the order open, and gcc takes y first*/
+			int16 px_ = OSI_rand(8, 167);
+			GR_PUT_PIXEL(px_, OSI_rand(8, 167));
+		}
+#endif
 		GrInfo->xorMode = 0;
 		GrInfo->toBackBuffer = 0;
 	}
