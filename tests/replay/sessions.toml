@@ -192,6 +192,21 @@ feed = 40
 setup = ["teleport 291 348 0", "place 0xDF 292 348 0"]
 keys = "u right space u up space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space"
 
+# NOT A TEST SESSION (it never ends): the inventory hang (docs/CODE_REVIEW.md, CR-002). The Avatar
+# carries 14 items, among them a bag holding two daggers. F1 (the inventory), Tab (the slot
+# cursor), two right to the bag, Enter (opens it), two left to a dagger, Enter (readies it:
+# STAT_Ready refreshes the inventory size from the Avatar's 14 items while the open container is
+# still the bag), then down past the bottom row: the scroll's skip loop (status.c) runs off the
+# bag's two items and never ends. Recorded with `rp.py record OUT --session invhang --timeout
+# 120`, which times out; its STATE.OUT shows the last key read
+[invhang]
+feed = 40
+setup = ["teleport 309 379 0", "give avatar 0xBC 0", "put 0x26 0", "put 0x26 0",
+         "give avatar 0x22 0", "give avatar 0x22 0", "give avatar 0x22 0", "give avatar 0x22 0",
+         "give avatar 0x22 0", "give avatar 0x22 0", "give avatar 0x22 0", "give avatar 0x22 0",
+         "give avatar 0x22 0", "give avatar 0x22 0", "give avatar 0x22 0"]
+keys = "f1 tab right right enter left left enter down down down down space"
+
 # Every spell (the 80 a player can cast, spells.h 00h..79h), in three sessions by circle (magic
 # points are a byte: all 80 need 360). The Avatar in the castle courtyard at (309, 379), level 8,
 # 255 magic points, a readied spellbook with the session's spells and 99 of each reagent. Each

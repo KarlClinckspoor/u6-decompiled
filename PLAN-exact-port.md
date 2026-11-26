@@ -227,9 +227,19 @@ working platform, so the proof comes first and then guards the platform swap.
         would have swapped a monster's food and its quantity. A scan of every statement with two
         OSI_rand found no other unordered pair (the rest are sums, `&&`, nested calls or separate
         statements). Gate 3 of 3, RGAME.EXE unchanged; spells2 then identical in all four builds.
-      - **Open:** the same class with other side effects (two calls in one argument list that
-        both change state). The clang builds follow Turbo C's order by luck; the gcc ones do
-        not. A scan for calls whose arguments call anything but pure functions is still to do.
+      - **The scan, done** (an Opus worker, over clang's JSON AST of every SRC file with the
+        port's flags, so every macro expanded): every call's arguments and every unsequenced
+        operator with two side effects, or one side effect and a global read; 215 candidates,
+        all reviewed by hand, **none left in GAME** beyond the three fixed (sums of two draws,
+        stats against a draw, array addresses from locals, ... are harmless). clang
+        -Wunsequenced and gcc -Wsequence-point: nothing. cdecl exceptions in GAME (right to
+        left in DOS): CON_printf, decompress, main, MOUSE_*, the replay hooks, Turbo C's library;
+        none has two order-dependent arguments. compat.h makes cdecl and pascal empty, so a
+        future cdecl call with two such arguments would match DOS under gcc, not clang.
+      - **U.EXE (Phase 4):** it is built without -p, so cdecl, right to left: four calls in
+        SRC_U/intro.c (739, 1039, 1055, 1075) pass two rand() draws as x and y; clang swaps them
+        (gcc probably matches). Cosmetic (the introduction's jitter), the same draws either way.
+        Fix: the last argument into a temporary first, under `#ifndef __TURBOC__`.
   - **The endgame.** The cube and the lenses are placed, and the Codex vanishes
     (objcmd.c's UseVortexCube): all 8 moonstones in the vortex cube, the Britannia lens at
     (399h, 353h), the Gargoyle lens at (39Dh, 353h), and the Codex at (39Bh, 353h) within 5
@@ -309,6 +319,24 @@ docs/CODE_REVIEW.md (146 findings, by an Opus worker) ranks the port hazards. Th
   frames 0..7 are inside: with the eight potions (113h, one of each colour) in the cube and no
   moonstone, the Codex vanished and GAME ran END.EXE. Session `[potions]` written; not yet
   recorded in DOS.
+- **The review's other critical claims:**
+  - **CR-004, the powder keg: confirmed in DOS.** Session `[keg]` (tests/replay/keg.rec): a keg lit
+    in the castle's northwest tower, then down the ladder; the surface area is unloaded and the
+    keg's slot (463) is taken by a stalagmite of level 1; when the fuse runs out, Detonate(463)
+    deletes the stalagmite, with an explosion where it stands. DOS recording = replay 1 = replay
+    2; the port identical in all four builds. (Vanish on a lit keg gives "No effect".)
+  - **CR-002, the inventory hang: confirmed in DOS and the port.** `[invhang]` (not a test
+    session: it never ends): 14 items carried, a bag with two daggers; F1, Tab, the bag opened,
+    a dagger readied (STAT_Ready refreshes the inventory size from the member's 14 while the
+    open container is still the bag), then down past the bottom row: the game reads the third
+    down and never another key, in DOS (`rp.py record --timeout 120` timed out; STATE.OUT shows
+    the last key read) and in the port (no exit after 60 s, after the same key).
+  - **CR-003, casting at a map target:** needs a mouse click on the map with the spellbook open
+    (in cast mode the keys only pick spell lines), and the sessions can only type keys in DOS.
+    Open until the DOS side can script the mouse.
+  - **CR-005, the healer's resurrect:** Tiberius (NPC 26, Britain) only offers it with a dead
+    party member; the setup needs a dead companion and a temporary creature's corpse ahead of
+    its body in the object chain. Open.
 - u6save's `place` now puts the object in front of those already on its tile, as AddMapObj
   does (the first FindLoc finds, which a drop onto the tile takes as its container); `behind`
   keeps the old order, which [drake]'s stage uses (byte-identical, so drake.rec stays valid).
