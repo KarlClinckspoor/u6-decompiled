@@ -344,7 +344,17 @@ Constants are pushed; an operator pops its operands from the top of
 lstack and leaves its result in the lowest operand's slot.*/
 /*C_1703_050E*/static parse_factor() {
 	int16 sidx;/*stack index*/
+#ifdef __TURBOC__
 	NEARLONG lstack[10];/*local "stack"*/
+#else
+	/*docs/CODE_REVIEW.md, CR-009: a string LET from an array reaches OP_DATA with one operand,
+	  which reads and writes lstack[-1]. In DOS that is the caller's saved DI and SI (the frame:
+	  sub sp,92h; push si; push di, lstack[0] at [bp-92h]); the value read only addresses a word
+	  that goes back into lstack[-1], and parse_factor returns lstack[0], the index. The host
+	  gives lstack[-1] a slot of its own (zero), so the read and the write stay in this frame*/
+	NEARLONG lstack_[11] = {0};
+#define lstack (lstack_ + 1)
+#endif
 	int32 arrayAddr;
 	int16 i, j, opcode, cmpLen;
 	unsigned char cparam0, cparam1, varIdx;
@@ -743,6 +753,9 @@ lstack and leaves its result in the lowest operand's slot.*/
 		CON_printf(/*09C7*/"Error occured.\n");
 	return lstack[0];
 }
+#ifndef __TURBOC__
+#undef lstack
+#endif
 
 /*resolve an OP_ADDRESS operand (Talk_PC points just after OP_ADDRESS):
 reads the U32 address; if OP_NOINDEX follows it is a plain address,

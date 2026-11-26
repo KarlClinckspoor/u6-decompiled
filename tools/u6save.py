@@ -306,13 +306,16 @@ class Save:
         x, y, z = self.npc_pos(o.assoc) if o.status & 0x10 and o.assoc < 0x100 else coord(o.pos)
         return (y, x, -z)
 
-    def insert(self, area, runs):
-        """runs placed in area before the first run that comes after them in the game's order"""
+    def insert(self, area, runs, in_front=False):
+        """runs placed in area before the first run that comes after them in the game's order;
+        in_front: before the runs on the same tile too, as the game's AddMapObj puts a new object
+        in front of the objects already there (the first one FindLoc finds, which a drop onto
+        the tile takes as its container)"""
         if not runs:
             return
         rest = area.groups()
         k = self.key(runs[0])
-        i = next((j for j, g in enumerate(rest) if self.key(g) > k), len(rest))
+        i = next((j for j, g in enumerate(rest) if (self.key(g) >= k if in_front else self.key(g) > k)), len(rest))
         rest[i:i] = runs
         area.objs = [o for g in rest for o in g]
 
@@ -412,15 +415,22 @@ class Save:
                 return
         sys.exit('u6save: unequip: NPC %d has no readied item of type %03Xh' % (n, t))
 
-    def cmd_place(self, typ, x, y, z, quantity='0', quality='0', frame='0'):
-        """place TYPE X Y Z [QUANTITY [QUALITY [FRAME]]]: a new object on the map (a cannon, 0DDh,
-        frame its direction: 0 north, 1 east, 2 south, 3 west), in the area file of that place,
-        where the game's order puts it"""
+    def cmd_place(self, typ, x, y, z, *rest):
+        """place TYPE X Y Z [QUANTITY [QUALITY [FRAME]]] [behind]: a new object on the map (a
+        cannon, 0DDh, frame its direction: 0 north, 1 east, 2 south, 3 west), in the area file of
+        that place, in front of the objects already on that tile as the game's AddMapObj puts
+        one (the first FindLoc finds: a drop onto the tile takes it as the container); behind:
+        after them instead (as u6save did before, which [drake]'s recording was made with)"""
+        rest = list(rest)
+        behind = bool(rest) and rest[-1] == 'behind'
+        if behind:
+            rest.pop()
+        quantity, quality, frame = (rest + ['0', '0', '0'][len(rest):])[:3]
         x, y, z = num(x), num(y), num(z)
         name = area_file(x, y, z)
         a = self.area(name)
         o = self.item(LOCXYZ, typ, quantity, quality, frame, raw_coord(x, y, z))
-        self.insert(a, [[o]])
+        self.insert(a, [[o]], in_front=not behind)
         self.last = (name, o)
         self.changed.add(name)
 

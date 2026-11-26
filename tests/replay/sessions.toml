@@ -65,7 +65,7 @@ keys = "space space space space space space c enter left left left enter space s
 # cannon again between; passes; the game saved
 [drake]
 feed = 40
-setup = ["teleport 575 350 0", "unequip avatar 0x2B", "give avatar 0x2F 0 0 0 equip", "place 0xDD 571 340 0 0 0 3"]
+setup = ["teleport 575 350 0", "unequip avatar 0x2B", "give avatar 0x2F 0 0 0 equip", "place 0xDD 571 340 0 0 0 3 behind"]
 keys = "up up up up up up left left left left u up up up up u up space a left left up enter space a left left up enter space u up space a left left up enter space a left left up enter space a left left up enter space a left left up enter space space space space ctrl+s Y"
 
 # The endgame (PLAN-exact-port.md, Phase 3): the Codex at (923, 851), in its chamber at the Shrine
@@ -93,6 +93,31 @@ keys = "up up up left left up d right right enter up enter right right right rig
 feed = 40
 setup = ["teleport 309 379 0"]
 keys = "u up Y enter space u up Y t:xyz enter space u up Y t:food enter space u up Y t:food enter space u up Y t:food enter space"
+
+# A purchase (docs/CODE_REVIEW.md, CR-009): Max the blacksmith (NPC 18) in Britain, at (348, 378)
+# at noon. His script's lists fill $0, $1 and $Y from arrays: string LETs from an array, whose
+# OP_DATA has one operand and reads and writes lstack[-1] (talkdr.c's parse_factor; the port
+# gives it a slot of its own). The party two tiles south at (348, 380), 200 gold for the Avatar;
+# talk (the cursor two up), "buy", "weap", the Avatar (1) buys a dagger (1), yes, "bye"
+[shop]
+feed = 40
+setup = ["teleport 348 380 0", "set Time_H 12", "give avatar 0x58 200"]
+keys = "t up up enter t:buy enter t:weap enter 1 1 y space t:bye enter space space"
+
+# The endgame with potions instead of moonstones (docs/CODE_REVIEW.md, CR-001): UseVortexCube
+# only checks that the cube holds items of frames 0 to 7, and the cube takes any item dropped
+# onto it on the ground (CanPutInContainer refuses the spellbook and dead bodies, not the cube;
+# only putting it in from the inventory refuses non-moonstones; a port trial dropped six potions
+# into the cube that way). Setup: the lenses in place (921, 851) and (925, 851), the cube on
+# the carpet at (923, 852) holding eight potions (113h, frames 0 to 7, one of each colour) and
+# no moonstone. Up three to (923, 853); use the cube (north). If the claim holds, the Codex
+# vanishes and the session ends at HOOK_EXEC
+[potions]
+feed = 40
+setup = ["teleport 923 856 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0", "place 0x3E 923 852 0",
+         "put 0x113 0 0 0", "put 0x113 0 0 1", "put 0x113 0 0 2", "put 0x113 0 0 3",
+         "put 0x113 0 0 4", "put 0x113 0 0 5", "put 0x113 0 0 6", "put 0x113 0 0 7"]
+keys = "up up up u up enter space space"
 
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in

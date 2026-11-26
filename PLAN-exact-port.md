@@ -232,8 +232,33 @@ docs/CODE_REVIEW.md (146 findings, by an Opus worker) ranks the port hazards. Th
   normal build, TALKDR_TEXT 0ECB:050E) shows `sub sp,92h; push si; push di` with lstack[0] at
   [bp-92h] and sidx in SI: lstack[-1] is the caller's saved DI (low word) and SI (high word). In
   DOS, OP_DATA with one operand reads them as the array address and writes the 16-bit result over
-  them, so the caller's DI and SI come back changed. Copying that exactly needs the callers'
-  register use (TALK_ResolveAddress, execute_op) and a shop session to show it in DOS. Open.
+  them, so the caller's DI and SI come back changed.
+  - What that does in DOS: OP_DATA's read only goes into lstack[-1]; the loop's `sidx ++` takes
+    sidx back to 0, and parse_factor returns lstack[0], the index, so the result is as if the
+    operator were absent. TALK_ResolveAddress (its caller on this path) saves only SI and sets it
+    from the return value; execute_op keeps varIdx in DI and pStr in memory, and reads neither
+    DI nor SI after the call before its epilogue restores its own caller's. So the clobbered
+    registers have no effect on this path.
+  - **Port fix:** under `!__TURBOC__`, talkdr.c's `lstack` is `lstack_ + 1` of an 11-element
+    array, zeroed per call, so lstack[-1] is a slot of the frame. Gate 3 of 3; RGAME.EXE
+    unchanged.
+  - **Session `[shop]`** (tests/replay/shop.rec): the Avatar buys a dagger from Max the
+    blacksmith ("After accepting Avatar's gold, Max hands over the Dagger."). A temporary log in
+    the port showed 9 one-operand OP_DATAs in it. DOS: recording = replay 1 = replay 2; the port
+    identical to DOS in all four builds.
+- **After the three fixes**, port-check `--all`: first, smoke, setup and shrine identical to DOS
+  in all four builds. drake, endgame and fountain were not re-run (Claude Code stopped the run,
+  low memory, during drake); shop was checked with the CR-009 fix in.
+- **CR-001, the vortex cube takes any item: confirmed in the port.** ContainerTypes includes the
+  cube, and CanPutInContainer refuses the spellbook and dead bodies but not the cube, so a drop
+  or a push onto a cube on the ground puts any item in (a port trial dropped six potions in);
+  only putting it in from the inventory refuses non-moonstones. UseVortexCube checks only that
+  frames 0..7 are inside: with the eight potions (113h, one of each colour) in the cube and no
+  moonstone, the Codex vanished and GAME ran END.EXE. Session `[potions]` written; not yet
+  recorded in DOS.
+- u6save's `place` now puts the object in front of those already on its tile, as AddMapObj
+  does (the first FindLoc finds, which a drop onto the tile takes as its container); `behind`
+  keeps the old order, which [drake]'s stage uses (byte-identical, so drake.rec stays valid).
 - Noted on the way: the user's gamedata/GAME.EXE (sha1 360a999a...) is another version than the
   one the sources rebuild (5129af96...); the disassembly used build/dos/game/GAME.EXE.
 - Goldens from DOS (twice, identical) committed with their recordings.
@@ -294,7 +319,8 @@ model (runtime/port/sys/enhance.c and enhance.h, Underworld Exhumed's docs/ENHAN
   Each needs a session that reaches it, and the fix must be shown to change only what it says.
 - **A guard before burying a moonstone** (the user, 2026-11-26): ask "Bury the moonstone here?"
   in objcmd.c's UseMoonstone before it buries. It reads a key, so it changes the inputs: a flag
-  like any other, carried by the recordings it is on in. What the code says about burying:
+  like any other, carried by the recordings it is on in, and **off by default** like every
+  enhancement (the user, 2026-11-26: no exception). What the code says about burying:
   - UseMoonstone buries only on grass and earth tiles (else "Cannot be buried here!"); it puts
     the stone on the ground as an ordinary map object and records `MoonstonePos[phase]`;
   - it is not irreversible: Get takes the stone back and clears its MoonstonePos
