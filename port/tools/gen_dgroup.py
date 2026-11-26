@@ -274,8 +274,10 @@ def main():
     funcs = []
     for n, (s, o) in sorted(code.items()):
         # every port function whose name is the DOS one without regard to case (GAME is -p:
-        # OSI_READ is OSI_read; the port also has an OSI_Read)
-        for name, size, typ in nm.get(n, []):
+        # OSI_READ is OSI_read; the port also has an OSI_Read). The assembly library's C names
+        # carry Turbo C's underscore (_MOUSE_0055), which the port's do not
+        key = n[1:] if n.startswith('_') and n[1:] not in code else n
+        for name, size, typ in nm.get(key, []):
             if typ == 'T':
                 funcs.append((name, (s - DGROUP_PARA) & 0xFFFF, o))
 
@@ -317,7 +319,7 @@ def main():
              ' * its statics (their DOS offsets are in its comments) for port/game/dgroup_port.c. */',
              '#include "%s.c"' % tu, '#include "dgs.h"', '',
              'const struct u6_dgs %s[] = {' % dgs_name(tu)]
-        t += ['\t{&%s, sizeof %s},\t/* %04X */' % (n, n, o) for n, o, _ in lst]
+        t += ['\t{&%s, sizeof %s, 0},\t/* %04X */' % (n, n, o) for n, o, _ in lst]
         if not lst:
             t += ['\t{0, 0, 0}']
         t += ['};']
@@ -334,7 +336,7 @@ def main():
              ' * GAME.EXE\'s near data, for port/game/dgroup_port.c (the file includes this at its end). */',
              '#include "../include/dgs.h"', '',
              'const struct u6_dgs %s[] = {' % dgs_name(rel)]
-        t += ['\t{&%s, sizeof %s},\t/* D_%04X */' % (n, n, o) for n, o, _ in lst]
+        t += ['\t{&%s, sizeof %s, 0},\t/* D_%04X */' % (n, n, o) for n, o, _ in lst]
         t += ['};']
         open(os.path.join(GAME, 'dgs_%s.inc' % base), 'w', newline='\n').write('\n'.join(t) + '\n')
 

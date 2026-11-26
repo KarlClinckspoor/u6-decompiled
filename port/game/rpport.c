@@ -65,6 +65,36 @@ unsigned char *port_null_copy(int far_table)
 	return far_table ? ivt : ds0;
 }
 
+/* PAL and SCRN as the DOS build's RP_U6_SCREEN reads them: the DAC through ports 3C7h/3C9h and
+ * A000:0000. While the game has the VGA in mode 13h (port/gfx/mcga.c, GR_INIT to GR_SHUTDOWN)
+ * that is the port's DAC and screen. Before (the first dump, at MOUSE_INIT's first button read,
+ * before InitGraphicsData) DOS's VGA is still in the text mode 3 that DOS started in, which the
+ * port does not draw, so this writes what that mode holds:
+ *   - the DAC the VGA BIOS loads for mode 3: the EGA's 64 colours (bit 0/1/2 blue/green/red at
+ *     2/3 intensity, 2Ah; bits 3/4/5 the same at 1/3, 15h) in entries 0..3Fh, the rest 0;
+ *   - A000:0000 reads FFh: in text mode the graphics controller maps B800h, and nothing
+ *     answers at A000h (DOSBox-X gives FFh, as a real ISA bus does). */
+int mcga_mode13(void);
+const unsigned char *u6_rp_screen(unsigned char pal[768])
+{
+	static unsigned char text_frame[64000];
+	int i;
+	if (mcga_mode13()) {
+		outportb(0x3C7, 0);
+		for (i = 0; i < 768; i++)
+			pal[i] = inportb(0x3C9);
+		return mcga_screen();
+	}
+	memset(pal, 0, 768);
+	for (i = 0; i < 64; i++) {
+		pal[i * 3 + 0] = (unsigned char)((i & 4 ? 0x2A : 0) + (i & 0x20 ? 0x15 : 0));
+		pal[i * 3 + 1] = (unsigned char)((i & 2 ? 0x2A : 0) + (i & 0x10 ? 0x15 : 0));
+		pal[i * 3 + 2] = (unsigned char)((i & 1 ? 0x2A : 0) + (i & 0x08 ? 0x15 : 0));
+	}
+	memset(text_frame, 0xFF, sizeof text_frame);
+	return text_frame;
+}
+
 /* main.c's rp_u6_shutdown (the replay DOS build's, -DREPLAY): the temporary object blocks
  * deleted from SAVEGAME, which the runs compare; the music, the timer and the video mode are
  * the port's exit's */

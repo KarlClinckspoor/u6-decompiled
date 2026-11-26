@@ -3,6 +3,6 @@
 #include "../include/dgs.h"
 
 const struct u6_dgs u6_dgs_sys_osi[] = {
-	{&selected_drive, sizeof selected_drive},	/* D_2FC2 */
-	{&crit_error, sizeof crit_error},	/* D_2FCC */
+	{&selected_drive, sizeof selected_drive, 0},	/* D_2FC2 */
+	{&crit_error, sizeof crit_error, 0},	/* D_2FCC */
 };

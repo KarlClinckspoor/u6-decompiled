@@ -157,6 +157,26 @@ program's input:
   too early hides the emulator's own MOUNT. The same SET lines, in the same order, run in the
   batch after the mount, give every DOS the same block whatever it started with.
 
+### The port against DOS (Phase 2)
+
+- **Lay out the state the way DOS does, rather than masking it.** The port writes DGROUP and the
+  graphics driver's segment in DOS's byte layout, every pointer in DOS's form. A generated
+  table maps DOS offsets to port symbols. Then the comparison covers the program's own data,
+  and what stays masked is only what the port has no counterpart for.
+- **The first dump is the hardest.** It comes before the game owns the machine: the VGA is in
+  the BIOS's text mode, and the far blocks don't exist yet. A small model of what DOS's machine
+  holds at that point (the mode-3 DAC, an unmapped A000h) is cheaper and more honest than
+  masking the whole screen.
+- **A wait that decides nothing need not be waited out.** OSI_delay's tick count reaches no
+  game decision, so the port's replay of a DOS recording runs on a virtual clock: 1 second
+  instead of 3 minutes. That makes checking four builds after every change cheap.
+- **Four compilers, one result.** gcc and clang on Linux and on Windows (where `long` is 32
+  bits) give byte-identical dumps. The port's fixed-width types and its 16-bit arithmetic
+  wrappers hold up.
+- **Don't cache inside a folder the build empties.** The character stage lived in the replay
+  build's folder. A rebuild that happened after the cache check deleted it, and the replay
+  failed now and then, which looked like flakiness.
+
 ## 7. Sound
 
 The AdLib driver (U6ADLIB.DRV) is C, ticked at 60 Hz inside the SDL audio callback, on an

@@ -588,3 +588,27 @@ The port now writes every section DOS writes, and `first.rec` is identical at 69
   - Near pointers to string literals are masked rather than compared.
   - The port's replay still waits in real time.
   - A flaky `cpSync` failure of one DOS replay, seen once while a WSL build was running in the same tree.
+
+## 19. Phase 2 task 3: every checkpoint, four builds (2026-11-26, by the coordinator)
+
+`first.rec` and a second session, `smoke`, are identical to DOS at every checkpoint, in every section apart from the masks. The saved games are identical. This holds in four builds: Linux gcc 11 and clang 14 (WSL), and Windows MinGW gcc 16 and clang 23 (MSYS2). The Windows gcc run is also identical to the Linux gcc run under `--same-build`, which applies only the `always` masks and none of the cross ones.
+
+- **Checkpoint 0**, before the level exists:
+  - **Segment words.** DOS writes SEGS only from the level on. Exhume's `replay.py compare` now pairs a dump without SEGS against each run's first SEGS, using only the load segment's rule and `heap_block`'s, since neither moves during a run. Exhume docs/config.md says so.
+  - **Mouse.onMove** is the DOS driver's default handler, `_MOUSE_0055`. The port's handler (a static `mouse_dummy` before) now carries that name. `gen_dgroup.py` also matches the assembly library's underscored names (21 more functions, 381 in all).
+  - **PAL and SCRN.** DOS's VGA is still in text mode 3 at this point. While the game hasn't put the VGA in mode 13h (`mcga_mode13`: GR_INIT to GR_SHUTDOWN), the port writes what text mode holds: the VGA BIOS's mode-3 DAC (the EGA's 64 colours) and FFh for A000:0000, which nothing maps in text mode. This is a model of the machine, like NULL's stand-in, and the port draws nothing differently.
+- **Speed.** A `--dos-replay` run took about 3 minutes and now takes 1 second. `timer.c` runs a virtual clock there, which OSI_delay's waits advance. Nothing the game decides on reads the tick count (DELAYRP.ASM keeps it outside DGROUP). The run reads no live input, and the busy delay loops return at once, as in the port's own replays.
+- **The flaky `cpSync`.** The cause: `chargen()` returned the cached stage, then rpbuild rebuilt the replay build and emptied `build/dos/replay`, the stage folder included. The stage now lives in `build/dos/stage`.
+- **Tools.** `rp.py port-build/port-check --variant V | --all` (linux-gcc, linux-clang, win-gcc, win-clang; `U6_MSYS2`). port-check builds every variant first, runs DOS once, then compares each build with DOS and prints a summary.
+- **Checks:**
+  - port-check `--all` on first.rec and smoke (recorded this task, `tests/replay/smoke.rec`): all identical, saves identical. Once the builds are done, the whole check takes about 1.5 minutes, most of it the DOS replay.
+  - The port's own `--record`/`--replay`: 107 of 107.
+  - OSI tests: 257 unit checks, and the RAND, SEED, LZW, KBD, SOUND and MOUSE Unicorn diffs.
+  - `mcga_diff.py`: PASS.
+  - No SRC file changed. RGAME.EXE is unchanged (`def703cb`).
+- **Masks.** No new ones: 58 cross masks, all from task 2.
+- **Left for task 4 and Phase 3:**
+  - Retire the port's own recorder.
+  - Near pointers to string literals are still masked, not compared.
+  - More sessions.
+- **Decided (the user, 2026-11-26): test set-ups go through saved games, not runtime cheats.** A Phase 3 tool will edit the staged saved game: positions (teleport), attributes and levels, inventory, quest flags, and the global state block. DOS and the port then start from the same file, so a session stays proved against DOS. Exhume's runtime cheats are port-only, and DOS can't replay them.

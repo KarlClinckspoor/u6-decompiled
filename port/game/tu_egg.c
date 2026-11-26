@@ -4,10 +4,10 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_egg[] = {
-	{&SerpentSegIndex, sizeof SerpentSegIndex},	/* 28A2 */
-	{&LootFoodTypes, sizeof LootFoodTypes},	/* 28A3 */
-	{&SerpentBodyFrames, sizeof SerpentBodyFrames},	/* 28A9 */
-	{&SerpentTailFrames, sizeof SerpentTailFrames},	/* 28AD */
-	{&SerpentSegDX, sizeof SerpentSegDX},	/* 28B1 */
-	{&SerpentSegDY, sizeof SerpentSegDY},	/* 28B5 */
+	{&SerpentSegIndex, sizeof SerpentSegIndex, 0},	/* 28A2 */
+	{&LootFoodTypes, sizeof LootFoodTypes, 0},	/* 28A3 */
+	{&SerpentBodyFrames, sizeof SerpentBodyFrames, 0},	/* 28A9 */
+	{&SerpentTailFrames, sizeof SerpentTailFrames, 0},	/* 28AD */
+	{&SerpentSegDX, sizeof SerpentSegDX, 0},	/* 28B1 */
+	{&SerpentSegDY, sizeof SerpentSegDY, 0},	/* 28B5 */
 };

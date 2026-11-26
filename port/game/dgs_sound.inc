@@ -3,6 +3,6 @@
 #include "../include/dgs.h"
 
 const struct u6_dgs u6_dgs_sys_sound[] = {
-	{&noise_seed, sizeof noise_seed},	/* D_3098 */
-	{&noise_acc, sizeof noise_acc},	/* D_3092 */
+	{&noise_seed, sizeof noise_seed, 0},	/* D_3098 */
+	{&noise_acc, sizeof noise_acc, 0},	/* D_3092 */
 };

@@ -231,6 +231,11 @@ void mcga_attach_image(const void *img, uint32_t size)
 }
 
 uint8_t *mcga_screen(void) { return vram; }
+
+/* whether the VGA is in mode 13h: from GR_INIT to GR_SHUTDOWN. Before and after, DOS's VGA is
+ * in text mode 3 (O_SAVEDMODE), where A000h is not mapped */
+static int in_mode13;
+int mcga_mode13(void) { return in_mode13; }
 uint8_t *mcga_segment(void) { return drv; }
 
 /* The palette int 10h AH=0 loads for mode 13h (IBM VGA BIOS; same in DOSBox). */
@@ -288,15 +293,18 @@ void *GRDRV_00(int16_t mode)
 	/* int 10h AX=0013h: clears the video memory, default palette */
 	memset(vram, 0, sizeof vram);
 	mcga_bios_palette();
+	in_mode13 = 1;
 	vdirty = 0;
 	plat_video_source(vram, vga_palette);
 	plat_video_dirty();
 	return &info;
 }
 
-/* 03h (21B1): GR_SHUTDOWN: int 10h AH=0, AL = the saved mode. Nothing to do here. */
+/* 03h (21B1): GR_SHUTDOWN: int 10h AH=0, AL = the saved mode. Nothing to do here but note
+ * that the VGA is back in text mode. */
 void GRDRV_03(void)
 {
+	in_mode13 = 0;
 }
 
 /* 06h (2A72): GR_SET_COLOR */

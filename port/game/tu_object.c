@@ -4,12 +4,12 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_object[] = {
-	{&MusicianWasNear, sizeof MusicianWasNear},	/* 0654 */
-	{&AllowSubmissionMove, sizeof AllowSubmissionMove},	/* 065A */
-	{&LocCursor, sizeof LocCursor},	/* 06F4 */
-	{&LocOnNextRow, sizeof LocOnNextRow},	/* 06F6 */
-	{&LocTarget, sizeof LocTarget},	/* 06F8 */
-	{&__Sav_file, sizeof __Sav_file},	/* 0709 */
-	{&__Tmp_file, sizeof __Tmp_file},	/* 071B */
-	{&__Bak_file, sizeof __Bak_file},	/* 0731 */
+	{&MusicianWasNear, sizeof MusicianWasNear, 0},	/* 0654 */
+	{&AllowSubmissionMove, sizeof AllowSubmissionMove, 0},	/* 065A */
+	{&LocCursor, sizeof LocCursor, 0},	/* 06F4 */
+	{&LocOnNextRow, sizeof LocOnNextRow, 0},	/* 06F6 */
+	{&LocTarget, sizeof LocTarget, 0},	/* 06F8 */
+	{&__Sav_file, sizeof __Sav_file, 0},	/* 0709 */
+	{&__Tmp_file, sizeof __Tmp_file, 0},	/* 071B */
+	{&__Bak_file, sizeof __Bak_file, 0},	/* 0731 */
 };

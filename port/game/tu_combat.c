@@ -4,6 +4,6 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_combat[] = {
-	{&NumEquipWeapons, sizeof NumEquipWeapons},	/* 1A25 */
-	{&CurEquipWeapon, sizeof CurEquipWeapon},	/* 1A27 */
+	{&NumEquipWeapons, sizeof NumEquipWeapons, 0},	/* 1A25 */
+	{&CurEquipWeapon, sizeof CurEquipWeapon, 0},	/* 1A27 */
 };

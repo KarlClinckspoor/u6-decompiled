@@ -147,6 +147,8 @@ void GRDRV_4E(void);
 
 /* The screen: A000:0000-FFFF (the first 64000 bytes are the 320x200 picture). */
 uint8_t *mcga_screen(void);
+/* Whether the VGA is in mode 13h (GR_INIT to GR_SHUTDOWN); text mode 3 before and after. */
+int mcga_mode13(void);
 /* The driver's segment (64 KB, the tables at their DOS offsets); for tests and debugging. */
 uint8_t *mcga_segment(void);
 /* Optional, before GRDRV_00: the unpacked U6MCGA.DRV (13796 bytes; GrDriver.p in the

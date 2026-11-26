@@ -44,9 +44,24 @@ static uint32_t raw_ticks(void)
 static uint32_t tick_offset, last_tick;
 static int was_replaying;
 
+/* --dos-replay (portmain.c): Exhume's replay.c replays a recording of the replay DOS build,
+ * and the run is a replay from start to end (it ends at the recording's stop key). The DOS
+ * build records every outside value the game decides on, and the tick count is none of them:
+ * only OSI_delay reads it (DELAYRP.ASM counts outside DGROUP, which the dumps hold), so it
+ * waits for nothing the dumps show. So the clock is a virtual one here, which advances a
+ * tick each time OSI_delay waits for one, and like the port's own replays this reads no live
+ * input and the busy loops return at once: the replay runs as fast as the host can. */
+static int dos_replay;
+static uint32_t dos_replay_ticks;
+
+void osi_set_dos_replay(int on)
+{
+	dos_replay = on;
+}
+
 int osi_replaying(void)
 {
-	return rp_mode == RP_REPLAY && !rp_finished();
+	return dos_replay || (rp_mode == RP_REPLAY && !rp_finished());
 }
 
 uint32_t osi_ticks_live(void)
@@ -61,6 +76,8 @@ uint32_t osi_ticks(void)
 	uint32_t raw = raw_ticks(), t;
 	int rep = osi_replaying();
 
+	if (dos_replay)
+		return dos_replay_ticks;
 	if (was_replaying && !rep)
 		tick_offset = last_tick - raw;   /* taken over between two reads */
 	t = rp_value(RP_TICKS, raw + tick_offset);
@@ -100,6 +117,8 @@ void osi_wait_tick(uint32_t seen)
 	uint32_t now, next;
 
 	plat_pump();
+	if (dos_replay)
+		dos_replay_ticks = seen + 1;
 	if (osi_replaying())
 		return;
 	now = plat_ms();

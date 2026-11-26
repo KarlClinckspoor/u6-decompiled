@@ -4,5 +4,5 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_status[] = {
-	{&ComModeNames, sizeof ComModeNames},	/* 07CF */
+	{&ComModeNames, sizeof ComModeNames, 0},	/* 07CF */
 };

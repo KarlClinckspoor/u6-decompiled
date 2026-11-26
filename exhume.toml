@@ -25,7 +25,7 @@ data_skip = ["DOSBOX", "cloud_saves", "webcache.zip", "manual.pdf", "unins000.ex
              "dosboxULTIMA6.conf", "dosboxULTIMA6_single.conf"]
 dosbox_conf = "tests/replay/dosbox-x.conf"   # replays (replaydos.mjs) and recordings (tools/rp.py)
 # the saved game every run starts from is not in the repository: tools/rp.py chargen makes it with
-# the real U.EXE ([_chargen] in tests/replay/sessions.toml) into build/dos/replay/stage, and passes
+# the real U.EXE ([_chargen] in tests/replay/sessions.toml) into build/dos/stage, and passes
 # it as --stage
 # Exhume's replay build is the modding link, which this project does not have: the replay
 # build swaps OSILIB's MOUSE and DELAY for MOUSERP and DELAYRP, adds STACKRP and rpfar.asm, and

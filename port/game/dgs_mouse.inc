@@ -3,10 +3,10 @@
 #include "../include/dgs.h"
 
 const struct u6_dgs u6_dgs_sys_mouse[] = {
-	{&pMouse, sizeof pMouse},	/* D_2FB4 */
-	{&nMouseSem, sizeof nMouseSem},	/* D_2FB6 */
-	{&lastX, sizeof lastX},	/* D_2FBA */
-	{&lastY, sizeof lastY},	/* D_2FBC */
-	{&lastL, sizeof lastL},	/* D_2FBE */
-	{&lastR, sizeof lastR},	/* D_2FC0 */
+	{&pMouse, sizeof pMouse, 0},	/* D_2FB4 */
+	{&nMouseSem, sizeof nMouseSem, 0},	/* D_2FB6 */
+	{&lastX, sizeof lastX, 0},	/* D_2FBA */
+	{&lastY, sizeof lastY, 0},	/* D_2FBC */
+	{&lastL, sizeof lastL, 0},	/* D_2FBE */
+	{&lastR, sizeof lastR, 0},	/* D_2FC0 */
 };

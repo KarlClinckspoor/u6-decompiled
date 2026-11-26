@@ -7,6 +7,8 @@ What the replay DOS build's runs read (docs/replay.md):
 - `first.rec`: the first real session's recording (`[first]`; Exhume's layout, `NAME.rec` in
   `[replay] sessions`). `python tools/rp.py check OUT --rec tests/replay/first.rec` replays it
   twice and compares.
+- `smoke.rec`: `[smoke]`'s recording (sha1 c7050b69...). `python tools/rp.py port-check OUT --rec
+  tests/replay/smoke.rec --all` checks it against the port, like first.rec.
 - `dosbox-x.conf`: the DOSBox-X configuration of every recording and replay (exhume.toml's
   `[replay] dosbox_conf`). It is `exhume/tools/replaydos.mjs`'s own default, as a file: js-dos's
   hardware (a Sound Blaster 16 with an OPL3, an MPU-401, 16 MB), no sound output, the dynamic
@@ -25,7 +27,7 @@ the real U.EXE at every run (or taken from the cache).
 
 `tools/rp.py chargen` (and every `record`, `replay` and `check` before it runs) copies your game
 directory to a scratch C:, runs **U.EXE** there in DOSBox-X with the keys of `[_chargen]`, and
-keeps the `SAVEGAME/OBJLIST` it writes in `build/dos/replay/stage/`, which every run then copies
+keeps the `SAVEGAME/OBJLIST` it writes in `build/dos/stage/` (beside the replay build, which a rebuild empties), which every run then copies
 over the game. It is cached by a sha1 over its inputs (U.EXE, your OBJLIST, the key program, the
 DOSBox-X configuration and executable) and checked against `objlist_sha1`: any other result fails.
 

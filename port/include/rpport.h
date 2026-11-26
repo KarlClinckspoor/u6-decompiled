@@ -159,17 +159,16 @@ const unsigned char *u6_rp_gdrv(uint32_t a, uint32_t b);
         dump_far(Mem_BP, Mem_Remain); \
     } while (0)
 
-/* the DAC through the emulated ports, as the DOS build reads it, then the frame */
+/* the DAC and the frame as the DOS build reads them (rpport.c's u6_rp_screen: in mode 13h the
+   DAC through the emulated ports and A000:0000; before the game sets it, text mode 3's) */
+const unsigned char *u6_rp_screen(unsigned char pal[768]);
 #define RP_U6_SCREEN() do { \
-        int rp_i_; \
+        static unsigned char rp_pal_[768]; \
+        const unsigned char *rp_scr_ = u6_rp_screen(rp_pal_); \
         section(RP_TAG('P', 'A', 'L', ' '), 768); \
-        outportb(0x3C7, 0); \
-        for (rp_i_ = 0; rp_i_ < 768; rp_i_++) { \
-            bounce[rp_i_ & 0xFF] = inportb(0x3C9); \
-            if ((rp_i_ & 0xFF) == 0xFF) dump_bytes(bounce, 256); \
-        } \
+        dump_bytes(rp_pal_, 768); \
         section(RP_TAG('S', 'C', 'R', 'N'), 64000U); \
-        dump_far(mcga_screen(), 64000U); \
+        dump_far((unsigned char *)rp_scr_, 64000U); \
     } while (0)
 
 #define RP_U6_DGROUP() do { \

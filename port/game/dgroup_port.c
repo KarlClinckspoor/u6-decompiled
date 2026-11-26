@@ -630,6 +630,27 @@ extern void UseWell();
 extern void VIS_FloodFill();
 extern void VIS_UpdateView();
 extern void WanderRandomly();
+extern void CON_printf();
+extern void decompress();
+extern void execl();
+extern void int86();
+extern void int86x();
+extern void intdos();
+extern void intdosx();
+extern void main();
+extern void MOUSE_0055();
+extern void MOUSE_0297();
+extern void MOUSE_02CF();
+extern void MOUSE_DRAW();
+extern void MOUSE_HIDE();
+extern void MOUSE_INIT();
+extern void MOUSE_IN_AREA();
+extern void MOUSE_POINTER();
+extern void MOUSE_SAVE_BG();
+extern void MOUSE_SERVE();
+extern void MOUSE_SHOW();
+extern void segread();
+extern void u6_mouse_poll();
 
 const struct dg_ent u6_dg_ents[] = {
 	{0x0194, 2, K_BYTES, IsZFile, 0},	/* ISZFILE */
@@ -1902,6 +1923,27 @@ const struct dg_fn u6_dg_fns[] = {
 	{(const void *)VIS_FloodFill, 0xD633, 0x012B},
 	{(const void *)VIS_UpdateView, 0xD633, 0x0300},
 	{(const void *)WanderRandomly, 0xE342, 0x37D9},
+	{(const void *)CON_printf, 0xD1CF, 0x363D},
+	{(const void *)decompress, 0xF838, 0x000C},
+	{(const void *)execl, 0xFED5, 0x0008},
+	{(const void *)int86, 0xFF04, 0x0009},
+	{(const void *)int86x, 0xFF04, 0x0034},
+	{(const void *)intdos, 0xFF11, 0x0004},
+	{(const void *)intdosx, 0xFF11, 0x002C},
+	{(const void *)main, 0xCE30, 0x0C7B},
+	{(const void *)MOUSE_0055, 0xF866, 0x00A8},
+	{(const void *)MOUSE_0297, 0xF866, 0x02F9},
+	{(const void *)MOUSE_02CF, 0xF866, 0x0331},
+	{(const void *)MOUSE_DRAW, 0xF866, 0x01BE},
+	{(const void *)MOUSE_HIDE, 0xF866, 0x01A8},
+	{(const void *)MOUSE_INIT, 0xF866, 0x0033},
+	{(const void *)MOUSE_IN_AREA, 0xF866, 0x0252},
+	{(const void *)MOUSE_POINTER, 0xF866, 0x00A9},
+	{(const void *)MOUSE_SAVE_BG, 0xF866, 0x01E5},
+	{(const void *)MOUSE_SERVE, 0xF866, 0x00F2},
+	{(const void *)MOUSE_SHOW, 0xF866, 0x0197},
+	{(const void *)segread, 0xFF4A, 0x0006},
+	{(const void *)u6_mouse_poll, 0xF866, 0x001C},
 };
 const unsigned u6_dg_nfns = sizeof u6_dg_fns / sizeof u6_dg_fns[0];
 

@@ -4,11 +4,11 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_visible[] = {
-	{&DistanceTable, sizeof DistanceTable},	/* 05EA */
-	{&visited_w, sizeof visited_w},	/* 062A */
-	{&visited_r, sizeof visited_r},	/* 062B */
-	{&NeighbourStepX, sizeof NeighbourStepX},	/* 062C */
-	{&NeighbourStepY, sizeof NeighbourStepY},	/* 0634 */
-	{&NeighbourStepOfs, sizeof NeighbourStepOfs},	/* 063C */
-	{&WallShapeOfs, sizeof WallShapeOfs},	/* 0644 */
+	{&DistanceTable, sizeof DistanceTable, 0},	/* 05EA */
+	{&visited_w, sizeof visited_w, 0},	/* 062A */
+	{&visited_r, sizeof visited_r, 0},	/* 062B */
+	{&NeighbourStepX, sizeof NeighbourStepX, 0},	/* 062C */
+	{&NeighbourStepY, sizeof NeighbourStepY, 0},	/* 0634 */
+	{&NeighbourStepOfs, sizeof NeighbourStepOfs, 0},	/* 063C */
+	{&WallShapeOfs, sizeof WallShapeOfs, 0},	/* 0644 */
 };

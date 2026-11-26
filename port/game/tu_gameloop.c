@@ -4,5 +4,5 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_gameloop[] = {
-	{&CommandNames, sizeof CommandNames},	/* 03A2 */
+	{&CommandNames, sizeof CommandNames, 0},	/* 03A2 */
 };

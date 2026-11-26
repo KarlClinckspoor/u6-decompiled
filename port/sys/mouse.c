@@ -74,8 +74,11 @@ static uint16_t lastY;            /* D_2FBC */
 static uint16_t lastL;            /* D_2FBE */
 static uint16_t lastR;            /* D_2FC0 */
 
-/* _MOUSE_0055 */
-static void mouse_dummy(void)
+/* _MOUSE_0055, MOUSE_INIT's onMove until the game sets its own. Not static, and with DOS's
+ * name, so that port/tools/gen_dgroup.py finds it and the replay dumps write Mouse.onMove
+ * as DOS's code pointer (MOUSE_TEXT:00A8) */
+void MOUSE_0055(void);
+void MOUSE_0055(void)
 {
 }
 
@@ -104,7 +107,7 @@ int MOUSE_INIT(struct tMouse *mouse)
 	mouse->buttonR = 0;
 	mouse->posX = 0;
 	mouse->posY = 0;
-	mouse->onMove = mouse_dummy;
+	mouse->onMove = MOUSE_0055;
 	mouse->installed = 0;
 	/* int 33h AX=0: reset, AX = FFFFh if a driver is there, BX = number of buttons */
 	present = plat_mouse_present();

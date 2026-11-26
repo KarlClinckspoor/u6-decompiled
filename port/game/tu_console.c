@@ -4,8 +4,8 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_console[] = {
-	{&SpellbookSelectFirst, sizeof SpellbookSelectFirst},	/* 0496 */
-	{&CapitalizeNext, sizeof CapitalizeNext},	/* 0498 */
-	{&InGetString, sizeof InGetString},	/* 049B */
-	{&KbdKeepLastOnly, sizeof KbdKeepLastOnly},	/* 04AB */
+	{&SpellbookSelectFirst, sizeof SpellbookSelectFirst, 0},	/* 0496 */
+	{&CapitalizeNext, sizeof CapitalizeNext, 0},	/* 0498 */
+	{&InGetString, sizeof InGetString, 0},	/* 049B */
+	{&KbdKeepLastOnly, sizeof KbdKeepLastOnly, 0},	/* 04AB */
 };

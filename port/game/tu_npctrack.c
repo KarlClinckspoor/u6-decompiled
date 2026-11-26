@@ -4,6 +4,6 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_npctrack[] = {
-	{&TeleportCount, sizeof TeleportCount},	/* 17A5 */
-	{&PathSearchCount, sizeof PathSearchCount},	/* 17A7 */
+	{&TeleportCount, sizeof TeleportCount, 0},	/* 17A5 */
+	{&PathSearchCount, sizeof PathSearchCount, 0},	/* 17A7 */
 };

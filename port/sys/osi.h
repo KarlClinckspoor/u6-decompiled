@@ -158,9 +158,12 @@ extern uint16_t osi_cpu_speed;
 /* The 18.2065 Hz timer tick counter (ticks since plat_init), read through
  * rp_value(RP_TICKS). Every read is a recorded value. */
 uint32_t osi_ticks(void);
-/* 1 while a replay gives the inputs (rp_mode RP_REPLAY and not run out): no waiting,
- * no live input read, the speaker silent. */
+/* 1 while a replay gives the inputs (rp_mode RP_REPLAY and not run out, or a --dos-replay
+ * run): no waiting, no live input read, the speaker silent. */
 int osi_replaying(void);
+/* --dos-replay: the whole run is Exhume's replay of a DOS recording; the tick count is a
+ * virtual one that OSI_delay's waits advance (timer.c). */
+void osi_set_dos_replay(int on);
 /* The same, live, not recorded: for code that only paces itself (no game decision). */
 uint32_t osi_ticks_live(void);
 /* Called under replay with each tick value the game reads (0: none): lets the session

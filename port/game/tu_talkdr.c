@@ -4,5 +4,5 @@
 #include "dgs.h"
 
 const struct u6_dgs u6_dgs_talkdr[] = {
-	{&mustLeave, sizeof mustLeave},	/* 098A */
+	{&mustLeave, sizeof mustLeave, 0},	/* 098A */
 };

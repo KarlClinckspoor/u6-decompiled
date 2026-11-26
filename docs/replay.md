@@ -14,7 +14,7 @@ From the repository's root, in Git Bash on Windows or in WSL/Linux:
 | | |
 |---|---|
 | `make replay` or `python tools/rp.py build` | build it into `build/dos/replay/GAME.EXE` (skipped when nothing changed; `--force`) |
-| `python tools/rp.py chargen [OUT]` | the character every run starts from: U.EXE run by script (cached in `build/dos/replay/stage/`) |
+| `python tools/rp.py chargen [OUT]` | the character every run starts from: U.EXE run by script (cached in `build/dos/stage/`) |
 | `python tools/rp.py record OUT [--session NAME \| --keys "..." [--feed N]]` | record a session (default: `smoke`) |
 | `python tools/rp.py replay OUT/RECORD.OUT OUT2` | replay it |
 | `python tools/rp.py compare OUT OUT2` | compare two dumps, masks applied |
@@ -50,7 +50,7 @@ and leaves no GAME.EXE.
 
 Every run copies your game directory (less the GOG release's DOSBox and launcher files,
 `[replay] data_skip`) to a scratch C:, puts the replay build there as GAME.EXE, and copies
-`build/dos/replay/stage/` over it: `SAVEGAME/OBJLIST` with a character, made by the real U.EXE from
+`build/dos/stage/` over it: `SAVEGAME/OBJLIST` with a character, made by the real U.EXE from
 your copy of the game, driven by the key script `[_chargen]` of `tests/replay/sessions.toml` and
 checked against its sha1 (`rp.py chargen`, run first by every command that needs it, cached by its
 inputs; `tests/replay/README.md` explains why it is the same every time). Every run uses the same DOSBox-X configuration,
@@ -137,12 +137,29 @@ build:
 `u6 --dos-replay REC --home DIR` replays a recording of the replay DOS build from the saved
 game in DIR and writes STATE.OUT there:
 
-    python tools/rp.py port REC OUT          # the port alone (on Windows, its WSL build)
-    python tools/rp.py port-check OUT        # first.rec in DOS and in the port, compared
+    python tools/rp.py port REC OUT [--variant V]       # the port alone
+    python tools/rp.py port-check OUT [--rec REC] --all  # REC (default first.rec) in DOS and in every build
 
 `port-check` compares the dumps across the builds (`replay.py compare` without
 `--same-build`: masks of both scopes and `[replay.segments]`). It also compares the saved
 games: every file DOS's run changed must be in the port's home, byte for byte.
+
+The port's builds (`--variant`, or `--all` for the four):
+
+| variant | built with | where |
+|---|---|---|
+| `linux-gcc` (default) | gcc | on Windows in WSL (`~/u6port-replay`), else `build/port-linux-gcc` |
+| `linux-clang` | clang | WSL `~/u6port-replay-clang`, else `build/port-linux-clang` |
+| `win-gcc` | MSYS2 MINGW64's gcc and SDL2 | `build/port-win-gcc` |
+| `win-clang` | MSYS2 CLANG64's clang, MINGW64's SDL2 | `build/port-win-clang` |
+
+`U6_MSYS2` names MSYS2's folder (default `C:\msys64`). A Windows build runs with MINGW64's `bin`
+on PATH, for SDL2.dll. `U6_PORT` still names an executable that is used as it is.
+
+A `--dos-replay` run takes about a second. Its clock is a virtual one that OSI_delay's waits
+advance (`port/sys/timer.c`): nothing the game decides on reads the tick count, which the DOS
+build keeps outside DGROUP (DELAYRP.ASM). Like the port's own replays, it reads no live input,
+and the busy delay loops return at once.
 
 The port writes every section DOS does.
 
@@ -174,13 +191,21 @@ What the port has no counterpart for is masked, `scope = "cross"`, each with its
 
 `gen_dgroup.py --masks` writes the generated ones into exhume.toml.
 
-`first.rec` (task 2): 69 of 70 checkpoints are identical in every section. The first, before the
-level is loaded, differs:
-- its segment words have no SEGS section to pair them (DOS writes SEGS only once the level
-  exists);
-- its screen is DOSBox-X's text mode.
+The first dump comes before the level exists (MOUSE_INIT's first button read):
+- **Segment words.** DOS writes SEGS only from the level on. A dump without SEGS is compared
+  with each run's first SEGS, by the load segment's rule and `heap_block`'s only: neither moves
+  during a run (Exhume's `replay.py`, `segment_words` with `rules_only`).
+- **Text mode.** DOS's VGA is still in text mode 3 there. The port writes what that mode holds
+  (`u6_rp_screen`, port/game/rpport.c): the DAC the VGA BIOS loads for mode 3 (the EGA's 64
+  colours, the rest 0), and FFh for A000:0000, which nothing answers in text mode. In mode 13h,
+  from GR_INIT to GR_SHUTDOWN (`mcga_mode13`), it writes its own DAC and screen.
+- **Mouse.onMove.** It is the DOS driver's default handler, `_MOUSE_0055`. The port's carries
+  that name, so the table finds it.
 
-The saved games are identical. Masks that cover bytes DOS changes during the session:
+**Task 3 result:** `first.rec` and `smoke` are identical at every checkpoint, in every section
+apart from the masks, in all four builds. The saved games are identical too.
+
+The masks that cover bytes DOS changes during the session:
 - OSI_ErrorFile;
 - VarStr (but its 'N' slot);
 - the driver's mouse temporaries;
@@ -209,6 +234,6 @@ reaches it writes no RECORD.OUT.
 
 ## Not yet
 
-Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); a mask scope for two different DOSes (above);
-the port's DATA, BSS and STAK, its graphics driver's state in DOS's layout, and the rest of
-Phase 2; music cards other than AdLib, and video other than VGA.
+Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); a mask scope for two
+different DOSes (above); retiring the port's own recorder (Phase 2 task 4); music cards other
+than AdLib, and video other than VGA.

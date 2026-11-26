@@ -9,9 +9,13 @@
                                                       record a session in headless DOSBox-X from that
                                                       character; F9, the stop key, is sent after the keys
     python3 tools/rp.py replay REC OUT                replay REC (a RECORD.OUT) in DOSBox-X (Exhume's replay.py dos)
-    python3 tools/rp.py port REC OUT                  replay REC in the port (--dos-replay; on Windows its WSL build)
-    python3 tools/rp.py port-check OUT [--rec REC]    REC (default tests/replay/first.rec) in DOS and in the port,
-                                                      the dumps compared across the builds and the saved games
+    python3 tools/rp.py port REC OUT [--variant V]    replay REC in the port (--dos-replay; V one of linux-gcc,
+                                                      the default, linux-clang, win-gcc, win-clang: PORT_VARIANTS)
+    python3 tools/rp.py port-build [--variant V ... | --all]
+    python3 tools/rp.py port-check OUT [--rec REC] [--variant V ... | --all]
+                                                      REC (default tests/replay/first.rec) in DOS and in each
+                                                      port build, the dumps compared across the builds and the
+                                                      saved games
     python3 tools/rp.py port-dgroup                   regenerate the port's DGROUP table and the masks from a
                                                       port build's symbols (port/tools/gen_dgroup.py)
     python3 tools/rp.py compare A B [--cross]         compare two STATE.OUT files (or run directories) with
@@ -32,7 +36,7 @@ so that the program loads at the same segment in both.
 
 The saved game is made by the real U.EXE from the user's game directory ([replay] data:
 $U6_GAMEDATA or gamedata/), driven by [_chargen] of tests/replay/sessions.toml (tools/keyfeed.py,
-`python3 tools/rp.py chargen [OUT]`), cached in build/dos/replay/stage/ and copied over the game in
+`python3 tools/rp.py chargen [OUT]`), cached in build/dos/stage/ and copied over the game in
 every run. Sessions are key scripts in tests/replay/sessions.toml; one with `feed` is typed by
 KEYFEED.COM at the game's own key polls (the same run every time), one without by AUTOTYPE.
 
@@ -149,7 +153,7 @@ def chargen(force=False, out=None, check=True):
     fresh copy of the game with the key script [_chargen] of tests/replay/sessions.toml, typed by
     tools/keyfeed.py's KEYFEED.COM (counted in the program's keyboard polls, with a fixed date and
     time, so that every run makes the same character). Returns the stage directory holding
-    SAVEGAME/OBJLIST. Cached in build/dos/replay/stage by a sha1 over its inputs; fails if the
+    SAVEGAME/OBJLIST. Cached in build/dos/stage by a sha1 over its inputs; fails if the
     OBJLIST's sha1 is not the script's objlist_sha1 (unless check is False)"""
     import hashlib, keyfeed
     R = rc()
@@ -169,7 +173,9 @@ def chargen(force=False, out=None, check=True):
                  conf.encode('latin-1'), open(dosbox_x(), 'rb').read(64 << 10)):
         h.update(hashlib.sha1(part).digest())
     key = h.hexdigest()
-    stage = out or os.path.join(R.work, 'stage')
+    # beside the replay build, not in it: rpbuild empties R.work when it builds again, which a
+    # replay does after chargen() has returned (once seen as replaydos.mjs's cpSync failing)
+    stage = out or os.path.join(os.path.dirname(os.path.abspath(R.work)), 'stage')
     objlist = os.path.join(stage, 'SAVEGAME', 'OBJLIST')
     stamp = os.path.abspath(stage) + '.sha1'      # beside it: the stage is copied into the game
     if not force and os.path.exists(objlist) and os.path.exists(stamp) and open(stamp).read().strip() == key:
@@ -329,9 +335,21 @@ def replay(rec, out):
 
 # ---- the port against DOS (PLAN-exact-port.md, Phase 2) ----
 
-# where the port's Linux build goes when rp.py runs on Windows (built in WSL with CMake, as
-# `make port BUILD=...` builds it: on WSL's own file system, which builds far faster than /mnt/c)
-PORT_WSL_BUILD = '~/u6port-replay'
+# The port's builds that rp.py makes and checks against DOS. Phase 2's exit asks for Linux and
+# Windows, gcc and clang:
+#   linux-gcc, linux-clang  CMake with gcc or clang. On Windows they are built and run in WSL, on
+#                           WSL's own file system (~/u6port-replay, ~/u6port-replay-clang), which
+#                           builds far faster than /mnt/c; elsewhere in build/port-linux-CC.
+#   win-gcc, win-clang      native Windows builds with MSYS2 (U6_MSYS2, default C:\msys64):
+#                           MINGW64's gcc and SDL2, or CLANG64's clang with MINGW64's SDL2
+#                           (build/port-win-CC). They run with MINGW64's bin on PATH, for SDL2.dll.
+# U6_PORT, if set, names an executable that is used as it is, run natively.
+PORT_VARIANTS = ('linux-gcc', 'linux-clang', 'win-gcc', 'win-clang')
+PORT_WSL_BUILD = {'linux-gcc': '~/u6port-replay', 'linux-clang': '~/u6port-replay-clang'}
+
+
+def msys2(*p):
+    return os.path.join(os.environ.get('U6_MSYS2', r'C:\msys64'), *p)
 
 
 def wsl_path(p):
@@ -340,30 +358,60 @@ def wsl_path(p):
     return '/mnt/' + p[0].lower() + p[2:] if len(p) > 1 and p[1] == ':' else p
 
 
-def on_wsl_side():
-    """whether the port runs through WSL: on Windows, unless U6_PORT names an executable"""
-    return os.name == 'nt' and not os.environ.get('U6_PORT')
+def on_wsl_side(variant='linux-gcc'):
+    """whether the port runs through WSL: a Linux build on Windows, unless U6_PORT names an executable"""
+    return os.name == 'nt' and variant.startswith('linux') and not os.environ.get('U6_PORT')
 
 
-def port_build(force=False):
-    """builds the port (port/, CMake, Release): U6_PORT, if set, is used as it is; on Windows the
-    build is WSL's (PORT_WSL_BUILD), elsewhere build/port-linux. Returns the executable's path
-    as the side that runs it sees it."""
+def port_env(variant):
+    """the environment a native run of the port needs: MSYS2's DLLs (SDL2.dll, the C runtime's) on
+    PATH for a Windows build"""
+    e = dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy')
+    if variant.startswith('win'):
+        dirs = [msys2('mingw64', 'bin')] + ([msys2('clang64', 'bin')] if variant == 'win-clang' else [])
+        e['PATH'] = os.pathsep.join(dirs + [e.get('PATH', '')])
+    return e
+
+
+def port_build(variant='linux-gcc'):
+    """builds the port (port/, CMake, Release) as VARIANT (PORT_VARIANTS). Returns the executable's
+    path as the side that runs it sees it."""
     if os.environ.get('U6_PORT'):
         return os.environ['U6_PORT']
-    if on_wsl_side():
-        b = PORT_WSL_BUILD
-        cmd = ('cmake -S %s -B %s -DCMAKE_BUILD_TYPE=Release >/dev/null && cmake --build %s -j8 2>&1 | '
-               'grep -E "error|undefined" ; test -x %s/u6' % (shlex.quote(wsl_path(os.path.join(ROOT, 'port'))), b, b, b))
+    if variant not in PORT_VARIANTS:
+        sys.exit('rp: no port variant %s (there are: %s)' % (variant, ' '.join(PORT_VARIANTS)))
+    cc = variant.split('-')[1]
+    src = os.path.join(ROOT, 'port')
+    if on_wsl_side(variant):
+        b = PORT_WSL_BUILD[variant]
+        cmd = ('cmake -S %s -B %s -DCMAKE_C_COMPILER=%s -DCMAKE_BUILD_TYPE=Release >/dev/null && cmake --build %s -j8 2>&1 | '
+               'grep -E "error|undefined" ; test -x %s/u6' % (shlex.quote(wsl_path(src)), b, cc, b, b))
         if subprocess.run(['wsl', '-e', 'bash', '-lc', cmd]).returncode:
             sys.exit('rp: the port did not build (in WSL, %s)' % b)
         return b + '/u6'
-    b = os.path.join(ROOT, 'build', 'port-linux')
-    if subprocess.run(['cmake', '-S', os.path.join(ROOT, 'port'), '-B', b, '-DCMAKE_BUILD_TYPE=Release'],
-                      stdout=subprocess.DEVNULL).returncode or \
-            subprocess.run(['cmake', '--build', b, '-j8']).returncode:
-        sys.exit('rp: the port did not build (%s)' % b)
-    return os.path.join(b, 'u6')
+    b = os.path.join(ROOT, 'build', 'port-' + variant)
+    if variant.startswith('linux'):
+        if os.name == 'nt':
+            sys.exit('rp: %s is built in WSL (unset U6_PORT)' % variant)
+        cfg = ['cmake', '-S', src, '-B', b, '-DCMAKE_C_COMPILER=' + cc, '-DCMAKE_BUILD_TYPE=Release']
+        bld, e = ['cmake', '--build', b, '-j8'], None
+    else:
+        if os.name != 'nt':
+            sys.exit('rp: %s is built on Windows, with MSYS2' % variant)
+        env_dir = 'clang64' if cc == 'clang' else 'ucrt64'      # where cmake and ninja are
+        cmake = msys2(env_dir, 'bin', 'cmake.exe')
+        cfg = [cmake, '-S', src, '-B', b, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
+               '-DCMAKE_MAKE_PROGRAM=' + msys2(env_dir, 'bin', 'ninja.exe'),
+               '-DCMAKE_C_COMPILER=' + (msys2('clang64', 'bin', 'clang.exe') if cc == 'clang' else msys2('mingw64', 'bin', 'gcc.exe')),
+               '-DSDL2_DIR=' + msys2('mingw64', 'lib', 'cmake', 'SDL2').replace('\\', '/')]
+        bld = [cmake, '--build', b, '-j8']
+        # the compiler's own DLLs: MINGW64's for gcc, CLANG64's for clang
+        e = dict(os.environ, PATH=os.pathsep.join([msys2('clang64' if cc == 'clang' else 'mingw64', 'bin'), os.environ.get('PATH', '')]))
+    for cmd in (cfg, bld):
+        r = subprocess.run(cmd, env=e, capture_output=True, text=True, errors='replace')
+        if r.returncode:
+            sys.exit('rp: the port did not build (%s):\n%s' % (b, (r.stdout + r.stderr)[-3000:]))
+    return os.path.join(b, 'u6.exe' if variant.startswith('win') else 'u6')
 
 
 def port_dgroup():
@@ -386,13 +434,13 @@ def port_dgroup():
     return 0
 
 
-def port_replay(rec, out, exe=None, timeout=1800):
+def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc'):
     """replays REC (a RECORD.OUT of the replay DOS build) in the port (--dos-replay), from the
     character [_chargen] makes, as tools/replay.py's run_port does: a fresh home folder with the
     stage in it, the game's own directory as --data; STATE.OUT and the home's SAVEGAME are
     copied to OUT, the port's log to OUT/port.log"""
     R = rc()
-    exe = exe or port_build()
+    exe = exe or port_build(variant)
     stage = chargen()
     out = os.path.abspath(out)
     home = os.path.join(out, 'home')
@@ -404,16 +452,16 @@ def port_replay(rec, out, exe=None, timeout=1800):
     shutil.rmtree(os.path.join(out, 'SAVEGAME'), ignore_errors=True)
     data = os.path.join(ROOT, R.data) if not os.path.isabs(R.data) else R.data
     args = ['--data', data, '--home', home, '--hidden', '--no-audio', '--dos-replay', os.path.abspath(rec)]
-    print('rp: replaying %s in the port' % rec)
+    print('rp: replaying %s in the port (%s)' % (rec, os.environ.get('U6_PORT') or variant))
     t0 = time.time()
-    if on_wsl_side():
+    if on_wsl_side(variant):
         line = 'SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout %d %s %s' % (
             timeout, exe, ' '.join(shlex.quote(wsl_path(a)) if os.path.exists(a) else shlex.quote(a) for a in args))
         r = subprocess.run(['wsl', '-e', 'bash', '-lc', line], capture_output=True, text=True, errors='replace')
     else:
         try:
             r = subprocess.run([exe] + args, capture_output=True, text=True, errors='replace', timeout=timeout,
-                               env=dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy'))
+                               env=port_env(variant))
         except subprocess.TimeoutExpired:
             sys.exit('rp: the port did not finish within %d s' % timeout)
     open(os.path.join(out, 'port.log'), 'w').write(r.stdout + r.stderr)
@@ -465,20 +513,30 @@ def port_saves(dos, port):
     return bad
 
 
-def port_check(out, rec):
-    """REC replayed in DOS (DOSBox-X) and in the port, the dumps compared across the builds
-    (replay.py compare: the masks of both scopes, [replay.segments]) and the saved games"""
+def port_check(out, rec, variants=('linux-gcc',)):
+    """REC replayed in DOS (DOSBox-X) and in each of the port's builds VARIANTS, each one's dumps
+    compared with DOS's across the builds (replay.py compare: the masks of both scopes,
+    [replay.segments]) and its saved games with DOS's. One variant's run goes to OUT/port, more
+    to OUT/port-VARIANT."""
     out = os.path.abspath(out)
-    exe = port_build()
+    exes = [(v, port_build(v)) for v in variants]   # all built before anything runs
     if replay(rec, os.path.join(out, 'dos')):
         return 1
-    if port_replay(rec, os.path.join(out, 'port'), exe):
-        print('rp: the port failed (%s)' % os.path.join(out, 'port', 'port.log'))
-    print('\n== DOS against the port')
-    r = exhume('compare', os.path.join(out, 'dos'), os.path.join(out, 'port'))
-    print('\n== the saved games')
-    b = port_saves(os.path.join(out, 'dos'), os.path.join(out, 'port'))
-    return 1 if r or b else 0
+    res = {}
+    for v, exe in exes:
+        d = os.path.join(out, 'port' if len(exes) == 1 else 'port-' + v)
+        if port_replay(rec, d, exe, variant=v):
+            print('rp: the port failed (%s)' % os.path.join(d, 'port.log'))
+        print('\n== DOS against the port (%s)' % v)
+        r = exhume('compare', os.path.join(out, 'dos'), d)
+        print('\n== the saved games (%s)' % v)
+        b = port_saves(os.path.join(out, 'dos'), d)
+        res[v] = (r, b)
+    if len(exes) > 1:
+        print('\n== summary')
+        for v, (r, b) in res.items():
+            print('  %-12s checkpoints %s, saves %s' % (v, 'identical' if not r else 'DIFFER', 'identical' if not b else 'DIFFER'))
+    return 1 if any(r or b for r, b in res.values()) else 0
 
 
 def keys_of(a):
@@ -494,7 +552,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
     p = sub.add_parser('build'); p.add_argument('--force', action='store_true')
-    p = sub.add_parser('chargen'); p.add_argument('out', nargs='?', help='a stage directory (default build/dos/replay/stage, cached)')
+    p = sub.add_parser('chargen'); p.add_argument('out', nargs='?', help='a stage directory (default build/dos/stage, cached)')
     p.add_argument('--force', action='store_true'); p.add_argument('--no-check', action='store_true')
     for name in ('record', 'check'):
         p = sub.add_parser(name)
@@ -507,10 +565,15 @@ def main():
         if name == 'check':
             p.add_argument('--rec', help='a RECORD.OUT to replay instead of recording one')
     p = sub.add_parser('replay'); p.add_argument('rec'); p.add_argument('out')
-    p = sub.add_parser('port'); p.add_argument('rec'); p.add_argument('out')
-    p = sub.add_parser('port-build')
+    def variant_args(p, many):
+        p.add_argument('--variant', action='append' if many else 'store', choices=PORT_VARIANTS,
+                       help='the port build (default linux-gcc)' + ('; repeatable' if many else ''))
+        if many:
+            p.add_argument('--all', action='store_true', help='every variant: %s' % ', '.join(PORT_VARIANTS))
+    p = sub.add_parser('port'); p.add_argument('rec'); p.add_argument('out'); variant_args(p, False)
+    p = sub.add_parser('port-build'); variant_args(p, True)
     p = sub.add_parser('port-dgroup')
-    p = sub.add_parser('port-check'); p.add_argument('out')
+    p = sub.add_parser('port-check'); p.add_argument('out'); variant_args(p, True)
     p.add_argument('--rec', default=os.path.join(ROOT, 'tests', 'replay', 'first.rec'),
                    help='a RECORD.OUT of the replay DOS build (default tests/replay/first.rec)')
     p = sub.add_parser('compare'); p.add_argument('a'); p.add_argument('b'); p.add_argument('--cross', action='store_true')
@@ -530,14 +593,16 @@ def main():
     if a.cmd == 'replay':
         return replay(a.rec, a.out)
     if a.cmd == 'port':
-        return port_replay(a.rec, a.out)
+        return port_replay(a.rec, a.out, variant=a.variant or 'linux-gcc')
     if a.cmd == 'port-dgroup':
         return port_dgroup()
+    variants = PORT_VARIANTS if getattr(a, 'all', False) else (getattr(a, 'variant', None) or ['linux-gcc'])
     if a.cmd == 'port-build':
-        print('rp: %s' % port_build())
+        for v in variants:
+            print('rp: %s: %s' % (v, port_build(v)))
         return 0
     if a.cmd == 'port-check':
-        return port_check(a.out, a.rec)
+        return port_check(a.out, a.rec, variants)
     if a.cmd == 'compare':
         return exhume('compare', a.a, a.b, *([] if a.cross else ['--same-build']))
     if a.cmd == 'show':

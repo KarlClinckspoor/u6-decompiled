@@ -338,6 +338,7 @@ int main(int argc, char **argv)
 	u6_rp_set_off();
 	if (dos_replay) {
 		u6_rp_set_dos_replay(dos_replay);
+		osi_set_dos_replay(1);
 		replay = 0;
 		record = 0;
 		recording = 0;
