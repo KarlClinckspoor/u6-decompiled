@@ -114,6 +114,7 @@ recording made on Windows replays identically on Linux and the other way round.
     --speed N           replay speed: 1, 2, 4, 8, or 0 for as fast as possible
     --continue          after a replay ends, keep playing (default: quit)
     --record DIR        record this session into DIR
+    --dos-replay FILE   replay a recording of the replay DOS build (docs/replay.md)
     --no-recording      no black box recording this time
     --hidden            no window (replays, tests)
     --settings          open the settings screen before the game

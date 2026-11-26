@@ -38,7 +38,12 @@ file(GLOB GAME_C ${GAME_SRC}/*.c)
 # gamestat.c's and monsdata.c's variables keep DOS's layout: the port defines each file's
 # as a packed block of its own (port/tools/gen_block.py)
 list(REMOVE_ITEM GAME_C ${GAME_SRC}/gamestat.c ${GAME_SRC}/monsdata.c)
-add_library(u6game OBJECT ${GAME_C} game/digest.c game/gamestat_port.c game/monsdata_port.c)
+# Exhume's record and replay (runtime/replay/replay.c, compiled where it is, as the replay DOS
+# build compiles it), with the port's bindings (include/rpport.h, through SRC/rpgame.h) and
+# their helpers (game/rpport.c): PLAN-exact-port.md, Phase 2
+set(EXHUME_REPLAY ${CMAKE_CURRENT_SOURCE_DIR}/../exhume/runtime/replay/replay.c)
+add_library(u6game OBJECT ${GAME_C} game/digest.c game/gamestat_port.c game/monsdata_port.c
+	game/rpport.c ${EXHUME_REPLAY})
 target_include_directories(u6game PRIVATE ${GAME_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/include ${EXHUME_INC})
 foreach(f ${GAME_C})
 	get_filename_component(n ${f} NAME_WE)

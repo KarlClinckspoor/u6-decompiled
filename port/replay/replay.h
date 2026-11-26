@@ -49,7 +49,7 @@ uint32_t rp_call_count(void);
 
 typedef uint64_t (*rp_digest_fn)(void);
 void rp_set_digest(rp_digest_fn fn);
-void rp_checkpoint(uint64_t digest);
+void rp_digest_checkpoint(uint64_t digest);
 uint32_t rp_diverged(void);              /* call count of the first differing checkpoint, 0 none */
 uint32_t rp_checks_compared(void);
 uint32_t rp_checks_total(void);

@@ -15,6 +15,13 @@
 static uint16_t seed_lo = 1;   /* D_3088 */
 static uint16_t seed_hi = 0;   /* D_308A */
 
+/* the state as one dword, D_308A:D_3088: the RAND section of Exhume's replay dumps
+ * (port/include/rpport.h's RP_RAND_SEED, as rpgame.h's reads D_3088 in DOS) */
+uint32_t u6_rand_seed(void)
+{
+	return (uint32_t)seed_hi << 16 | seed_lo;
+}
+
 /* C_33C5_000C */
 static void rand_step(void)
 {

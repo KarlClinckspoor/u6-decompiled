@@ -521,3 +521,33 @@ This closes Phase 1. Open:
 - **Open:**
   - A mask scope for two different DOSes (Exhume has `always` and `cross`).
   - Phase 2's `cross` masks will need the C runtime's saved vectors (DATA 74..83h).
+
+## 17. Phase 2 task 1: the port links replay.c and replays DOS's recording (2026-11-26, by the coordinator)
+
+Phase 2 split into four tasks:
+1. **Link replay.c.** The port makes the same hook calls and writes the byte-portable sections.
+2. **DATA, BSS and STAK in DOS's layout.** Each global is written in DOS's bytes, with pointers as segment:offset. The graphics driver's state too.
+3. **Fix every divergence:** each one either fixed or masked with its reason. Linux and Windows, gcc and clang.
+4. **Retire the port's own recorder** (`port/replay`, `digest.c`) in favour of Exhume's format, with a black box.
+
+Task 1:
+- **The bindings.** `SRC/rpgame.h` includes `port/include/rpport.h` when the compiler isn't Turbo C. `port/game/rpport.c` is built with the game's sources: the SEGS words through the real structs, the far heap's bounds, the file paths, and stand-ins for the runtime pieces replay.c expects. `port/include/io.h` covers Linux. `replay.c` is compiled in place from the submodule, with RP_FAR_STORAGE as in DOS. `port/sys/rphooks.c` is gone.
+- **Changes to the port's own code:**
+  - `mouse.c`: the poll goes through `rp_mouse` then `rp_mbuttons`, with `u6_mouse_poll` as RP_MOUSE_READ. MOUSE_INIT records the reset's AX and BX (RECORDED 12 and 13) and returns BX, as MOUSERP.ASM does.
+  - `rand.c`: `u6_rand_seed`.
+  - `portmain.c`: `--dos-replay FILE`. Exhume's `rp_request` is off otherwise.
+  - The port's own recorder still runs on top: a `--keys` session still replays 761 of 761 checkpoints identical.
+  - The OSI library tests pass: 257 unit checks, and the Unicorn diffs (RAND, SEED, LZW, KBD, SOUND and MOUSE against GAME.EXE's own routines). Running them in WSL needed `U6_DOS_EXE=build/dos/game/GAME.EXE` and unicorn in a venv (`~/u6venv`). `port/tests/osi_stubs.c` has the three hooks, passed through. Its `rp_checkpoint` was renamed `rp_digest_checkpoint`, since replay.c has its own.
+- **`[replay.segments]`, first real use.** The tile cache keeps GrMemory's page segments, 305Eh paragraphs above FarHeap in both builds. `exe_range` now runs up to 9E00h, so the `heap_block` rule covers the far heap; after that, GRMM is identical.
+- **Tools.** `rp.py port REC OUT` (on Windows, the port's WSL build at `~/u6port-replay`), `rp.py port-build`, and `rp.py port-check OUT [--rec]`. port-check runs a DOS replay and a port replay, compares them across builds, then compares the saved games: every file DOS's run changed must be in the port's home, identical.
+- **Result on `first.rec`:**
+  - All 70 checkpoint headers are identical: the same path and the same hook calls.
+  - From checkpoint 1 on, GSTA, OBJS, NPCS, FARB, MDRV, GRMM, RAND, CNTS, PAL and SCRN are identical at every checkpoint.
+  - Saves: the 5 files the session wrote are identical.
+  - RGAME.EXE is unchanged (`def703cb...`).
+- **Left for tasks 2 and 3:**
+  - DATA, BSS and STAK (not written by the port).
+  - GDRV: the graphics driver's image. DOS's driver keeps `struct tGr` and its tables there; the port's C driver keeps them in host memory, and GrInfo's segment is a foreign F001h.
+  - Checkpoint 0's PAL and SCRN, before mode 13h: DOSBox-X's text mode against the port's black.
+  - The port's replay waits in real time (about 3 minutes).
+  - The NULL section is a stand-in (DS:0's bytes, a zero vector table).

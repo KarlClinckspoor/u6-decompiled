@@ -122,6 +122,44 @@ DOSBox-X versions differ from each other in the same way, by BIOS addresses only
 covers those ranges yet: Exhume's mask scopes are `always` and `cross` (DOS against the port),
 so `compare --same-build` of a js-dos run against a DOSBox-X run lists them.
 
+### The port against DOS (Phase 2)
+
+The port links the same `replay.c` (exhume/runtime/replay, compiled with the game's sources)
+with its own bindings, `port/include/rpport.h`, which `SRC/rpgame.h` includes when the
+compiler is not Turbo C. It makes the same hook calls at the same points as the replay DOS
+build:
+- the key reads, through the shared C's `KEY(a)`;
+- the RECORDED values;
+- the mouse poll, `rp_mouse` then `rp_mbuttons`, which `port/sys/mouse.c` now makes as
+  MOUSERP.ASM does;
+- the mouse reset's AX and BX, as RECORDED ids 12 and 13.
+
+`u6 --dos-replay REC --home DIR` replays a recording of the replay DOS build from the saved
+game in DIR and writes STATE.OUT there:
+
+    python tools/rp.py port REC OUT          # the port alone (on Windows, its WSL build)
+    python tools/rp.py port-check OUT        # first.rec in DOS and in the port, compared
+
+`port-check` compares the dumps across the builds (`replay.py compare` without
+`--same-build`: masks of both scopes and `[replay.segments]`). It also compares the saved
+games: every file DOS's run changed must be in the port's home, byte for byte.
+
+The port writes GSTA, OBJS, NPCS, SEGS, GDRV, MDRV, FARB, GRMM, RAND, NULL (stand-ins), CNTS,
+PAL and SCRN. DATA, BSS and STAK are not written yet, because the port's DGROUP is not one
+block in DOS's layout (task 2).
+
+`first.rec` (task 1):
+- **Checkpoints:** all 70 headers are the same as DOS's (kind, key, hook calls). From the first
+  key on, every section the port writes is identical except GDRV.
+- **GDRV:** the graphics driver's image. DOS's driver keeps `struct tGr` and its tables inside
+  it, while the port's C driver keeps them in host memory.
+- **Checkpoint 0's PAL and SCRN:** taken before the game sets mode 13h. DOSBox-X's text mode
+  against the port's black.
+- **Saved games:** the five files the session wrote (OBJLIST and four OBJBLK files) are
+  identical.
+- **Speed:** the port's replay takes about three minutes, because OSI_delay waits in real time,
+  as DOS's does.
+
 ### The stop key
 
 **F9** (143h) ends a recording. `rpgame.h`'s `RP_STOP_KEY` defines it, and exhume.toml's
@@ -133,5 +171,5 @@ reaches it writes no RECORD.OUT.
 ## Not yet
 
 Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); a mask scope for two different DOSes (above);
-the port linking `replay.c` and replaying DOS's recordings (Phase 2), which is when
-`[replay.segments]` gets its first real use; music cards other than AdLib, and video other than VGA.
+the port's DATA, BSS and STAK, its graphics driver's state in DOS's layout, and the rest of
+Phase 2; music cards other than AdLib, and video other than VGA.

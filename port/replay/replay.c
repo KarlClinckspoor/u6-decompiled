@@ -11,7 +11,7 @@
  * nothing is one run however long the player waits. The timer stream stores deltas from
  * the previous reading, so a waiting game's ticks are runs too.
  *
- * Checkpoints: every RP_CHECK_EVERY calls of rp_value the port calls rp_checkpoint with a
+ * Checkpoints: every RP_CHECK_EVERY calls of rp_value the port calls rp_digest_checkpoint with a
  * digest of the game's state; a replay compares its own digest with the recorded one and
  * reports the first difference (rp_diverged).
  *
@@ -100,7 +100,7 @@ uint32_t rp_value_(int stream, uint32_t live)
 		}
 	}
 	if (digest_fn && rp_calls % RP_CHECK_EVERY == 0)
-		rp_checkpoint(digest_fn());
+		rp_digest_checkpoint(digest_fn());
 	return v;
 }
 
@@ -109,7 +109,7 @@ uint32_t rp_call_count(void) { return rp_calls; }
 uint32_t rp_diverged(void) { return diverged_at; }
 void rp_set_digest(rp_digest_fn fn) { digest_fn = fn; }
 
-void rp_checkpoint(uint64_t digest)
+void rp_digest_checkpoint(uint64_t digest)
 {
 	if (rp_mode == RP_RECORD) {
 		if (nchecks == capchecks) {

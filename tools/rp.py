@@ -9,6 +9,9 @@
                                                       record a session in headless DOSBox-X from that
                                                       character; F9, the stop key, is sent after the keys
     python3 tools/rp.py replay REC OUT                replay REC (a RECORD.OUT) in DOSBox-X (Exhume's replay.py dos)
+    python3 tools/rp.py port REC OUT                  replay REC in the port (--dos-replay; on Windows its WSL build)
+    python3 tools/rp.py port-check OUT [--rec REC]    REC (default tests/replay/first.rec) in DOS and in the port,
+                                                      the dumps compared across the builds and the saved games
     python3 tools/rp.py compare A B [--cross]         compare two STATE.OUT files (or run directories) with
                                                       exhume.toml's masks (replay.py compare --same-build;
                                                       --cross for DOS against the port)
@@ -34,7 +37,7 @@ KEYFEED.COM at the game's own key polls (the same run every time), one without b
 Environment: U6_DOSBOX or EXHUME_DOSBOX_X (a DOSBox-X; default tools/Dosbox-X on Windows, else
 dosbox-x on PATH), U6_GAMEDATA. Needs Python 3.11+, and Node.js for the replays.
 """
-import argparse, os, shutil, subprocess, sys, tempfile, time, tomllib
+import argparse, shlex, os, shutil, subprocess, sys, tempfile, time, tomllib
 sys.dont_write_bytecode = True   # no __pycache__ in exhume/tools
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -322,6 +325,140 @@ def replay(rec, out):
     return r
 
 
+# ---- the port against DOS (PLAN-exact-port.md, Phase 2) ----
+
+# where the port's Linux build goes when rp.py runs on Windows (built in WSL with CMake, as
+# `make port BUILD=...` builds it: on WSL's own file system, which builds far faster than /mnt/c)
+PORT_WSL_BUILD = '~/u6port-replay'
+
+
+def wsl_path(p):
+    """a Windows path as WSL sees it (C:/x/y is /mnt/c/x/y)"""
+    p = os.path.abspath(p).replace('\\', '/')
+    return '/mnt/' + p[0].lower() + p[2:] if len(p) > 1 and p[1] == ':' else p
+
+
+def on_wsl_side():
+    """whether the port runs through WSL: on Windows, unless U6_PORT names an executable"""
+    return os.name == 'nt' and not os.environ.get('U6_PORT')
+
+
+def port_build(force=False):
+    """builds the port (port/, CMake, Release): U6_PORT, if set, is used as it is; on Windows the
+    build is WSL's (PORT_WSL_BUILD), elsewhere build/port-linux. Returns the executable's path
+    as the side that runs it sees it."""
+    if os.environ.get('U6_PORT'):
+        return os.environ['U6_PORT']
+    if on_wsl_side():
+        b = PORT_WSL_BUILD
+        cmd = ('cmake -S %s -B %s -DCMAKE_BUILD_TYPE=Release >/dev/null && cmake --build %s -j8 2>&1 | '
+               'grep -E "error|undefined" ; test -x %s/u6' % (shlex.quote(wsl_path(os.path.join(ROOT, 'port'))), b, b, b))
+        if subprocess.run(['wsl', '-e', 'bash', '-lc', cmd]).returncode:
+            sys.exit('rp: the port did not build (in WSL, %s)' % b)
+        return b + '/u6'
+    b = os.path.join(ROOT, 'build', 'port-linux')
+    if subprocess.run(['cmake', '-S', os.path.join(ROOT, 'port'), '-B', b, '-DCMAKE_BUILD_TYPE=Release'],
+                      stdout=subprocess.DEVNULL).returncode or \
+            subprocess.run(['cmake', '--build', b, '-j8']).returncode:
+        sys.exit('rp: the port did not build (%s)' % b)
+    return os.path.join(b, 'u6')
+
+
+def port_replay(rec, out, exe=None, timeout=1800):
+    """replays REC (a RECORD.OUT of the replay DOS build) in the port (--dos-replay), from the
+    character [_chargen] makes, as tools/replay.py's run_port does: a fresh home folder with the
+    stage in it, the game's own directory as --data; STATE.OUT and the home's SAVEGAME are
+    copied to OUT, the port's log to OUT/port.log"""
+    R = rc()
+    exe = exe or port_build()
+    stage = chargen()
+    out = os.path.abspath(out)
+    home = os.path.join(out, 'home')
+    shutil.rmtree(home, ignore_errors=True)
+    shutil.copytree(stage, home)
+    for f in ('STATE.OUT', 'port.log'):
+        if os.path.exists(os.path.join(out, f)):
+            os.remove(os.path.join(out, f))
+    shutil.rmtree(os.path.join(out, 'SAVEGAME'), ignore_errors=True)
+    data = os.path.join(ROOT, R.data) if not os.path.isabs(R.data) else R.data
+    args = ['--data', data, '--home', home, '--hidden', '--no-audio', '--dos-replay', os.path.abspath(rec)]
+    print('rp: replaying %s in the port' % rec)
+    t0 = time.time()
+    if on_wsl_side():
+        line = 'SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout %d %s %s' % (
+            timeout, exe, ' '.join(shlex.quote(wsl_path(a)) if os.path.exists(a) else shlex.quote(a) for a in args))
+        r = subprocess.run(['wsl', '-e', 'bash', '-lc', line], capture_output=True, text=True, errors='replace')
+    else:
+        try:
+            r = subprocess.run([exe] + args, capture_output=True, text=True, errors='replace', timeout=timeout,
+                               env=dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy'))
+        except subprocess.TimeoutExpired:
+            sys.exit('rp: the port did not finish within %d s' % timeout)
+    open(os.path.join(out, 'port.log'), 'w').write(r.stdout + r.stderr)
+    if os.path.exists(os.path.join(home, 'STATE.OUT')):
+        shutil.copy(os.path.join(home, 'STATE.OUT'), os.path.join(out, 'STATE.OUT'))
+    names = {n.upper(): n for n in os.listdir(home)}
+    if 'SAVEGAME' in names:
+        shutil.copytree(os.path.join(home, names['SAVEGAME']), os.path.join(out, 'SAVEGAME'))
+    print('rp: the port exited with %d after %.0f s' % (r.returncode, time.time() - t0))
+    if not os.path.exists(os.path.join(out, 'STATE.OUT')):
+        print('rp: the port wrote no STATE.OUT (%s)' % os.path.join(out, 'port.log'))
+        return r.returncode or 1
+    return r.returncode
+
+
+def port_saves(dos, port):
+    """the saved game the session left, DOS's against the port's. DOS's run holds the whole
+    SAVEGAME (the game's copy, the stage over it, and what the session wrote); the port's home
+    holds the stage and what the session wrote, and reads the rest from the game's directory.
+    So every file DOS's run changed from the game's own (with the stage) must be in the port's,
+    with the same bytes, and every file in the port's must be DOS's. Returns the number of
+    differences."""
+    R = rc()
+    data = os.path.join(ROOT, R.data) if not os.path.isabs(R.data) else R.data
+    def files(d):
+        if not os.path.isdir(d):
+            return {}
+        return {n.upper(): os.path.join(d, n) for n in os.listdir(d) if os.path.isfile(os.path.join(d, n))}
+    def ci(root, name):
+        for n in os.listdir(root):
+            if n.upper() == name:
+                return os.path.join(root, n)
+        return os.path.join(root, name)
+    base = files(ci(data, 'SAVEGAME'))
+    base.update(files(os.path.join(chargen(), 'SAVEGAME')))
+    fd, fp = files(os.path.join(dos, 'SAVEGAME')), files(os.path.join(port, 'SAVEGAME'))
+    bad = 0
+    changed = [n for n in sorted(fd) if n not in base or sha1(fd[n]) != sha1(base[n])]
+    for n in changed:
+        if n not in fp:
+            print('rp: saves: %s changed in DOS, not written by the port' % n); bad += 1
+    for n in sorted(fp):
+        if n not in fd:
+            print('rp: saves: %s only in the port' % n); bad += 1
+        elif sha1(fp[n]) != sha1(fd[n]):
+            print('rp: saves: %s differs' % n); bad += 1
+    print('rp: saves: %d files DOS changed, %d in the port\'s home, %s' % (
+        len(changed), len(fp), 'all identical' if not bad else '%d differences' % bad))
+    return bad
+
+
+def port_check(out, rec):
+    """REC replayed in DOS (DOSBox-X) and in the port, the dumps compared across the builds
+    (replay.py compare: the masks of both scopes, [replay.segments]) and the saved games"""
+    out = os.path.abspath(out)
+    exe = port_build()
+    if replay(rec, os.path.join(out, 'dos')):
+        return 1
+    if port_replay(rec, os.path.join(out, 'port'), exe):
+        print('rp: the port failed (%s)' % os.path.join(out, 'port', 'port.log'))
+    print('\n== DOS against the port')
+    r = exhume('compare', os.path.join(out, 'dos'), os.path.join(out, 'port'))
+    print('\n== the saved games')
+    b = port_saves(os.path.join(out, 'dos'), os.path.join(out, 'port'))
+    return 1 if r or b else 0
+
+
 def keys_of(a):
     """keys, wait, pace, feed: from --keys and the switches, or a session of sessions.toml (its
     feed, when it has one, says the keys are KEYFEED.COM's, that many polls apart)"""
@@ -348,6 +485,11 @@ def main():
         if name == 'check':
             p.add_argument('--rec', help='a RECORD.OUT to replay instead of recording one')
     p = sub.add_parser('replay'); p.add_argument('rec'); p.add_argument('out')
+    p = sub.add_parser('port'); p.add_argument('rec'); p.add_argument('out')
+    p = sub.add_parser('port-build')
+    p = sub.add_parser('port-check'); p.add_argument('out')
+    p.add_argument('--rec', default=os.path.join(ROOT, 'tests', 'replay', 'first.rec'),
+                   help='a RECORD.OUT of the replay DOS build (default tests/replay/first.rec)')
     p = sub.add_parser('compare'); p.add_argument('a'); p.add_argument('b'); p.add_argument('--cross', action='store_true')
     p = sub.add_parser('show'); p.add_argument('state'); p.add_argument('pngdir', nargs='?')
     p = sub.add_parser('log'); p.add_argument('rec')
@@ -364,6 +506,13 @@ def main():
         return record(a.out, k, w, pc, a.timeout, fd)
     if a.cmd == 'replay':
         return replay(a.rec, a.out)
+    if a.cmd == 'port':
+        return port_replay(a.rec, a.out)
+    if a.cmd == 'port-build':
+        print('rp: %s' % port_build())
+        return 0
+    if a.cmd == 'port-check':
+        return port_check(a.out, a.rec)
     if a.cmd == 'compare':
         return exhume('compare', a.a, a.b, *([] if a.cross else ['--same-build']))
     if a.cmd == 'show':

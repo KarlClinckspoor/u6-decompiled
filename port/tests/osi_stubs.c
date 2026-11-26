@@ -173,3 +173,11 @@ void GRDRV_30(const void *surface, int16_t posX, int16_t posY, const void *shape
 	(void)surface; (void)shapes;
 	grlogf("30(%d,%d,%u) ", posX, posY, shapeIndex);
 }
+
+/* Exhume's replay.c hooks that port/sys/mouse.c calls (port/include/rpport.h), as replay.c
+ * behaves with no recording or replay: the poll read live, the value passed through */
+extern int16_t u6_mouse_regs[3];
+void u6_mouse_poll(void);
+void rp_mouse(void) { u6_mouse_poll(); }
+int rp_mbuttons(void) { return u6_mouse_regs[2]; }
+uint32_t u6_rp_recorded(int id, uint32_t v) { (void)id; return v; }

@@ -168,6 +168,9 @@ static void write_screenshot(const char *path)
 	fclose(f);
 }
 
+void u6_rp_set_off(void);
+void u6_rp_set_dos_replay(const char *path);
+
 /* Called by the game's exit (compat.h renames exit to port_exit). */
 void port_exit(int code)
 {
@@ -269,6 +272,8 @@ static void usage(void)
 		"  --speed N           replay speed: 1, 2, 4, 8, or 0 for as fast as possible\n"
 		"  --continue          after a replay ends, keep playing (default: quit)\n"
 		"  --record DIR        record this session into DIR\n"
+		"  --dos-replay FILE   replay a recording of the replay DOS build (Exhume's RECORD.OUT)\n"
+		"                      from the saved game in --home, writing STATE.OUT there\n"
 		"  --no-recording      no black box recording this time\n"
 		"  --hidden            no window (replays, tests)\n"
 		"  --screenshot FILE   write the screen as a BMP when the game ends\n"
@@ -288,6 +293,7 @@ static void usage(void)
 int main(int argc, char **argv)
 {
 	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0, *ending = 0;
+	const char *dos_replay = 0;
 	int menu = -1;
 	int recording = -1, speed = -1, audio = 1, settings_now = 0, i;
 	int scale = 0, fullscreen = -1, aspect = -1, integer = -1, first_run;
@@ -303,6 +309,7 @@ int main(int argc, char **argv)
 		else if (!strcmp(a, "--home")) home = ARG;
 		else if (!strcmp(a, "--replay")) replay = ARG;
 		else if (!strcmp(a, "--record")) record = ARG;
+		else if (!strcmp(a, "--dos-replay")) dos_replay = ARG;
 		else if (!strcmp(a, "--no-recording")) recording = 0;
 		else if (!strcmp(a, "--speed")) speed = atoi(ARG);
 		else if (!strcmp(a, "--continue")) quit_after_replay = 0;
@@ -323,6 +330,20 @@ int main(int argc, char **argv)
 		else if (!strcmp(a, "--help") || !strcmp(a, "-h")) { usage(); return 0; }
 		else { fprintf(stderr, "unknown option %s\n", a); usage(); return 2; }
 #undef ARG
+	}
+
+	/* Exhume's replay.c (port/include/rpport.h): off, unless a DOS recording is replayed. That
+	 * replay is the game alone, from the saved game in the home folder (tools/replay.py's
+	 * run_port puts the session's stage there), with nothing of the port's own recording */
+	u6_rp_set_off();
+	if (dos_replay) {
+		u6_rp_set_dos_replay(dos_replay);
+		replay = 0;
+		record = 0;
+		recording = 0;
+		menu = 0;
+		new_avatar = 0;
+		ending = 0;
 	}
 
 	settings_defaults();
@@ -395,7 +416,7 @@ int main(int argc, char **argv)
 	plat_set_pump_hook(pump_hook_chain);
 	overlay_set_idle_hook(test_options);
 
-	if (!hidden && (settings_now || ((settings.settings_at_start || first_run) && !replay)))
+	if (!hidden && !dos_replay && (settings_now || ((settings.settings_at_start || first_run) && !replay)))
 		overlay_run_modal();
 
 	adlib_set_volume(settings.music ? settings.music_volume : 0);
@@ -429,7 +450,9 @@ int main(int argc, char **argv)
 	 * comes before the session starts, so that a recording's copy of the saved game has
 	 * the character. A saved game without a character always starts there, unless
 	 * --new-avatar makes one (tests). */
-	if (!replay && new_avatar && newchar_needed()) {
+	if (dos_replay) {
+		/* the DOS recording starts in GAME.EXE, from the saved game it was made from */
+	} else if (!replay && new_avatar && newchar_needed()) {
 		if (newchar_quick(new_avatar) != 0) {
 			plat_shutdown();
 			return 1;

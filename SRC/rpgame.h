@@ -1,8 +1,8 @@
 /* rpgame.h: GAME.EXE's bindings for Exhume's runtime/replay/replay.c (its first comment lists
    them), which includes this file. Only the replay DOS build reads it: replay.c compiled with
    GAME's switches and -DRP_FAR_STORAGE, and the sources that use the hooks with -DREPLAY
-   (PLAN-exact-port.md, Phase 1). The gate never compiles it; the port does not link replay.c
-   yet (port/sys/rphooks.c until Phase 2). It keeps an 8.3 name, since the DOS build stages it
+   (PLAN-exact-port.md, Phase 1). The gate never compiles it. The port links replay.c too, with
+   its own bindings (port/include/rpport.h, below). It keeps an 8.3 name, since the DOS build stages it
    (with CRLF line ends: Turbo C 2.0 reads an LF-only header as one line).
 
    RP_FAR_STORAGE: nothing here may put data in DGROUP (GAME.EXE's near data must not move):
@@ -13,6 +13,13 @@
    u6.h); GAME is compiled with -p, so they link by their upper-case names. */
 #ifndef RPGAME_H
 #define RPGAME_H
+
+/* the port (not Turbo C): the same streams and dump from the port's own C,
+   port/include/rpport.h (PLAN-exact-port.md, Phase 2); the rest of this file is the
+   replay DOS build's */
+#ifndef __TURBOC__
+#include "rpport.h"
+#else
 
 #include "u6port.h"
 
@@ -324,5 +331,7 @@ extern unsigned MapSurface[];                   /* struct tSurface: its segment 
         dump_counts(); \
         if (full) RP_U6_SCREEN(); \
     } while (0)
+
+#endif /* __TURBOC__ */
 
 #endif
