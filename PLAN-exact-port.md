@@ -127,9 +127,10 @@ working platform, so the proof comes first and then guards the platform swap.
   melee and ranged combat, spells, camping, a dungeon, a boat and a moongate, shops,
   save and reload. Each starts where it needs to through its `setup` (`tools/u6save.py`,
   section 21). The user's suggestions (2026-11-26):
-  - **A gargoyle-held shrine** for combat: many enemies, melee, ranged and spells in one place.
-    Each surface shrine has a gargoyle egg (gargoyles and winged gargoyles) a few tiles off,
-    e.g. the shrine at (3A7h, 107h) with its egg at (3ACh, FBh), and (397h, 3A7h) with
+  - **A shrine the gargoyles occupy** for combat: many enemies, melee, ranged and spells in one
+    place. Each surface shrine has a gargoyle egg (gargoyles and winged gargoyles) a few tiles
+    off. Chosen: the one due east of the start, the shrine at (1F7h, 167h) (OBJBLKDC), with
+    its egg at (1F7h, 169h). Others: (3A7h, 107h) with (3ACh, FBh); (397h, 3A7h) with
     (39Eh, 3A7h). The setup gives arms, ammunition, reagents and magic points.
   - **A jailed drake at a wizard's** for melee. Not yet found: no drake is an NPC, and no drake
     egg is near Nystul, Nicodemus, Xiao, Mariah, Horance or Zellivan.
