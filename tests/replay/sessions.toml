@@ -1,0 +1,11 @@
+# Key scripts for tools/rp.py record and check (docs/replay.md). keys: DOSBox-X AUTOTYPE's
+# mapper names, typed `pace` seconds apart after `wait` seconds (the game reaches the map from
+# the staged saved game in about 15). rp.py sends the stop key, F9, after the last key; a
+# script must not contain it.
+
+# a minute of the opening fight (gargoyles in the throne room, from the staged saved game): moves,
+# a look north, a talk attempt and typed words the game answers with "what?", passes
+[smoke]
+keys = "left down down right l up enter t down enter n a m e enter j o b enter enter esc space space space space"
+wait = 25
+pace = 2

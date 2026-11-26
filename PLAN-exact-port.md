@@ -409,3 +409,46 @@ Open:
 
 Rerun: scratch (`task6/RERUN.txt`: rpbuild, rprun, rpcmp, rpdecode, rpstack, shots); the build
 becomes task 7's.
+
+## 14. Phase 1 task 7: the replay build and its runs as tools (2026-11-26)
+
+Done by one worker, reviewed; the gate, a clean build and `rp.py check` rerun by the coordinator.
+
+- `exhume.toml` (new): `[replay]` with the three masks and their reasons, `[replay.segments]`
+  (DGROUP paragraph 329Bh; untested until Phase 2), stop key F9, the DOSBox-X conf.
+- `tools/rpbuild.py`: GAME.EXE checked against the gate's sha1, then RGAME.EXE. It fails if any
+  DGROUP public moved, and is cached by a sha1 over its inputs. Exhume's `replay.py build` runs it
+  through a new `[replay] build` hook.
+- `tools/rp.py`: `build`, `record` (ours: DOSBox-X AUTOTYPE, F9 appended; `replay.py record`
+  needs js-dos), `replay`, `compare`, `show`, `log` (Exhume's `replay.py`), and `check` (record,
+  replay twice, compare both pairs, PNGs). `make replay`, `make replay-check`. `docs/replay.md`.
+- `tests/replay/`:
+  - `stage/SAVEGAME/OBJLIST`: the character, made by the port's `--new-avatar`, reproducible
+    byte for byte. Mostly the installed game's own starting OBJLIST.
+  - `sessions.toml`: `smoke`, a minute of the opening fight.
+  - `dosbox-x.conf`: replaydos's default. Recording and replay use the same conf, switches and
+    batch, since a different start-up moved the load segment by a paragraph.
+- Fork `dd92217` on `u6-tc20`: `[replay] build`, `stop_key`, and the SCRN frame in
+  `scanout`/`compare`/`show`. All of it is inactive unless configured. On synthetic Underworld
+  dumps the output is unchanged (Exhume has no tests of `replay.py`).
+
+Exit tests:
+- Gate PASS.
+- A clean `rp.py build`: DGROUP unmoved, RGAME.EXE sha1 `def703cb...`, the same as task 6's
+  scratch build.
+- `rp.py check`: 27 dumps; recording = replay 1 = replay 2 apart from the masks, read from
+  `exhume.toml`. With the masks removed, DATA 98..99 differs.
+- The last PNG is the throne-room fight with the party panel.
+- Port: 1108 of 1108 checkpoints identical (worker).
+
+Open, for task 8:
+- **Recordings that hang at a conversation:**
+  - once in task 6 (after "bye");
+  - twice here, both at the same byte of STATE.OUT, while the conf began with a comment block,
+    and never without it.
+
+  The cause is unknown, and it could be the game, the harness (a dump of half a megabyte at each
+  key, the stack fill) or DOSBox-X. Task 8 should find it before relying on long sessions.
+- A WSL (snap DOSBox-X) replay of a Windows recording took the same path but differed in a few
+  DATA/NULL/STAK/BSS bytes, so compare only within one DOSBox-X install.
+- Golden PNGs, checking the saved games, js-dos recording (`stop_key` is passed, untested).

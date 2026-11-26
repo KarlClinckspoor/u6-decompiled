@@ -1,0 +1,73 @@
+# Exhume's configuration for Ultima VI's GAME.EXE (exhume/docs/config.md). For now only the
+# replay tools read it: exhume/tools/replay.py's build, dos, compare, show and log, through
+# tools/rp.py (docs/replay.md). The DOS gate is still tools/gate.py, not Exhume's.
+
+[project]
+name = "u6"
+root = "."
+src = "SRC"
+include = "SRC"
+build = "build"
+
+[toolchain]
+profile = "borland-tc20"
+c_opts = "-d -mm -p -Z -O"       # SRC/MAKEFILE's switches for GAME's medium-model files
+
+[replay]
+magic = "U6GR"                   # rpgame.h's RP_MAGIC_TAG
+exe_name = "GAME.EXE"
+work = "dos/replay"              # build/dos/replay: the replay build, and runs without an OUT
+sessions = "tests/replay"
+# the user's own copy of the game (not in the repository): the directory the DOS runs stage as C:\
+data = "${U6_GAMEDATA:-gamedata}"
+# left out of that copy: the GOG release's own DOSBox, its launcher and uninstaller, the manual
+data_skip = ["DOSBOX", "cloud_saves", "webcache.zip", "manual.pdf", "unins000.exe", "unins000.dat",
+             "dosboxULTIMA6.conf", "dosboxULTIMA6_single.conf"]
+dosbox_conf = "tests/replay/dosbox-x.conf"   # replays (replaydos.mjs) and recordings (tools/rp.py)
+# Exhume's replay build is the modding link, which this project does not have: the replay
+# build swaps OSILIB's MOUSE and DELAY for MOUSERP and DELAYRP, adds STACKRP and rpfar.asm, and
+# fails if DGROUP moved (tools/rpbuild.py)
+build = "{python} tools/rpbuild.py --out {work}"
+shared_opts = "-d -mm -p -Z -O -DRP_FAR_STORAGE"
+# rpgame.h's RP_STOP_KEY: F9 (143h). KBD_GetKey's int 16h function 0 never gives F11 or F12,
+# the game uses F1..F8 and F10. tools/rp.py record sends it after the keys; replaydos.mjs
+# (a js-dos recording, Phase 1 task 8) sends this
+stop_key = "F9"
+keystate_len = 1                 # rpgame.h's RP_KEYSTATE_LEN
+# the replay build's own switches passed into DOS when set (runtime/replay/replay.c)
+env = ["UWRPCK", "UWRPTRACE", "UWRPFULL", "UWRPHOOK"]
+out_files = ["RECORD.OUT", "STATE.OUT", "TRACE.OUT"]
+
+# SEGS (rpgame.h): 30 words, DGROUP first, then the far heap blocks (FarHeap, Mem_BP, the
+# drivers, the game's blocks). DGROUP is EXE paragraph 329Bh in the replay build (RGAME.MAP);
+# DGROUP and the code segments the game keeps in far function pointers move with the load
+# segment, everything from DGROUP's 64 KB up (429Bh) is the far heap, whose blocks are counted
+# from FarHeap (SEGS word 1). Only a comparison of DOS with the port uses these (Phase 2): two
+# DOS runs are compared with --same-build.
+[replay.segments]
+first_block_para = 0x329B
+exe_range = [0x0000, 0x429B]
+heap_block = 1
+
+# rpgame.h's masks: bytes of a section that are the program's machinery, not game state.
+# lo inclusive, hi exclusive. None of them is zeroed in the dump.
+[[replay.mask]]
+section = "DATA"
+lo = 0x98
+hi = 0x9C
+scope = "always"
+why = "C0's __STARTTIME, the BIOS tick count at start-up (for clock(), which GAME does not link); different in every run"
+
+[[replay.mask]]
+section = "MDRV"
+lo = 0x0C
+hi = 0x162
+scope = "always"
+why = "U6ADLIB.DRV's variables (port/sys/adlib.c names them), stepped by its 60 Hz int 8 handler whenever it comes; another music driver has its own layout"
+
+[[replay.mask]]
+section = "STAK"
+lo = 4
+hi = 6
+scope = "always"
+why = "STACKRP's lowest stack address written: interrupts push wherever SP is when they come; a measurement, not state"

@@ -5,6 +5,8 @@
 #                DOSBox and require each to be identical to the original (tools/gate.py)
 #   make port    build the native port (cmake, port/ -> build/)
 #   make test    check + port + the port tests that run headless
+#   make replay  the replay DOS build of GAME.EXE (tools/rp.py build; docs/replay.md)
+#   make replay-check  record the smoke session in DOSBox-X, replay it twice, compare
 #   make help
 #
 # Needs for `check`: python3, the originals in gamedata/, the toolchain in tools/turboc20 and
@@ -23,7 +25,7 @@ QUICKFLAG = $(if $(QUICK),--quick,)
 
 export U6_GAMEDATA ?= $(CURDIR)/gamedata
 
-.PHONY: help check port test
+.PHONY: help check port test replay replay-check
 
 help:
 	@echo "make check   rebuild GAME.EXE, U.EXE, END.EXE with the original tools; must be identical to the originals"
@@ -31,6 +33,9 @@ help:
 	@echo "make test    check (keeping the build in $(DOSOUT)/), port, then the headless port tests:"
 	@echo "             OSI unit tests, osilib_diff, mcga_diff, ugfx_diff, uosi_diff, adlib_diff (need unicorn)"
 	@echo "             QUICK=1 for the diff tests' --quick; PYTHON=... to choose the interpreter"
+	@echo "make replay  the replay DOS build of GAME.EXE into $(DOSOUT)/replay/ (fails if DGROUP moved)"
+	@echo "make replay-check  record a session (SESSION=smoke) in DOSBox-X, replay it twice, compare"
+	@echo "             (into $(DOSOUT)/replay-check/; docs/replay.md; needs node)"
 	@echo "Not yet: verify, golden, fuzz (see the marked place in this Makefile)"
 
 check:
@@ -53,6 +58,14 @@ test:
 	$(PYTHON) port/tests/uosi_diff.py $(QUICKFLAG)
 	$(PYTHON) port/tests/adlib_diff.py
 	@echo "make test: all passed (replays need a recording and a display: not run here)"
+
+# the replay DOS build and a recorded session replayed twice (docs/replay.md)
+SESSION  ?= smoke
+replay:
+	$(PYTHON) tools/rp.py build
+
+replay-check:
+	$(PYTHON) tools/rp.py check $(DOSOUT)/replay-check --session $(SESSION)
 
 # ---- future targets (not implemented) -------------------------------------------------
 # golden   make each session's reference from DOS: replay it twice, require both identical,
