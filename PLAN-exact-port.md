@@ -204,8 +204,8 @@ working platform, so the proof comes first and then guards the platform swap.
       again for the grown build (endgame b7a8df86..., first e01afca1..., smoke 38457496...,
       setup bc9cc110..., shrine 484d23bc..., drake 3e4fb65e...), each recording = replay 1 =
       replay 2 in DOS, saves identical.
-    - **Not yet run:** port-check `--all` of the six new recordings. Claude Code stopped the run
-      (low memory) at its first port check.
+    - **Port:** port-check `--all` of the six new recordings (endgame, first, smoke, setup,
+      shrine, drake): every one identical to DOS in all four builds, saves identical.
     - **A port bug the session found:** the port's END.EXE, run from a game, failed at once
       ("LZW_load(brit.m): no far memory") and the port exited with code 3. GAME's main takes
       the whole far heap, and `dosmem_init`, which on_exec called before END, does nothing once
