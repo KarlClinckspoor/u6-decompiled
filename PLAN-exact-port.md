@@ -668,4 +668,4 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
   - the saved game DOS wrote at the end keeps every edit: strength 30, level 6, karma 99, the 100 gold coins, the party beside the moongate, the clock moved on to 12:05.
   
   The recording is `tests/replay/setup.rec` (sha1 781b5582...).
-- **Not yet run:** port-check of setup.rec against the four builds. Claude Code stopped the run during its DOS replay because the machine was low on memory. To run it: `python tools/rp.py port-check OUT --rec tests/replay/setup.rec --session setup --all`.
+- **Result in the port** (`rp.py port-check OUT --rec tests/replay/setup.rec --session setup --all`): all 16 checkpoints identical to DOS in all four builds. The saved games are identical too: the 4 files DOS changed, and the 6 in the port's home.
