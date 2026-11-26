@@ -119,6 +119,24 @@ setup = ["teleport 923 856 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0",
          "put 0x113 0 0 4", "put 0x113 0 0 5", "put 0x113 0 0 6", "put 0x113 0 0 7"]
 keys = "up up up u up enter space space"
 
+# Map transitions by ladder: the castle's northwest tower ladder at (291, 347). The party at
+# (291, 348) uses it (north): map.c's PartyChangeLevel takes it down to level 1, the coordinates
+# scaled (surface chunk / 4, the same tile in the chunk) to (75, 83, 1), where an up ladder
+# stands; waits; uses that ladder (Use, Enter on its own tile) back up to (291, 347, 0); waits
+[ladders]
+feed = 40
+setup = ["teleport 291 348 0"]
+keys = "u up enter space space u enter space space"
+
+# Entering a dungeon by walking onto its entrance: the mine shaft at (234, 409) (dungeon 6). The
+# walk-on test (npctrack.c) returns at once in combat mode, which the saved game starts in, so b
+# breaks combat off first; north onto the shaft, down to (58, 97, 1), where an up ladder stands;
+# waits; that ladder back up to (234, 409, 0)
+[dungeon]
+feed = 40
+setup = ["teleport 234 410 0"]
+keys = "b up space space space u enter space space"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no

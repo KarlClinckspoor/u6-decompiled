@@ -177,6 +177,25 @@ working platform, so the proof comes first and then guards the platform swap.
     - **Result:** first, smoke, setup, shrine and drake: each recording = replay 1 = replay 2 in
       DOS, saves identical; each identical to DOS in all four port builds, saves identical.
       port-self identical. Gate 3 of 3 (GAME.EXE unchanged); RGAME.EXE is now `7ba129fb`.
+  - **More, the user's (2026-11-26):**
+    - **Map transitions:** ladders down and up (the castle's corner ladders, e.g. (291, 347),
+      to the dungeon under the castle; objcmd.c's UseLadder through map.c's PartyChangeLevel,
+      the surface-to-level-1 coordinate scaling), and entering a dungeon by walking onto its
+      entrance (npctrack.c: OBJ_MINE_SHAFT or OBJ_HOLE; the nearest, a mine shaft at (234, 409),
+      dungeon 6), then back up.
+      **Done:** `[ladders]` (tests/replay/ladders.rec): (291, 348, 0) -> (75, 83, 1) ->
+      (291, 347, 0); `[dungeon]` (tests/replay/dungeon.rec): (234, 410, 0) -> (58, 97, 1) ->
+      (234, 409, 0). Walking onto an entrance does nothing in combat mode (npctrack.c returns
+      at once), which the saved game starts in: the session breaks off combat (b) first. Both:
+      DOS recording = replay 1 = replay 2, the port identical to DOS in all four builds.
+    - **The balloon:** its plans (10Eh) with the four parts (mammoth silk bag, balloon basket,
+      cauldron, rope: objcmd.c's UseBalloonPlans), the deflated balloon set up, inflated,
+      boarded, flown with the wind, landed.
+    - **Every spell:** a level-8 Avatar with full magic points, a spellbook holding every spell
+      and reagents for all; each cast by its incantation (c, the syllable letters of spell.c's
+      SpellCode, Enter: console.c's SelectMode 3), then its target. Several sessions by circle;
+      the ones that end or upset a session (Armageddon, Kill, the winds, Gate Travel, Time Stop)
+      in sessions of their own.
   - **The endgame.** The cube and the lenses are placed, and the Codex vanishes
     (objcmd.c's UseVortexCube): all 8 moonstones in the vortex cube, the Britannia lens at
     (399h, 353h), the Gargoyle lens at (39Dh, 353h), and the Codex at (39Bh, 353h) within 5
