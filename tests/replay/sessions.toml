@@ -26,6 +26,18 @@ keys = "left down down right l up enter t down enter n a m e enter j o b enter e
 feed = 40
 keys = "t pagedown enter t:name enter t:job enter t:join enter t:bye enter space/60 f1/60 f1/60 f10/60 l up up up up enter b a up enter a up enter a up enter a up enter a up enter a up enter down down down down down down space space space space space space space space space space ctrl+s Y"
 
+# A session that starts from an edited saved game (`setup`: tools/u6save.py's commands, applied to
+# the character by tools/rp.py's session_stage; DOS and the port start from the same files): the
+# party teleported to the first moongate's place, far from the castle (another area file, with
+# their belongings), 100 gold coins (object 58h) for the Avatar, the Avatar's strength 30,
+# Dupre's level 6, karma 99, noon. Then steps, the inventory (F1), the party (F10), passes and
+# the game saved (ctrl+s, Y)
+[setup]
+feed = 40
+setup = ["teleport 0x3A7 0x106 0", "give avatar 0x58 100", "npc avatar str 30", "npc Dupre level 6",
+         "set KARMA 99", "set Time_H 12"]
+keys = "down down left left up f1/60 f1/60 f10/60 space space space space ctrl+s Y"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no

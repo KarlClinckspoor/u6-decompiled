@@ -17,6 +17,7 @@ From the repository's root, in Git Bash on Windows or in WSL/Linux:
 | `python tools/rp.py chargen [OUT]` | the character every run starts from: U.EXE run by script (cached in `build/dos/stage/`) |
 | `python tools/rp.py record OUT [--session NAME \| --keys "..." [--feed N]]` | record a session (default: `smoke`) |
 | `python tools/rp.py replay OUT/RECORD.OUT OUT2` | replay it |
+| `python tools/rp.py stage NAME` | the saved game session NAME starts from: the character with its `setup` (below, "Set-ups through the saved game") |
 | `python tools/rp.py compare OUT OUT2` | compare two dumps, masks applied |
 | `python tools/rp.py show OUT2 PNGDIR` | list the dumps, write each one's screen as a PNG |
 | `python tools/rp.py log OUT/RECORD.OUT` | what a recording holds |
@@ -254,6 +255,44 @@ is busy (`KBD_GetKey(1)` keeps only the last key in the buffer).
 **Task 4 result:** port-self is identical in all four builds: 14 checkpoints, and the saved game
 (OBJLIST and four OBJBLK files) the same after the replay, for both kinds of session. `first.rec`
 and `smoke` are still identical to DOS in all four builds.
+
+### Set-ups through the saved game
+
+A session that needs another starting point (a place, items, attributes, a quest's state) says
+so in its `setup` in tests/replay/sessions.toml: `tools/u6save.py` commands, which
+`rp.py`'s `session_stage` applies to the character's saved game, in `build/dos/stage-NAME`. DOS's
+recording and replays and the port's replays all start from that stage, so the session is
+still proved against DOS. Runtime cheats (Exhume's, port-only) would not replay in DOS.
+
+    python tools/rp.py stage NAME                        # make it and show it
+    python tools/rp.py check OUT --session NAME          # record in DOS, replay twice
+    python tools/rp.py port-check OUT --rec OUT/rec/RECORD.OUT --session NAME --all
+    python tools/u6save.py DIR "show"                    # any saved game
+
+The commands:
+- `show`;
+- `set NAME VALUE`: a field of the state block, with SRC/gamestat.c's names (KARMA, Time_H,
+  IsOnQuest, MoonstonePos[3] ...);
+- `npc WHO FIELD VALUE`: str, dex, int, magic, hp, exp, level, movepts, status, talkflags,
+  mode, commode, flag, schedindex, or name for a party member;
+- `teleport X Y Z`: the party, with their belongings;
+- `give WHO TYPE [QUANTITY [QUALITY [FRAME]]]`.
+
+WHO is an NPC number, `avatar`, or a party member's name.
+
+The editor writes the game's own formats:
+- **OBJLIST** as GAME_Save writes it: the NPCs' objects and tables, then the state block, 1C73h
+  bytes.
+- **The area files** (OBJBLKxy) as OBJ_UnloadArea writes them. An item an NPC holds is stored
+  in the file of the area where the NPC stands, so a teleport moves the party's items to the
+  new area's file. There they go where the game's order puts them (OBJ_CompareOrder: by the
+  owner's tile, y then x). Items in containers keep their containers, as indexes in the file.
+
+Every area file of the game reads and writes back byte for byte, including the third position
+byte of a contained item, which the game never sets (its stack junk).
+
+The teleport puts every party member on the one tile, as the game's own PartyExit does before
+the followers step out. It refuses when the party is in a vehicle.
 
 ### The stop key
 

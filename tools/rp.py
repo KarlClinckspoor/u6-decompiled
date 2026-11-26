@@ -16,6 +16,9 @@
                                                       REC (default tests/replay/first.rec) in DOS and in each
                                                       port build, the dumps compared across the builds and the
                                                       saved games
+    python3 tools/rp.py stage SESSION                 the saved game SESSION starts from: the character with
+                                                      the session's `setup` (tools/u6save.py) applied, shown
+    (record, check, replay, port and port-check take --session NAME: the runs start from its stage)
     python3 tools/rp.py port-self OUT [--variant V ... | --all] [--keys SCRIPT]
                                                       the port against itself: a --record session replayed
                                                       (dumps and saves compared), and a black box session
@@ -217,6 +220,35 @@ def chargen(force=False, out=None, check=True):
     return stage
 
 
+def session_stage(name=None):
+    """the saved game session NAME starts from: [_chargen]'s character, with the session's
+    `setup` (tools/u6save.py commands: teleport, give, npc, set) applied to it, in
+    build/dos/stage-NAME (cached by a sha1 of the commands, the character and u6save.py). DOS's
+    runs and the port's start from the same files, so the session stays proved against DOS
+    (PLAN-exact-port.md section 19). A session without `setup`, or none, is the character alone."""
+    import hashlib, u6save
+    base = chargen()
+    setup = session(name).get('setup', []) if name else []
+    if not setup:
+        return base
+    R = rc()
+    data = os.path.join(ROOT, R.data) if not os.path.isabs(R.data) else R.data
+    h = hashlib.sha1('\n'.join(setup).encode())
+    h.update(open(os.path.join(base, 'SAVEGAME', 'OBJLIST'), 'rb').read())
+    h.update(open(os.path.join(HERE, 'u6save.py'), 'rb').read())
+    key = h.hexdigest()
+    stage = os.path.join(os.path.dirname(base), 'stage-' + name)
+    stamp = stage + '.sha1'
+    if os.path.exists(stamp) and open(stamp).read().strip() == key and os.path.isdir(stage):
+        return stage
+    shutil.rmtree(stage, ignore_errors=True)
+    shutil.copytree(base, stage)
+    files = u6save.edit(stage, setup, base=data)
+    print('rp: [%s] setup: %d commands, wrote %s' % (name, len(setup), ' '.join(files)))
+    open(stamp, 'w').write(key + '\n')
+    return stage
+
+
 def conf_set(conf, section, settings):
     """conf (a DOSBox-X configuration's text) with settings {key: value} in [section], replacing
     the section's own lines for those keys. Section-aware: a comment that mentions "[cpu]" is
@@ -240,7 +272,7 @@ def conf_set(conf, section, settings):
     return '\n'.join(out) + '\n'
 
 
-def record(out, keys, wait=25, pace=2, timeout=300, feed=None):
+def record(out, keys, wait=25, pace=2, timeout=300, feed=None, stage=None):
     """records KEYS then the stop key into OUT/RECORD.OUT and STATE.OUT (and the saved game).
     feed None: KEYS are AUTOTYPE's names, typed in real time, `wait` seconds after the start and
     `pace` apart. feed N: KEYS are tools/keyfeed.py's names, typed by KEYFEED.COM (mode bios,
@@ -255,7 +287,7 @@ def record(out, keys, wait=25, pace=2, timeout=300, feed=None):
     if stop in [k.lower() for k in keys]:
         sys.exit('rp: the keys contain the stop key %s; it is sent after them' % stop)
     keys.append(stop)
-    stage = chargen()
+    stage = stage or chargen()
     out = os.path.abspath(out)
     os.makedirs(out, exist_ok=True)
     for f in R.out_files + ['keys.txt']:
@@ -325,12 +357,12 @@ def record(out, keys, wait=25, pace=2, timeout=300, feed=None):
     return 0
 
 
-def replay(rec, out):
+def replay(rec, out, stage=None):
     out = os.path.abspath(out)
     for f in ('STATE.OUT', 'TRACE.OUT'):
         if os.path.exists(os.path.join(out, f)):
             os.remove(os.path.join(out, f))
-    r = exhume('--stage', chargen(), 'dos', os.path.abspath(rec), out)
+    r = exhume('--stage', stage or chargen(), 'dos', os.path.abspath(rec), out)
     if not os.path.exists(os.path.join(out, 'STATE.OUT')):
         print('rp: the replay wrote no STATE.OUT')
         return r or 1
@@ -438,14 +470,14 @@ def port_dgroup():
     return 0
 
 
-def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc'):
+def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=None):
     """replays REC (a RECORD.OUT of the replay DOS build) in the port (--dos-replay), from the
-    character [_chargen] makes, as tools/replay.py's run_port does: a fresh home folder with the
-    stage in it, the game's own directory as --data; STATE.OUT and the home's SAVEGAME are
-    copied to OUT, the port's log to OUT/port.log"""
+    character [_chargen] makes (or STAGE, a session's: session_stage), as tools/replay.py's
+    run_port does: a fresh home folder with the stage in it, the game's own directory as --data;
+    STATE.OUT and the home's SAVEGAME are copied to OUT, the port's log to OUT/port.log"""
     R = rc()
     exe = exe or port_build(variant)
-    stage = chargen()
+    stage = stage or chargen()
     out = os.path.abspath(out)
     home = os.path.join(out, 'home')
     shutil.rmtree(home, ignore_errors=True)
@@ -579,7 +611,7 @@ def port_self(out, variant='linux-gcc', keys=SELF_KEYS):
     return 1 if any(res.values()) else 0
 
 
-def port_saves(dos, port):
+def port_saves(dos, port, stage=None):
     """the saved game the session left, DOS's against the port's. DOS's run holds the whole
     SAVEGAME (the game's copy, the stage over it, and what the session wrote); the port's home
     holds the stage and what the session wrote, and reads the rest from the game's directory.
@@ -598,7 +630,7 @@ def port_saves(dos, port):
                 return os.path.join(root, n)
         return os.path.join(root, name)
     base = files(ci(data, 'SAVEGAME'))
-    base.update(files(os.path.join(chargen(), 'SAVEGAME')))
+    base.update(files(os.path.join(stage or chargen(), 'SAVEGAME')))
     fd, fp = files(os.path.join(dos, 'SAVEGAME')), files(os.path.join(port, 'SAVEGAME'))
     bad = 0
     changed = [n for n in sorted(fd) if n not in base or sha1(fd[n]) != sha1(base[n])]
@@ -615,24 +647,25 @@ def port_saves(dos, port):
     return bad
 
 
-def port_check(out, rec, variants=('linux-gcc',)):
+def port_check(out, rec, variants=('linux-gcc',), stage=None):
     """REC replayed in DOS (DOSBox-X) and in each of the port's builds VARIANTS, each one's dumps
     compared with DOS's across the builds (replay.py compare: the masks of both scopes,
     [replay.segments]) and its saved games with DOS's. One variant's run goes to OUT/port, more
-    to OUT/port-VARIANT."""
+    to OUT/port-VARIANT. STAGE: the saved game REC starts from (session_stage), by default the
+    character alone."""
     out = os.path.abspath(out)
     exes = [(v, port_build(v)) for v in variants]   # all built before anything runs
-    if replay(rec, os.path.join(out, 'dos')):
+    if replay(rec, os.path.join(out, 'dos'), stage):
         return 1
     res = {}
     for v, exe in exes:
         d = os.path.join(out, 'port' if len(exes) == 1 else 'port-' + v)
-        if port_replay(rec, d, exe, variant=v):
+        if port_replay(rec, d, exe, variant=v, stage=stage):
             print('rp: the port failed (%s)' % os.path.join(d, 'port.log'))
         print('\n== DOS against the port (%s)' % v)
         r = exhume('compare', os.path.join(out, 'dos'), d)
         print('\n== the saved games (%s)' % v)
-        b = port_saves(os.path.join(out, 'dos'), d)
+        b = port_saves(os.path.join(out, 'dos'), d, stage)
         res[v] = (r, b)
     if len(exes) > 1:
         print('\n== summary')
@@ -667,17 +700,23 @@ def main():
         if name == 'check':
             p.add_argument('--rec', help='a RECORD.OUT to replay instead of recording one')
     p = sub.add_parser('replay'); p.add_argument('rec'); p.add_argument('out')
+    def setup_arg(p):
+        p.add_argument('--session', help="the session REC was recorded from, for its saved game's setup "
+                       '(tests/replay/sessions.toml, tools/u6save.py)')
+    setup_arg(p)
     def variant_args(p, many):
         p.add_argument('--variant', action='append' if many else 'store', choices=PORT_VARIANTS,
                        help='the port build (default linux-gcc)' + ('; repeatable' if many else ''))
         if many:
             p.add_argument('--all', action='store_true', help='every variant: %s' % ', '.join(PORT_VARIANTS))
-    p = sub.add_parser('port'); p.add_argument('rec'); p.add_argument('out'); variant_args(p, False)
+    p = sub.add_parser('port'); p.add_argument('rec'); p.add_argument('out'); variant_args(p, False); setup_arg(p)
     p = sub.add_parser('port-build'); variant_args(p, True)
     p = sub.add_parser('port-dgroup')
     p = sub.add_parser('port-check'); p.add_argument('out'); variant_args(p, True)
     p.add_argument('--rec', default=os.path.join(ROOT, 'tests', 'replay', 'first.rec'),
                    help='a RECORD.OUT of the replay DOS build (default tests/replay/first.rec)')
+    setup_arg(p)
+    p = sub.add_parser('stage'); p.add_argument('session')
     p = sub.add_parser('port-self'); p.add_argument('out'); variant_args(p, True)
     p.add_argument('--keys', default=SELF_KEYS, help="the port's --keys script (MS:KEY ...; F9 is added)")
     p = sub.add_parser('compare'); p.add_argument('a'); p.add_argument('b'); p.add_argument('--cross', action='store_true')
@@ -691,13 +730,24 @@ def main():
         st = chargen(a.force or bool(a.out), a.out, not a.no_check)
         print('rp: %s' % os.path.join(st, 'SAVEGAME', 'OBJLIST'))
         return 0
+    # the saved game the session starts from: its setup over the character (session_stage)
+    sess = getattr(a, 'session', None)
+    if a.cmd in ('record', 'check') and not sess and not a.keys:
+        sess = 'smoke'
+    stage = session_stage(sess) if sess and a.cmd not in ('stage',) else None
+    if a.cmd == 'stage':
+        st = session_stage(a.session)
+        print('rp: %s' % st)
+        import u6save
+        u6save.Save(st, u6save.default_base()).cmd_show()
+        return 0
     if a.cmd == 'record':
         k, w, pc, fd = keys_of(a)
-        return record(a.out, k, w, pc, a.timeout, fd)
+        return record(a.out, k, w, pc, a.timeout, fd, stage)
     if a.cmd == 'replay':
-        return replay(a.rec, a.out)
+        return replay(a.rec, a.out, stage)
     if a.cmd == 'port':
-        return port_replay(a.rec, a.out, variant=a.variant or 'linux-gcc')
+        return port_replay(a.rec, a.out, variant=a.variant or 'linux-gcc', stage=stage)
     if a.cmd == 'port-dgroup':
         return port_dgroup()
     variants = PORT_VARIANTS if getattr(a, 'all', False) else (getattr(a, 'variant', None) or ['linux-gcc'])
@@ -706,7 +756,7 @@ def main():
             print('rp: %s: %s' % (v, port_build(v)))
         return 0
     if a.cmd == 'port-check':
-        return port_check(a.out, a.rec, variants)
+        return port_check(a.out, a.rec, variants, stage)
     if a.cmd == 'port-self':
         bad = 0
         for v in variants:
@@ -723,13 +773,13 @@ def main():
     rec = a.rec
     if not rec:
         k, w, pc, fd = keys_of(a)
-        if record(os.path.join(out, 'rec'), k, w, pc, a.timeout, fd):
+        if record(os.path.join(out, 'rec'), k, w, pc, a.timeout, fd, stage):
             return 1
         rec = os.path.join(out, 'rec', 'RECORD.OUT')
     bad = 0
     for d in ('rep1', 'rep2'):
         print('\n== replay %s' % d)
-        bad |= replay(rec, os.path.join(out, d)) != 0
+        bad |= replay(rec, os.path.join(out, d), stage) != 0
     if bad:
         print('rp check: a replay failed')
         return 1

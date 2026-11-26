@@ -641,3 +641,31 @@ The port records and replays through Exhume's `replay.c` only. `port/replay/` (R
   - OSI tests: 255 unit checks (the replay test now checks the virtual clock and take-over), and the RAND, SEED, LZW, KBD, SOUND and MOUSE Unicorn diffs.
   - Gate 3 of 3. No SRC file changed. RGAME.EXE is unchanged (`def703cb`).
 - **Next:** the save editor for Phase 3's set-ups (`tools/u6save.py`).
+
+## 21. The save editor: test set-ups through the saved game (2026-11-26, by the coordinator)
+
+The user's decision (section 19) carried out. `tools/u6save.py` edits a saved game in the game's own formats, and a session's `setup` in tests/replay/sessions.toml lists its commands. `rp.py`'s `session_stage` applies them to the character's stage, in `build/dos/stage-NAME`. The cache key is the commands, the character's OBJLIST and u6save.py.
+
+- **Commands:**
+  - `show`;
+  - `set` a state-block field, with gamestat.c's names parsed from the source;
+  - `npc WHO FIELD VALUE`, an NPC's attributes, level, flags and name;
+  - `teleport X Y Z`: the party and their belongings, moved to the new area's file;
+  - `give WHO TYPE [QUANTITY [QUALITY [FRAME]]]`.
+- **The formats** come from the game's code:
+  - OBJLIST from GAME_Load and GAME_Save;
+  - the area files from OBJ_UnloadArea and `__ObjSerialize`: held items in the file of the area where the owner stands, contained items as container indexes, order by OBJ_CompareOrder.
+  
+  All 69 area files of the game read and write back byte for byte.
+- **Plumbing:** record, check, replay, port and port-check take `--session NAME` and run from that stage. DOS's runs copy it over the game. The port's runs put it in their home folder, and port_saves counts it as the base.
+- **Test session `[setup]`:**
+  - setup: the party teleported to the first moongate's place, (3A7h, 106h, 0), in area file OBJBLKHC instead of the castle's OBJBLKCC;
+  - 100 gold coins for the Avatar, the Avatar's strength 30, Dupre's level 6, karma 99, noon;
+  - then steps, the inventory, the party, passes and a save.
+- **Result in DOS** (`rp.py check build/setup --session setup`):
+  - recording = replay 1 = replay 2 apart from the masks, and the saved games are identical;
+  - the screens show the party on the moongate's stone circle;
+  - the saved game DOS wrote at the end keeps every edit: strength 30, level 6, karma 99, the 100 gold coins, the party beside the moongate, the clock moved on to 12:05.
+  
+  The recording is `tests/replay/setup.rec` (sha1 781b5582...).
+- **Not yet run:** port-check of setup.rec against the four builds. Claude Code stopped the run during its DOS replay because the machine was low on memory. To run it: `python tools/rp.py port-check OUT --rec tests/replay/setup.rec --session setup --all`.

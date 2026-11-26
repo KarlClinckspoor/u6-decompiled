@@ -9,6 +9,13 @@ What the replay DOS build's runs read (docs/replay.md):
   twice and compares.
 - `smoke.rec`: `[smoke]`'s recording (sha1 c7050b69...). `python tools/rp.py port-check OUT --rec
   tests/replay/smoke.rec --all` checks it against the port, like first.rec.
+- `setup.rec`: `[setup]`'s recording (sha1 781b5582...), from its edited saved game; replay it
+  with `--session setup`.
+- A session's `setup` in sessions.toml: `tools/u6save.py` commands (teleport, give, npc, set)
+  applied to the character's saved game, the stage every run of that session starts from, in
+  `build/dos/stage-NAME` (`python tools/rp.py stage NAME` makes and shows it). Replaying its
+  recording takes `--session NAME` too, for the same stage. A test set-up goes through the saved
+  game rather than a cheat at run time, so DOS and the port start from the same files.
 - `dosbox-x.conf`: the DOSBox-X configuration of every recording and replay (exhume.toml's
   `[replay] dosbox_conf`). It is `exhume/tools/replaydos.mjs`'s own default, as a file: js-dos's
   hardware (a Sound Blaster 16 with an OPL3, an MPU-401, 16 MB), no sound output, the dynamic
