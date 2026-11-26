@@ -216,9 +216,42 @@ working platform, so the proof comes first and then guards the platform swap.
   `adlib_diff.py` checks AdLib.
 - **Exit:** every golden unchanged across the swap.
 
-### Phase 7: release
-- Packages for Windows, Linux and macOS, the web build, fixes from `FINDINGS.md` as
-  options that are off by default (replays run with all off).
+### Phase 7: enhancements, as Underworld Exhumed has them (the user, 2026-11-26)
+Changes the original does not have, each off unless the player turns it on, in Exhume's
+model (runtime/port/sys/enhance.c and enhance.h, Underworld Exhumed's docs/ENHANCEMENTS.md):
+- **The registry.** A table of flags, each with a name (`--enhance NAME,...`, the settings
+  file's `enhance=`, a tab of the settings screen), a line about it, a kind (presentation,
+  timing, gameplay, fix) and its source. The mask is set before the game starts and never
+  changes while it runs.
+- **Where they live.** An enhancement is tested with `ENHANCED(i)` only in code the DOS build
+  never compiles. In the shared sources that means a hook whose original tokens stay exactly the
+  same under Turbo C (as STACK_JUNK_FILL does), so the gate keeps proving GAME.EXE.
+- **The proof stays.** With every flag off, every session must stay identical to DOS. A
+  recording made with flags on carries them (Exhume's format 5: its enhancements chunk), and
+  its replay turns the same ones on. It replays in the port only, never in DOS. Each
+  enhancement gets a port session of its own (port-self), recorded with the flag on and
+  replayed with it on.
+- **Fixes first.** Faults of the original, each a flag of kind `fix`, so the original's behaviour
+  stays the default. Candidates already marked in the sources:
+  - main.c LaunchEndGame: the time in Britannia shown by the ending; "days" is never corrected
+    when it goes negative (it tests Date_D), and months wrap at 13;
+  - objcmd.c: the fountain reads 10 wishes from a table of 5 (pointers past its end);
+  - objcmd.c: a neighbour search that only ever looks at one row ("actorY + i - 1" for "+ j");
+  - objcmd.c: the look at a person ("(!TalkFlags[] & 1)" for "!(TalkFlags[] & 1)");
+  - objcmd.c: the cannon's turn when pushed (a misplaced parenthesis);
+  - npctrack.c: an NPC's mode overwritten before it is tested;
+  - disk.c: a drive number used as a letter;
+  - gfx.c: the missile animation reading a never-drawn projectile's position (the drake
+    session; STACK_JUNK_FILL already gives it a fixed value, a fix would not add it at all).
+  
+  Each needs a session that reaches it, and the fix must be shown to change only what it says.
+- **Then the rest:** presentation (scaling filters, a wider view), timing (a faster pace, no
+  waits), gameplay changes (quality of life). Each needs the same flag, session and log line.
+- **Exit:** every fix is a flag, off by default; all sessions identical to DOS with all flags off.
+
+### Phase 8: release
+- Packages for Windows, Linux and macOS, the web build, with the enhancements and fixes off by
+  default (replays run with all off unless the recording carries flags).
 
 ## 6. Decisions that are yours
 
