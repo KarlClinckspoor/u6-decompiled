@@ -54,6 +54,20 @@ setup = ["teleport 513 361 0", "give avatar 0x39 0 0 0 equip", "put 0x3A 0 0x11"
          "give avatar 0x41 20", "give avatar 0x42 20", "give avatar 0x48 20"]
 keys = "space space space space space space c enter left left left enter space space space space space space space space a left enter space space space space space space space space space space ctrl+s Y"
 
+# The jailed drake at the mage Rudyom's house (PLAN-exact-port.md, Phase 3): an egg (100%, one
+# drake) at (569, 340), in a cell walled north and west and barred east and south, so no one can
+# stand next to it. The party starts in the yard at (575, 350), more than 8 tiles off, so the egg
+# hatches as the save loads. The Avatar trades the sword for a halberd (reach 2, still melee:
+# combat.c's WeaponRanges), and a cannon (0DDh) stands at (571, 340) facing west (frame 3). Six
+# steps north and four west to the steel door at (571, 343); use (it opens); in, to (571, 341);
+# fire the cannon (use, north; blocked by the bars, it explodes on the drake's tile:
+# objcmd.c's UseCannon); attack with the halberd (target two west, one north) six times, the
+# cannon again between; passes; the game saved
+[drake]
+feed = 40
+setup = ["teleport 575 350 0", "unequip avatar 0x2B", "give avatar 0x2F 0 0 0 equip", "place 0xDD 571 340 0 0 0 3"]
+keys = "up up up up up up left left left left u up up up up u up space a left left up enter space a left left up enter space u up space a left left up enter space a left left up enter space a left left up enter space a left left up enter space space space space ctrl+s Y"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no

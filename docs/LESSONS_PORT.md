@@ -184,6 +184,18 @@ program's input:
 - **Four compilers, one result.** gcc and clang on Linux and on Windows (where `long` is 32
   bits) give byte-identical dumps. The port's fixed-width types and its 16-bit arithmetic
   wrappers hold up.
+- **Uninitialised locals show up as soon as a session reaches them.** The drake session fired a
+  cannon whose ball the bars stopped before it was drawn. The missile animation still added the
+  ball's never-set screen position to its dirty rectangle, and DOS and the port read different
+  stack junk. The screens matched; only the dump caught it. The fix gives the local a fixed
+  starting value in the replay build and the port, and nothing under Turbo C (`STACK_JUNK_FILL`,
+  after Exhume's `STACK_JUNK_SET`), so the original's bytes stay the same.
+- **Don't hard-code what a build can move.** The fix grew the replay build's code by 64 bytes,
+  and the generator of the port's DGROUP table had DGROUP's paragraph written in as a constant:
+  it silently matched a quarter of the symbols. It reads the paragraph from the map now. Two
+  more copies of the same number turned up, in a static function's address and in the
+  comparison's segment rules, and every recording had to be made again, since GAME records how
+  much memory is left above it. Keep one copy of such a number, and check the others against it.
 - **Don't cache inside a folder the build empties.** The character stage lived in the replay
   build's folder. A rebuild that happened after the cache check deleted it, and the replay
   failed now and then, which looked like flakiness.

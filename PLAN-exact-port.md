@@ -132,7 +132,7 @@ working platform, so the proof comes first and then guards the platform swap.
     off. Chosen (by the user): the shrine at (503, 359) = (1F7h, 167h) (OBJBLKDC), with
     its egg at (1F7h, 169h). Others: (3A7h, 107h) with (3ACh, FBh); (397h, 3A7h) with
     (39Eh, 3A7h). The setup gives arms, ammunition, reagents and magic points.
-    **Done: `[shrine]`, tests/replay/shrine.rec** (sha1 c844d4c6...):
+    **Done: `[shrine]`, tests/replay/shrine.rec** (sha1 1241ae55..., recorded again after the drake's fix):
     - the party starts at (513, 361), 10 tiles east of the egg; loading the save builds the area,
       which hatches eggs more than 8 tiles off (EGG_hatchArea), so the gargoyles come;
     - the Avatar has a readied spellbook (Magic Arrow, Fireball) and reagents;
@@ -143,7 +143,40 @@ working platform, so the proof comes first and then guards the platform swap.
     - port: identical to DOS in all four builds, saves identical.
   - **A jailed drake at a wizard's** for melee: the mage Rudyom's house (NPC 128, at (579, 348)).
     An egg (100%, one drake) at (569, 340), behind bars with a steel door at (571, 343)
-    (OBJBLKEC).
+    (OBJBLKEC). No one can stand next to the drake, so (the user's ideas) a halberd (reach 2,
+    still melee: combat.c's WeaponRanges) and a cannon placed in front of the bars.
+    **`[drake]`, tests/replay/drake.rec** (sha1 a5871274..., recorded with the fixed build):
+    - setup: the party in the yard at (575, 350), so the egg hatches as the save loads; the
+      Avatar's sword unequipped and a halberd readied; a cannon (0DDh) at (571, 340), facing west;
+    - keys: to the steel door, opened, in to (571, 341), the cannon fired, six halberd attacks,
+      the cannon again, passes, saved. The drake breathes fire and survives;
+    - DOS: recording = replay 1 = replay 2, saves identical.
+    - **The port differed** at 50 checkpoints, in 7 bytes of BSS: DirtyRect (DS:ECBC). GFX's
+      missile animation adds a projectile's "last place" to it even when the projectile stopped
+      before it was ever drawn (the cannon ball the bars stop), and its spr_x[]/spr_y[] are
+      locals never set then: DOS read its stack's junk (167, the clamp), the port its own. It
+      is an uninitialised read in the original.
+    - **Fix: `STACK_JUNK_FILL`**, a new macro in SRC/u6port.h, applies Exhume's STACK_JUNK_SET
+      to every element of a local array. It is nothing under Turbo C, so the gate passes and
+      GAME.EXE is unchanged. In the replay build and the port, gfx.c's spr_x and spr_y start
+      at 0.
+    - The replay build's code grew by 4 paragraphs (RGAME.EXE `7ba129fb`; DGROUP itself is
+      unmoved). `gen_dgroup.py` had DGROUP's paragraph fixed at 329Bh and now reads it from
+      RGAME.MAP (329Fh); the table and the masks are otherwise the same.
+    - **Every recording was made again.** GAME records farcoreleft() (RV_FARCORE), the far
+      memory above the program, and 64 more bytes of code make it 64 bytes smaller: the old
+      recordings gave the new build more memory than DOS has, and its replay of drake.rec
+      hung. first, smoke, setup, shrine and drake were recorded again with the new build
+      (their keys are KEYFEED's, so each session plays as before). Any change to the replay
+      build's code size means the same.
+    - **Two more places held DGROUP's old paragraph**, found when every session then differed
+      in the port: gen_dgroup.py's STATIC_FUNCS gave DISK_NullCallback as 2A91h:0003 (it now
+      names DISK_TEXT and the offset in it, and reads the segment from the map: 2A95h:0007), and
+      exhume.toml's `[replay.segments] first_block_para` (now 329Fh). `rp.py port-check`
+      now fails at once when first_block_para is not RGAME.MAP's DGROUP.
+    - **Result:** first, smoke, setup, shrine and drake: each recording = replay 1 = replay 2 in
+      DOS, saves identical; each identical to DOS in all four port builds, saves identical.
+      port-self identical. Gate 3 of 3 (GAME.EXE unchanged); RGAME.EXE is now `7ba129fb`.
   - **The endgame.** The cube and the lenses are placed, and the Codex vanishes
     (objcmd.c's UseVortexCube): all 8 moonstones in the vortex cube, the Britannia lens at
     (399h, 353h), the Gargoyle lens at (39Dh, 353h), and the Codex at (39Bh, 353h) within 5
@@ -697,5 +730,5 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
   - the screens show the party on the moongate's stone circle;
   - the saved game DOS wrote at the end keeps every edit: strength 30, level 6, karma 99, the 100 gold coins, the party beside the moongate, the clock moved on to 12:05.
   
-  The recording is `tests/replay/setup.rec` (sha1 781b5582...).
+  The recording is `tests/replay/setup.rec` (sha1 781b5582...; 98f395d1... since the drake's fix, recorded again: Phase 3's drake session).
 - **Result in the port** (`rp.py port-check OUT --rec tests/replay/setup.rec --session setup --all`): all 16 checkpoints identical to DOS in all four builds. The saved games are identical too: the 4 files DOS changed, and the 6 in the port's home.

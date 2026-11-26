@@ -64,7 +64,10 @@ saves = ["SAVEGAME"]
 # it (port/game/rpport.c). Only a comparison of DOS with the port uses these (Phase 2): two DOS
 # runs are compared with --same-build.
 [replay.segments]
-first_block_para = 0x329B
+# DGROUP's paragraph in RGAME.MAP (its _DATA segment's start): 329Fh since gfx.c's
+# STACK_JUNK_FILL grew the replay build's code by 4 paragraphs (329Bh before). It must follow
+# the replay build: port/tools/gen_dgroup.py reads it from the map, this does not
+first_block_para = 0x329F
 exe_range = [0x0000, 0x9E00]
 heap_block = 1
 

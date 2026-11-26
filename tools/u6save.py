@@ -22,8 +22,13 @@ one argument (quote it):
     give WHO TYPE [QUANTITY [QUALITY [FRAME]]] [equip]
                                 a new item (object type TYPE, 0..3FFh) in WHO's inventory;
                                 equip readies it (a spellbook must be, to cast)
+    unequip WHO TYPE            WHO's readied item of TYPE back to the inventory
+    place TYPE X Y Z [QUANTITY [QUALITY [FRAME]]]
+                                a new object on the map (a cannon: 0DDh, frame its
+                                direction, 0 north, 1 east, 2 south, 3 west)
+    map X Y Z [R]               the terrain around a place (. passable, ~ water, # not)
     put TYPE [QUANTITY [QUALITY [FRAME]]]
-                                a new item inside the item the last give made: a spell
+                                a new item inside the item the last give or place made: a spell
                                 (3Ah, quality its number) in a spellbook (39h), a moonstone
                                 (49h, frame its phase) in the vortex cube (3Eh)
 
@@ -395,6 +400,30 @@ class Save:
             sys.exit('u6save: %s would hold too many objects' % name)
         self.changed.add(name)
 
+    def cmd_unequip(self, who, typ):
+        """unequip WHO TYPE: WHO's readied item of TYPE goes to the inventory (EQUIP to INVEN), to
+        free a hand for another"""
+        n, t = self.who(who), num(typ)
+        a = self.area(area_file(*self.npc_pos(n)))
+        for run in self.held(a, n):
+            if run[0].use == EQUIP and run[0].shape & 0x3FF == t:
+                run[0].status = (run[0].status & ~0x18) | INVEN
+                self.changed.add(area_file(*self.npc_pos(n)))
+                return
+        sys.exit('u6save: unequip: NPC %d has no readied item of type %03Xh' % (n, t))
+
+    def cmd_place(self, typ, x, y, z, quantity='0', quality='0', frame='0'):
+        """place TYPE X Y Z [QUANTITY [QUALITY [FRAME]]]: a new object on the map (a cannon, 0DDh,
+        frame its direction: 0 north, 1 east, 2 south, 3 west), in the area file of that place,
+        where the game's order puts it"""
+        x, y, z = num(x), num(y), num(z)
+        name = area_file(x, y, z)
+        a = self.area(name)
+        o = self.item(LOCXYZ, typ, quantity, quality, frame, raw_coord(x, y, z))
+        self.insert(a, [[o]])
+        self.last = (name, o)
+        self.changed.add(name)
+
     def cmd_put(self, typ, quantity='1', quality='0', frame='0'):
         """put TYPE [QUANTITY [QUALITY [FRAME]]]: a new item inside the item the last give made
         (a spell in a spellbook: type 3Ah, quality the spell's number; a moonstone in the vortex
@@ -445,7 +474,7 @@ class Save:
             return
         fn = getattr(self, 'cmd_' + w[0], None)
         if not fn:
-            sys.exit('u6save: no command %s (show set npc teleport give put map)' % w[0])
+            sys.exit('u6save: no command %s (show set npc teleport give put place unequip map)' % w[0])
         try:
             fn(*w[1:])
         except TypeError:

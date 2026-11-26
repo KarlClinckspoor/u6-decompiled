@@ -90,4 +90,17 @@ void u6_writable(char *buf, const char *init, unsigned n);
 #define WRITABLE_STR(s) ({ static char writable_[] = s; u6_writable(writable_, s, sizeof writable_); writable_; })
 #endif
 
+/*STACK_JUNK_FILL(a, v): Exhume's STACK_JUNK_SET (portable.h) for every element of a local
+  array the original may read before it sets it: nothing under Turbo C, so GAME.EXE's bytes
+  are the same (the gate proves it); in the replay build and the port each element starts as
+  v, so both read the same value where DOS read what its stack held. Written as a statement
+  after the declarations*/
+#if defined(__TURBOC__) && !defined(REPLAY)
+#define STACK_JUNK_FILL(a, v)
+#else
+#define STACK_JUNK_FILL(a, v) { int stack_junk_i_; \
+	for(stack_junk_i_ = 0; stack_junk_i_ < (int)(sizeof(a) / sizeof((a)[0])); stack_junk_i_ ++) \
+		(a)[stack_junk_i_] = (v); }
+#endif
+
 #endif

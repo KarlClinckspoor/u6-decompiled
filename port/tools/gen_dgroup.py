@@ -21,7 +21,8 @@ counterpart for, where that is and how to write it in DOS's form:
            byte it points at; NULL, 0:0
     NEAR   a host pointer into the near data, written as that byte's DOS offset
     CODE   a host function pointer, written as DOS's far code pointer: the function's offset in
-           RGAME.MAP and its segment counted from DGROUP's paragraph (329Bh), which is what a
+           RGAME.MAP and its segment counted from DGROUP's paragraph (read from the map: 329Fh
+           since STACK_JUNK_FILL's code in gfx.c, 329Bh before), which is what a
            segment that moves with the load segment is next to the port's DGROUP of 0
     RAND   RAND.ASM's two words, which rand.c keeps as statics (u6_rand_seed)
 
@@ -48,7 +49,7 @@ GAME = os.path.join(ROOT, 'port', 'game')
 BSS_BASE = 0x322E
 DATA_END = 0x322E
 DGROUP_END = 0xEDFA
-DGROUP_PARA = 0x329B
+DGROUP_PARA = 0x329B           # RGAME.MAP's, set by parse_map
 HOST_PTR = 8
 DOS_SIZE = {'NEAR': 2, 'FAR': 4, 'CODE': 4, 'HGR': 4, 'HMUS': 4}
 
@@ -88,8 +89,10 @@ PORT_FILES = ['sys/mouse.c', 'sys/osi.c', 'sys/sound.c']
 # static functions a far code pointer in the near data may name (not public, so not in
 # RGAME.MAP): game source -> [(name, RGAME.MAP segment, offset)], the address the replay DOS
 # build's dumps show
+# static functions DGROUP points at, which RGAME.MAP does not list: (name, the module's code
+# segment, the offset from the segment's start); parse_map turns each into a segment:offset
 STATIC_FUNCS = {
-    'disk': [('DISK_NullCallback', 0x2A91, 0x0003)],   # DriveErrorCallback (disk.c, DISK_init)
+    'disk': [('DISK_NullCallback', 'DISK_TEXT', 0x0000)],   # DriveErrorCallback (disk.c, DISK_init)
 }
 
 
@@ -105,8 +108,24 @@ def parse_bss():
 
 
 def parse_map(path):
+    """the DATA publics (DGROUP offset, name) and the code publics of RGAME.MAP. DGROUP's
+    paragraph is read from the map (its _DATA segment's start), since the replay build's code
+    before it can grow (STACK_JUNK_FILL, u6port.h); DGROUP_PARA is set from it"""
+    global DGROUP_PARA
     t = open(path, encoding='latin-1').read()
-    data = sorted({(int(o, 16), n) for o, n in re.findall(r'\b329B:([0-9A-F]{4})\s+(\S+)', t)})
+    m = re.search(r'^\s*([0-9A-F]{5})H\s+[0-9A-F]{5}H\s+[0-9A-F]{5}H\s+_DATA\s+DATA', t, re.M)
+    if not m:
+        sys.exit('gen_dgroup: no _DATA segment in %s' % path)
+    DGROUP_PARA = int(m.group(1), 16) >> 4
+    for tu, lst in STATIC_FUNCS.items():
+        for k, (n, segname, off) in enumerate(lst):
+            if isinstance(segname, str):
+                sm = re.search(r'^\s*([0-9A-F]{5})H\s+[0-9A-F]{5}H\s+[0-9A-F]{5}H\s+%s\s+CODE' % segname, t, re.M)
+                if not sm:
+                    sys.exit('gen_dgroup: no segment %s in %s' % (segname, path))
+                start = int(sm.group(1), 16)
+                lst[k] = (n, start >> 4, (start & 15) + off)
+    data = sorted({(int(o, 16), n) for o, n in re.findall(r'\b%04X:([0-9A-F]{4})\s+(\S+)' % DGROUP_PARA, t)})
     code = {}
     for s, o, n in re.findall(r'\b([0-9A-F]{4}):([0-9A-F]{4})\s+(\S+)', t):
         s, o = int(s, 16), int(o, 16)

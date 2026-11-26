@@ -269,6 +269,10 @@ int16 ColorYellow = 14;/*yellow: unused*/
 	/*sprite position in the map buffer*/
 	int16 spr_x[MAX_MISSILES],spr_y[MAX_MISSILES];
 
+	/*a projectile that stops before it was ever drawn (a cannon ball the bars stop) still has
+	  its "last place" added to DirtyRect: DOS reads the stack's junk there*/
+	STACK_JUNK_FILL(spr_x, 0);
+	STACK_JUNK_FILL(spr_y, 0);
 #if 0
 	CON_printf("Missiles %03x,%03x\n", src_x, src_y);
 #endif

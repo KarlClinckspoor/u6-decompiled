@@ -647,6 +647,22 @@ def port_saves(dos, port, stage=None):
     return bad
 
 
+def check_dgroup_para():
+    """exhume.toml's [replay.segments] first_block_para must be DGROUP's paragraph in the replay
+    build's RGAME.MAP (its _DATA segment), which moves when the code before it grows; a stale
+    value makes the cross comparison pair code segments wrongly"""
+    import re
+    if build():
+        sys.exit('rp: the replay build failed')
+    t = open(os.path.join(rc().work, 'RGAME.MAP'), encoding='latin-1').read()
+    m = re.search(r'^\s*([0-9A-F]{5})H\s+[0-9A-F]{5}H\s+[0-9A-F]{5}H\s+_DATA\s+DATA', t, re.M)
+    para = int(m.group(1), 16) >> 4
+    have = tomllib.load(open(CONFIG, 'rb'))['replay']['segments']['first_block_para']
+    if have != para:
+        sys.exit('rp: exhume.toml [replay.segments] first_block_para is %04Xh, RGAME.MAP has DGROUP at '
+                 '%04Xh: set it (and run python tools/rp.py port-dgroup)' % (have, para))
+
+
 def port_check(out, rec, variants=('linux-gcc',), stage=None):
     """REC replayed in DOS (DOSBox-X) and in each of the port's builds VARIANTS, each one's dumps
     compared with DOS's across the builds (replay.py compare: the masks of both scopes,
@@ -654,6 +670,7 @@ def port_check(out, rec, variants=('linux-gcc',), stage=None):
     to OUT/port-VARIANT. STAGE: the saved game REC starts from (session_stage), by default the
     character alone."""
     out = os.path.abspath(out)
+    check_dgroup_para()
     exes = [(v, port_build(v)) for v in variants]   # all built before anything runs
     if replay(rec, os.path.join(out, 'dos'), stage):
         return 1
