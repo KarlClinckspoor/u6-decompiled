@@ -79,27 +79,30 @@ struct tPixmap/*size:6*/ {
 #else
 /*the native port: the driver is C (port/gfx/mcga.c), called directly*/
 #include "../port/gfx/mcga.h"
-#define GR_INIT(a)                         (mcga_attach_image(GrDriver.p, 13796), (struct tGr *)GRDRV_00(a))
-#define GR_SHUTDOWN()                      GRDRV_03()
-#define GR_SET_COLOR(c)                    GRDRV_06(c)
-#define GR_PUT_PIXEL(x,y)                  GRDRV_09(x,y)
-#define GR_FILL_RECT(x0,y0,x1,y1)          GRDRV_12(x0,y0,x1,y1)
-#define GR_SCROLL_RECT_Y(x0,y0,x1,y1,dy)   GRDRV_15(x0,y0,x1,y1,dy)
-#define GR_DRAW_PIXMAP(p,x,y)              GRDRV_18(p,x,y)
-#define GR_PUT_CHAR(ch,x,y)                GRDRV_1E(ch,x,y)
-#define GR_INIT_PALETTE()                  GRDRV_24()
-#define GR_CYCLE_PALETTE(a)                GRDRV_27(a)
-#define GR_INIT_MEMORY(seg,size)           GRDRV_2A(seg,size)
-#define GR_PUT_TILE_SCREEN(tile,x,y)       GRDRV_2D(tile,x,y)
-#define GR_DEFINE_SPRITE(i,a,b,c,d)        GRDRV_33(i,a,b,c,d)
-#define GR_DRAW_SPRITE(i,x,y)              GRDRV_36(i,x,y)
-#define GR_SAVE_SPRITE_BG(i,x,y)           GRDRV_39(i,x,y)
-#define GR_ANIMATE_TILES()                 GRDRV_3F()
-#define GR_PUT_TILE(tile,x,y)              GRDRV_42(tile,x,y)
-#define GR_COPY_TO_SCREEN(x0,y0,x1,y1,a,b) GRDRV_45(x0,y0,x1,y1,a,b)
-#define GR_FADE_TO_SCREEN(x0,y0,x1,y1)     GRDRV_48(x0,y0,x1,y1)
-#define GR_SET_ANIM_FRAME(a,b)             GRDRV_4B(a,b)
-#define GR_CODEX_EFFECT()                  GRDRV_4E()
+/*the entry number of the last call, which DOS keeps in GrDriver's offset word (the replay
+  dumps write it there: port/game/rpport.c)*/
+extern unsigned short u6_gr_entry;
+#define GR_INIT(a)                         (u6_gr_entry = 0x00, mcga_attach_image(GrDriver.p, 13796), (struct tGr *)GRDRV_00(a))
+#define GR_SHUTDOWN()                      (u6_gr_entry = 0x03, GRDRV_03())
+#define GR_SET_COLOR(c)                    (u6_gr_entry = 0x06, GRDRV_06(c))
+#define GR_PUT_PIXEL(x,y)                  (u6_gr_entry = 0x09, GRDRV_09(x,y))
+#define GR_FILL_RECT(x0,y0,x1,y1)          (u6_gr_entry = 0x12, GRDRV_12(x0,y0,x1,y1))
+#define GR_SCROLL_RECT_Y(x0,y0,x1,y1,dy)   (u6_gr_entry = 0x15, GRDRV_15(x0,y0,x1,y1,dy))
+#define GR_DRAW_PIXMAP(p,x,y)              (u6_gr_entry = 0x18, GRDRV_18(p,x,y))
+#define GR_PUT_CHAR(ch,x,y)                (u6_gr_entry = 0x1E, GRDRV_1E(ch,x,y))
+#define GR_INIT_PALETTE()                  (u6_gr_entry = 0x24, GRDRV_24())
+#define GR_CYCLE_PALETTE(a)                (u6_gr_entry = 0x27, GRDRV_27(a))
+#define GR_INIT_MEMORY(seg,size)           (u6_gr_entry = 0x2A, GRDRV_2A(seg,size))
+#define GR_PUT_TILE_SCREEN(tile,x,y)       (u6_gr_entry = 0x2D, GRDRV_2D(tile,x,y))
+#define GR_DEFINE_SPRITE(i,a,b,c,d)        (u6_gr_entry = 0x33, GRDRV_33(i,a,b,c,d))
+#define GR_DRAW_SPRITE(i,x,y)              (u6_gr_entry = 0x36, GRDRV_36(i,x,y))
+#define GR_SAVE_SPRITE_BG(i,x,y)           (u6_gr_entry = 0x39, GRDRV_39(i,x,y))
+#define GR_ANIMATE_TILES()                 (u6_gr_entry = 0x3F, GRDRV_3F())
+#define GR_PUT_TILE(tile,x,y)              (u6_gr_entry = 0x42, GRDRV_42(tile,x,y))
+#define GR_COPY_TO_SCREEN(x0,y0,x1,y1,a,b) (u6_gr_entry = 0x45, GRDRV_45(x0,y0,x1,y1,a,b))
+#define GR_FADE_TO_SCREEN(x0,y0,x1,y1)     (u6_gr_entry = 0x48, GRDRV_48(x0,y0,x1,y1))
+#define GR_SET_ANIM_FRAME(a,b)             (u6_gr_entry = 0x4B, GRDRV_4B(a,b))
+#define GR_CODEX_EFFECT()                  (u6_gr_entry = 0x4E, GRDRV_4E())
 #endif
 
 #endif

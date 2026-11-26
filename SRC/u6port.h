@@ -56,13 +56,23 @@ typedef int64_t NEARLONG;
 #define PTR2INT16(p) (intptr_t)(p)
 #endif
 
+/*a far pointer as Turbo C's (int32) of it gives it: the segment in the high word, the offset in
+  the low one (on the host, the pointer's place in the DOS arena: FP_SEG, FP_OFF)*/
+#ifdef __TURBOC__
+#define FARPTR32(p) ((int32)(p))
+#else
+#define FARPTR32(p) ((int32)((uint32)FP_SEG(p) << 16 | FP_OFF(p)))
+#endif
+
 /*a call of the music driver's entry point o (MUS_DRV(6)(song)): in DOS a far
   call through MUS_Driver with its offset set to o; the port has the entries
   as C functions MUSDRV_0, MUSDRV_6, MUSDRV_9, MUSDRV_0xc (port/sys/musdrv.c)*/
 #ifdef __TURBOC__
 #define MUS_DRV(o) MUS_Driver.iii.ofs = o; (*MUS_Driver.f)
 #else
-#define MUS_DRV(o) MUSDRV_##o
+/*the entry number is kept as DOS keeps it in MUS_Driver's offset word, for the replay dumps*/
+extern unsigned short u6_mus_entry;
+#define MUS_DRV(o) (u6_mus_entry = (o), MUSDRV_##o)
 #endif
 
 /*a string literal the game writes into (DOS has no read-only data; a host keeps
@@ -74,7 +84,10 @@ typedef int64_t NEARLONG;
 #define WRITABLE_STR(s) s
 #else
 #undef WRITABLE_STR
-#define WRITABLE_STR(s) ({ static char writable_[] = s; writable_; })
+/*u6_writable (port/game/rpport.c) notes the copy, for the replay dumps' DATA section, which
+  writes it at the literal's DOS offset*/
+void u6_writable(char *buf, const char *init, unsigned n);
+#define WRITABLE_STR(s) ({ static char writable_[] = s; u6_writable(writable_, s, sizeof writable_); writable_; })
 #endif
 
 #endif

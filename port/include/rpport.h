@@ -20,8 +20,13 @@
      and the far blocks in the DOS arena), SEGS (the arena's segments of the same blocks), the
      four far heap sections (the arena, laid out by the same LoadFile and __MemAlloc calls),
      RAND, NULL, CNTS, PAL (the emulated DAC, read through the same ports) and SCRN
-     (port/gfx/mcga.c's video memory). DATA, BSS and STAK are not written yet: the port's
-     DGROUP is not one block in DOS's layout, and writing it in that layout is task 2.
+     (port/gfx/mcga.c's video memory); DATA and BSS, DGROUP in DOS's layout, written from the
+     port's globals by the table port/tools/gen_dgroup.py makes (port/game/dgroup_port.c,
+     u6_rp_dgroup in rpport.c; task 2), every pointer in DOS's form; GDRV with the graphics
+     driver's segment as DOS's driver keeps it (mcga.c's drv[], the tGr block in DOS's layout:
+     u6_rp_gdrv); STAK, six zero bytes (the
+     DOS build's stack measure, which the port has no counterpart for: masked in a cross
+     comparison).
 
    RP_FAR_STORAGE as in DOS: replay.c's variables in one structure, its tags as RP_TAG
    numbers, so the code the DOS build runs is the code tested here. */
@@ -101,7 +106,7 @@ extern unsigned char *GrMemory, *Mem_BP;
 extern uint32_t Mem_Remain;
 
 #define RP_LEVEL        (GrMemory != 0)
-#define RP_NSECTIONS(full, level, fb) (3 + ((level) ? 8 : 0) + ((full) ? 2 : 0))
+#define RP_NSECTIONS(full, level, fb) (6 + ((level) ? 8 : 0) + ((full) ? 2 : 0))
 
 /* rpport.c: the 30 words of SEGS in rpgame.h's order, and the far heap's bounds (linear
    addresses in the arena: FarHeap, the music driver, its end, Mem_BP) */
@@ -109,6 +114,10 @@ void u6_rp_segs(uint16_t w[30]);
 void u6_rp_heap_bounds(uint32_t b[4]);
 unsigned char *u6_rp_lin(uint32_t lin);
 unsigned char *mcga_screen(void);
+const unsigned char *u6_rp_dgroup(void);    /* DS:0..EDF9 in DOS's layout */
+/* GDRV with the graphics driver's segment as DOS's driver keeps it (mcga.c's drv[], the tGr
+   block in DOS's layout at CS:0052) */
+const unsigned char *u6_rp_gdrv(uint32_t a, uint32_t b);
 
 #define RP_U6_GAME() do { \
         section(RP_TAG('G', 'S', 'T', 'A'), (unsigned)(&GameStateEnd - &IsOnQuest)); \
@@ -141,7 +150,9 @@ unsigned char *mcga_screen(void);
 #define RP_U6_HEAPS() do { \
         uint32_t rp_b_[4]; \
         u6_rp_heap_bounds(rp_b_); \
-        RP_U6_HEAP(RP_TAG('G', 'D', 'R', 'V'), rp_b_[0], rp_b_[1]); \
+        section(RP_TAG('G', 'D', 'R', 'V'), rp_b_[1] > rp_b_[0] ? rp_b_[1] - rp_b_[0] : 0); \
+        if (rp_b_[1] > rp_b_[0]) \
+            dump_far((unsigned char *)u6_rp_gdrv(rp_b_[0], rp_b_[1]), rp_b_[1] - rp_b_[0]); \
         RP_U6_HEAP(RP_TAG('M', 'D', 'R', 'V'), rp_b_[1], rp_b_[2]); \
         RP_U6_HEAP(RP_TAG('F', 'A', 'R', 'B'), rp_b_[2], rp_b_[3]); \
         section(RP_TAG('G', 'R', 'M', 'M'), Mem_Remain); \
@@ -161,8 +172,24 @@ unsigned char *mcga_screen(void);
         dump_far(mcga_screen(), 64000U); \
     } while (0)
 
+#define RP_U6_DGROUP() do { \
+        const unsigned char *rp_dg_ = u6_rp_dgroup(); \
+        section(RP_TAG('D', 'A', 'T', 'A'), 0x322E); \
+        dump_far((unsigned char *)rp_dg_, 0x322E); \
+        section(RP_TAG('B', 'S', 'S', ' '), 0xBBCC); \
+        dump_far((unsigned char *)rp_dg_ + 0x322E, 0xBBCC); \
+    } while (0)
+
+#define RP_U6_STAK() do { \
+        section(RP_TAG('S', 'T', 'A', 'K'), 6); \
+        dump_word(0); dump_word(0); dump_word(0); \
+    } while (0)
+
 #define RP_DUMP(full, level, fb) do { \
-        if (level) { RP_U6_GAME(); RP_U6_SEGS(); RP_U6_HEAPS(); } \
+        if (level) RP_U6_GAME(); \
+        RP_U6_DGROUP(); \
+        if (level) { RP_U6_SEGS(); RP_U6_HEAPS(); } \
+        RP_U6_STAK(); \
         dump_rand(); \
         dump_null(); \
         dump_counts(); \

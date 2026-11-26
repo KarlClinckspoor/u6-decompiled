@@ -40,6 +40,7 @@ int rp_mbuttons(void);
 uint32_t u6_rp_recorded(int id, uint32_t v);
 #define RV_MOUSE_RESET 12   /* SRC/hookgame.h */
 #define RV_MOUSE_NBTN  13
+extern unsigned short u6_gr_entry;   /* port/game/rpport.c: GrDriver's offset word in DOS */
 
 /* the poll (rpport.h's RP_MOUSE_READ, MOUSERP.ASM's _u6_mouse_poll): x, y and the buttons of
  * the live mouse, in the game's pixels, where rp_mouse and rp_mbuttons take them; a replay of
@@ -184,6 +185,7 @@ static void mouse_restore_bg(void)
 
 	if (!m || !m->installed)
 		return;
+	u6_gr_entry = 0x0F;	/* MOUSE.ASM sets GrDriver's offset word to the entry it calls */
 	GRDRV_0F(m->surface, m->saveBuf, m->posX, m->posY, m->shapes, m->shapeIndex);
 }
 
@@ -202,6 +204,7 @@ int MOUSE_DRAW(void)
 
 	if (!m || !m->installed)
 		return 0;
+	u6_gr_entry = 0x30;
 	GRDRV_30(m->surface, m->posX, m->posY, m->shapes, m->shapeIndex);
 	return 0;
 }
@@ -212,6 +215,7 @@ int MOUSE_SAVE_BG(void)
 
 	if (!m || !m->installed)
 		return 0;
+	u6_gr_entry = 0x0C;
 	GRDRV_0C(m->surface, m->saveBuf, m->posX, m->posY, m->shapes, m->shapeIndex);
 	return 0;
 }
@@ -269,3 +273,7 @@ int16_t MOUSE_02CF(struct tSurface *area, void *shapes, uint16_t shapeIndex, int
 		return 0;
 	return 1;
 }
+
+/* the statics above that stand for GAME.EXE's near data, for the replay dumps' DATA section
+ * (port/tools/gen_dgroup.py writes the table) */
+#include "../game/dgs_mouse.inc"

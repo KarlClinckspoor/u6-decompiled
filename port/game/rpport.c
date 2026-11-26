@@ -189,3 +189,256 @@ void port_far_copy(void *dst, const void *src, unsigned n)
 {
 	memcpy(dst, src, n);
 }
+
+/* ---- DGROUP in DOS's layout (the DATA and BSS sections) ----
+ *
+ * port/game/dgroup_port.c (port/tools/gen_dgroup.py) lists each DOS byte range the port has a
+ * counterpart for; this writes them into one image of DS:0..EDF9, every pointer in DOS's form.
+ * What the table leaves out stays 0 (exhume.toml masks those ranges, each with its reason),
+ * except DS:0..30h, C0's copyright, which is the same constant as the NULL section's stand-in. */
+#include "dgs.h"
+
+extern const struct dg_ent u6_dg_ents[];
+extern const unsigned u6_dg_nents;
+extern const struct dg_fn u6_dg_fns[];
+extern const unsigned u6_dg_nfns;
+extern const struct dg_fn *const u6_dg_sfns[];
+extern const unsigned u6_dg_nsfns[];
+
+#define DG_SIZE 0xEDFAu
+static uint8_t dg_img[DG_SIZE];
+struct dg_span { const uint8_t *p; uint32_t n; uint16_t off; };
+static struct dg_span *dg_spans;
+static unsigned dg_nspans;
+
+static void put16(uint8_t *d, uint16_t v) { d[0] = (uint8_t)v; d[1] = (uint8_t)(v >> 8); }
+static void dg_put_handler(uint8_t *d, const void *base, unsigned short entry);
+extern unsigned short u6_gr_entry, u6_mus_entry;
+const void *mcga_info_ptr(void);
+
+/* the host ranges the image's plain bytes come from, to place a near pointer */
+/* the port's writable copies of literals (u6port.h's WRITABLE_STR), noted when the game makes
+ * them, with the literal's DOS offset (u6_dg_wstrs) */
+extern const struct dg_wstr u6_dg_wstrs[];
+#define DG_MAX_WSTR 16
+static struct { char *buf; unsigned n; uint16_t off; } dg_wstr[DG_MAX_WSTR];
+static unsigned dg_nwstr;
+
+void u6_writable(char *buf, const char *init, unsigned n)
+{
+	unsigned i;
+	for (i = 0; i < dg_nwstr; i++)
+		if (dg_wstr[i].buf == buf)
+			return;
+	for (i = 0; u6_dg_wstrs[i].init; i++)
+		if (!strcmp(u6_dg_wstrs[i].init, init) && dg_nwstr < DG_MAX_WSTR) {
+			dg_wstr[dg_nwstr].buf = buf;
+			dg_wstr[dg_nwstr].n = n;
+			dg_wstr[dg_nwstr++].off = u6_dg_wstrs[i].off;
+			return;
+		}
+}
+
+static void dg_init(void)
+{
+	unsigned i;
+	if (dg_spans)
+		return;
+	dg_spans = (struct dg_span *)calloc(u6_dg_nents + DG_MAX_WSTR, sizeof *dg_spans);
+	for (i = 0; i < u6_dg_nents; i++) {
+		const struct dg_ent *e = &u6_dg_ents[i];
+		if (e->kind == K_BYTES) {
+			dg_spans[dg_nspans].p = (const uint8_t *)e->p;
+			dg_spans[dg_nspans].n = e->len;
+			dg_spans[dg_nspans++].off = e->off;
+		} else if (e->kind == K_SBYTES) {
+			dg_spans[dg_nspans].p = (const uint8_t *)e->ref->p;
+			dg_spans[dg_nspans].n = e->ref->n < e->len ? e->ref->n : e->len;
+			dg_spans[dg_nspans++].off = e->off;
+		}
+	}
+}
+
+/* a host pointer into the near data as its DOS offset; 0 if it is none of the table's */
+static int dg_near_of(const void *p, uint16_t *off)
+{
+	const uint8_t *q = (const uint8_t *)p;
+	unsigned i;
+	for (i = 0; i < dg_nwstr; i++)
+		if (q >= (const uint8_t *)dg_wstr[i].buf && q < (const uint8_t *)dg_wstr[i].buf + dg_wstr[i].n) {
+			*off = (uint16_t)(dg_wstr[i].off + (q - (const uint8_t *)dg_wstr[i].buf));
+			return 1;
+		}
+	for (i = 0; i < dg_nspans; i++)
+		if (q >= dg_spans[i].p && q < dg_spans[i].p + dg_spans[i].n) {
+			*off = (uint16_t)(dg_spans[i].off + (q - dg_spans[i].p));
+			return 1;
+		}
+	return 0;
+}
+
+static void dg_put_near(uint8_t *d, const void *p)
+{
+	uint16_t off;
+	if (!p)
+		put16(d, 0);
+	else if (dg_near_of(p, &off))
+		put16(d, off);
+	else
+		put16(d, 0xFFFF);              /* a string literal or other host memory */
+}
+
+static void dg_put_far(uint8_t *d, const void *p)
+{
+	long l;
+	uint16_t off;
+	if (!p) {
+		put16(d, 0);
+		put16(d + 2, 0);
+		return;
+	}
+	if (p == mcga_info_ptr() && GrDriver.p) {
+		/* the tGr block: DOS's is in the graphics driver's segment at offset 52h */
+		l = dos_linear(GrDriver.p) + 0x52;
+		put16(d, (uint16_t)(0x52 + (dos_linear(GrDriver.p) & 15)));
+		put16(d + 2, (uint16_t)(dos_linear(GrDriver.p) >> 4));
+		return;
+	}
+	l = dos_linear(p);
+	if (l >= 0) {                       /* the DOS arena: normalised, as FP_SEG and FP_OFF */
+		put16(d, (uint16_t)(l & 15));
+		put16(d + 2, (uint16_t)(l >> 4));
+	} else if (dg_near_of(p, &off)) {   /* the near data: DGROUP, which is segment 0 here */
+		put16(d, off);
+		put16(d + 2, 0);
+	} else {
+		put16(d, 0xFFFF);
+		put16(d + 2, 0xFFFF);
+	}
+}
+
+static void dg_put_code(uint8_t *d, const void *f)
+{
+	unsigned i, t;
+	for (i = 0; f && i < u6_dg_nfns; i++)
+		if (u6_dg_fns[i].f == f) {
+			put16(d, u6_dg_fns[i].off);
+			put16(d + 2, u6_dg_fns[i].seg);
+			return;
+		}
+	for (t = 0; f && u6_dg_sfns[t]; t++)
+		for (i = 0; i < u6_dg_nsfns[t]; i++)
+			if (u6_dg_sfns[t][i].f == f) {
+				put16(d, u6_dg_sfns[t][i].off);
+				put16(d + 2, u6_dg_sfns[t][i].seg);
+				return;
+			}
+	put16(d, f ? 0xFFFF : 0);
+	put16(d + 2, f ? 0xFFFF : 0);
+}
+
+const uint8_t *u6_rp_dgroup(void)
+{
+	unsigned i, k, n;
+	dg_init();
+	memset(dg_img, 0, sizeof dg_img);
+	memcpy(dg_img, port_null_copy(0), 0x31);
+	/* a writable literal: its text until the game has made the copy (DOS's is in place from the
+	 * start), then the copy */
+	for (i = 0; u6_dg_wstrs[i].init; i++)
+		memcpy(dg_img + u6_dg_wstrs[i].off, u6_dg_wstrs[i].init, strlen(u6_dg_wstrs[i].init) + 1);
+	for (i = 0; i < dg_nwstr; i++)
+		memcpy(dg_img + dg_wstr[i].off, dg_wstr[i].buf, dg_wstr[i].n);
+	for (i = 0; i < u6_dg_nents; i++) {
+		const struct dg_ent *e = &u6_dg_ents[i];
+		uint8_t *d = dg_img + e->off;
+		switch (e->kind) {
+		case K_BYTES:
+			memcpy(d, e->p, e->len);
+			break;
+		case K_FAR:
+			dg_put_far(d, *(void *const *)e->p);
+			break;
+		case K_NEAR:
+			dg_put_near(d, *(void *const *)e->p);
+			break;
+		case K_CODE:
+			dg_put_code(d, *(void *const *)e->p);
+			break;
+		case K_RAND: {
+			uint32_t s = u6_rand_seed();
+			put16(d, (uint16_t)s);
+			put16(d + 2, (uint16_t)(s >> 16));
+			break;
+		}
+		case K_SBYTES:
+			memcpy(d, e->ref->p, e->ref->n < e->len ? e->ref->n : e->len);
+			break;
+		case K_HGR:
+			dg_put_handler(d, *(void *const *)e->p, u6_gr_entry);
+			break;
+		case K_HMUS:
+			dg_put_handler(d, *(void *const *)e->p, u6_mus_entry);
+			break;
+		case K_SNEAR:
+		case K_SFAR:
+			n = e->ref->n / sizeof(void *);
+			for (k = 0; k < n && (k + 1) * (e->kind == K_SNEAR ? 2u : 4u) <= e->len; k++) {
+				const void *p = ((void *const *)e->ref->p)[k];
+				if (e->kind == K_SNEAR)
+					dg_put_near(d + 2 * k, p);
+				else
+					dg_put_far(d + 4 * k, p);
+			}
+			break;
+		}
+	}
+	return dg_img;
+}
+
+/* ---- the graphics driver's state, and the drivers' entry numbers ---- */
+
+/* the entry number of the last call of each driver, which DOS keeps in GrDriver's and
+ * MUS_Driver's offset word (gr.h's and u6port.h's port branches, port/sys/mouse.c set them) */
+unsigned short u6_gr_entry, u6_mus_entry;
+
+const uint8_t *mcga_drv_mem(void);
+const void *mcga_info_ptr(void);
+void mcga_dos_info(uint8_t *d, void (*put_far)(uint8_t *, const void *),
+                   void (*put_code)(uint8_t *, const void *));
+
+/* a union tHandler: the entry number and the driver's segment */
+static void dg_put_handler(uint8_t *d, const void *base, unsigned short entry)
+{
+	long l = base ? dos_linear(base) : -1;
+	put16(d, entry);
+	put16(d + 2, l >= 0 ? (uint16_t)(l >> 4) : 0);
+}
+
+/* GDRV, rpgame.h's far heap section from FarHeap to the music driver: the arena's bytes, with
+ * the graphics driver's segment as DOS's driver keeps it: its variables (mcga.c's drv[], at
+ * their DOS offsets) and the tGr block in DOS's layout at CS:0052 */
+static uint8_t *gdrv_buf;
+static uint32_t gdrv_cap;
+const uint8_t *u6_rp_gdrv(uint32_t a, uint32_t b)
+{
+	uint32_t n = b > a ? b - a : 0;
+	long dl;
+	if (n > gdrv_cap) {
+		gdrv_buf = (uint8_t *)realloc(gdrv_buf, n);
+		gdrv_cap = n;
+	}
+	if (!n)
+		return gdrv_buf;
+	memcpy(gdrv_buf, dos_base + a, n);
+	dl = GrDriver.p ? dos_linear(GrDriver.p) : -1;
+	if (dl >= (long)a && (uint32_t)dl < b) {
+		uint32_t o = (uint32_t)dl - a, m = b - (uint32_t)dl;
+		if (m > 0x10000u)
+			m = 0x10000u;
+		memcpy(gdrv_buf + o, mcga_drv_mem(), m);
+		if (o + 0x52 + 0x34 <= n)
+			mcga_dos_info(gdrv_buf + o + 0x52, dg_put_far, dg_put_code);
+	}
+	return gdrv_buf;
+}

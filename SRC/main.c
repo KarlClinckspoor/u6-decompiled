@@ -265,7 +265,7 @@ int16 Unused01C4 = 0;/*unused*/
 		GR_SHUTDOWN();
 		exit(1);
 	}
-	GrMemorySeg = FP_SEG(GrMemory) + (((int32)GrMemory & 0xffff) >> 4);/*unused?*/
+	GrMemorySeg = FP_SEG(GrMemory) + ((FARPTR32(GrMemory) & 0xffff) >> 4);/*unused?*/
 
 	/*animated tiles: count, tile number, first frame, frame mask, shift*/
 	DISK_confirm(DISK_GAME);

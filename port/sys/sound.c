@@ -42,6 +42,7 @@ static uint16_t pit_div;          /* channel 2 count; 0 = 65536 */
 static int gate;                  /* port 61h bits 0-1 */
 static uint32_t last_hz = 0xFFFFFFFFu;
 static uint16_t noise_seed = 0x7664;   /* D_3098 */
+static uint16_t noise_acc;             /* D_3092: OSI_playNoise's sum of steps, which DOS keeps */
 
 void (*osi_sound_trace)(int what, uint16_t value);
 
@@ -114,7 +115,7 @@ void OSI_playNote(int frequency, int duration)
 
 void OSI_playNoise(int step, int length, int maxFrequency)
 {
-	uint16_t acc = 0;   /* D_3092 */
+	noise_acc = 0;
 
 	if ((uint8_t)SoundFlag)
 		set_gate(1);
@@ -131,9 +132,9 @@ void OSI_playNoise(int step, int length, int maxFrequency)
 			dos_divide_error("OSI_playNoise");
 		f = (uint16_t)(ax % cx + 100u);
 		set_divisor(freq_divisor(f, "OSI_playNoise"));
-		acc = (uint16_t)(acc + (uint16_t)step);
+		noise_acc = (uint16_t)(noise_acc + (uint16_t)step);
 		osi_spin_loops(osi_cxax_loops((uint16_t)step, (uint16_t)(CpuSpeed >> 4)));
-	} while ((int16_t)acc < (int16_t)length);
+	} while ((int16_t)noise_acc < (int16_t)length);
 	set_gate(0);
 }
 
@@ -207,3 +208,7 @@ void OSI_playWavedNote(int increment, int tempo, int count, int threshold, int s
 	} while (cx != 0);
 	set_gate(0);
 }
+
+/* the statics above that stand for GAME.EXE's near data, for the replay dumps' DATA section
+ * (port/tools/gen_dgroup.py writes the table) */
+#include "../game/dgs_sound.inc"

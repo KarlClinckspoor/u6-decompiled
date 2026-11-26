@@ -1175,3 +1175,34 @@ void GRDRV_30(const void *surface, int16_t posX, int16_t posY, const void *shape
 	}
 	flush();
 }
+
+/* ---- for the replay dumps (port/game/rpport.c): the driver's state as DOS's image holds it ----
+ *
+ * DOS's driver keeps its variables in its own segment, which the far heap's GDRV section
+ * dumps; this driver keeps them in drv[] at the same offsets, except the tGr block (CS:0052),
+ * which is struct McgaInfo with host pointers. mcga_dos_info writes that block in DOS's layout
+ * (34h bytes: far pointers and far code pointers as rpport.c's put_far and put_code make
+ * them). */
+const uint8_t *mcga_drv_mem(void) { return drv; }
+const void *mcga_info_ptr(void) { return &info; }
+
+void mcga_dos_info(uint8_t *d, void (*put_far)(uint8_t *, const void *),
+                   void (*put_code)(uint8_t *, const void *))
+{
+	memcpy(d, info.header, 6);
+	put_far(d + 0x06, info.font);
+	d[0x0A] = info.textFg;
+	d[0x0B] = info.textBg;
+	d[0x0C] = info.xorMode;
+	d[0x0D] = info.unknown0d;
+	d[0x0E] = info.animOn;
+	d[0x0F] = info.toBackBuffer;
+	put_code(d + 0x10, (const void *)info.pfnDiskConfirm);
+	memcpy(d + 0x14, info.reserved14, 8);
+	put_far(d + 0x1C, info.pWorkBuf);
+	put_far(d + 0x20, info.pDriverMem);
+	put_code(d + 0x24, (const void *)info.pfnLoadFile);
+	put_code(d + 0x28, (const void *)info.pfnOpen);
+	put_code(d + 0x2C, (const void *)info.pfnRead);
+	put_code(d + 0x30, (const void *)info.pfnClose);
+}

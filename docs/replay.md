@@ -144,11 +144,50 @@ game in DIR and writes STATE.OUT there:
 `--same-build`: masks of both scopes and `[replay.segments]`). It also compares the saved
 games: every file DOS's run changed must be in the port's home, byte for byte.
 
-The port writes GSTA, OBJS, NPCS, SEGS, GDRV, MDRV, FARB, GRMM, RAND, NULL (stand-ins), CNTS,
-PAL and SCRN. DATA, BSS and STAK are not written yet, because the port's DGROUP is not one
-block in DOS's layout (task 2).
+The port writes every section DOS does.
 
-`first.rec` (task 1):
+- **DATA and BSS** are DGROUP in DOS's layout. `port/tools/gen_dgroup.py` (rerun with
+  `python tools/rp.py port-dgroup`) generates `port/game/dgroup_port.c`, a table of DOS byte
+  ranges and where the port keeps each one:
+  - BSS.ASM's objects (`port/sys/bss.c`);
+  - the DATA publics of RGAME.MAP, matched to the port's symbols by name;
+  - the statics the sources give a DOS offset for, reached through generated wrappers
+    (`port/game/tu_NAME.c`, `dgs_NAME.inc`);
+  - the writable literals (`WRITABLE_STR`).
+
+  `u6_rp_dgroup` (`port/game/rpport.c`) writes the image from it. Each pointer is written in
+  DOS's form:
+  - a far pointer as the arena's segment:offset, or as DGROUP:offset;
+  - a near pointer as its DOS offset;
+  - a code pointer as RGAME.MAP's segment:offset, counted from DGROUP's paragraph;
+  - the drivers' entry points as the last entry called.
+- **GDRV** holds the graphics driver's segment as DOS's driver keeps it: `mcga.c`'s `drv[]` at
+  its DOS offsets, and the tGr block in DOS's layout at CS:0052.
+- **STAK** is zeros; the stack measure is DOS's.
+
+What the port has no counterpart for is masked, `scope = "cross"`, each with its reason:
+- Turbo C's run-time data, the game's string literals, the library's data and BSS;
+- INFLATE.ASM's work variables;
+- near pointers to string literals;
+- the file handles that the replay build's own files shift;
+- the DOS driver's mouse temporaries.
+
+`gen_dgroup.py --masks` writes the generated ones into exhume.toml.
+
+`first.rec` (task 2): 69 of 70 checkpoints are identical in every section. The first, before the
+level is loaded, differs:
+- its segment words have no SEGS section to pair them (DOS writes SEGS only once the level
+  exists);
+- its screen is DOSBox-X's text mode.
+
+The saved games are identical. Masks that cover bytes DOS changes during the session:
+- OSI_ErrorFile;
+- VarStr (but its 'N' slot);
+- the driver's mouse temporaries;
+- INFLATE.ASM's variables;
+- the near heap's pointers.
+
+Task 1's result, before DATA and BSS were written:
 - **Checkpoints:** all 70 headers are the same as DOS's (kind, key, hook calls). From the first
   key on, every section the port writes is identical except GDRV.
 - **GDRV:** the graphics driver's image. DOS's driver keeps `struct tGr` and its tables inside

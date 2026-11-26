@@ -344,3 +344,7 @@ void OSI_lowInit(void)
 	CpuSpeed = osi_cpu_speed;
 	D_2FC8 = 640;
 }
+
+/* the statics above that stand for GAME.EXE's near data, for the replay dumps' DATA section
+ * (port/tools/gen_dgroup.py writes the table) */
+#include "../game/dgs_osi.inc"

@@ -12,6 +12,8 @@
     python3 tools/rp.py port REC OUT                  replay REC in the port (--dos-replay; on Windows its WSL build)
     python3 tools/rp.py port-check OUT [--rec REC]    REC (default tests/replay/first.rec) in DOS and in the port,
                                                       the dumps compared across the builds and the saved games
+    python3 tools/rp.py port-dgroup                   regenerate the port's DGROUP table and the masks from a
+                                                      port build's symbols (port/tools/gen_dgroup.py)
     python3 tools/rp.py compare A B [--cross]         compare two STATE.OUT files (or run directories) with
                                                       exhume.toml's masks (replay.py compare --same-build;
                                                       --cross for DOS against the port)
@@ -364,6 +366,26 @@ def port_build(force=False):
     return os.path.join(b, 'u6')
 
 
+def port_dgroup():
+    """regenerates the port's DGROUP table (port/tools/gen_dgroup.py --masks: port/game/dgroup_port.c,
+    tu_*.c, dgs_*.inc and exhume.toml's generated masks) from a port build's symbols, then builds
+    the port again with it"""
+    exe = port_build()
+    nmf = os.path.join(rc().work, 'port.nm')
+    os.makedirs(os.path.dirname(nmf), exist_ok=True)
+    if on_wsl_side():
+        r = subprocess.run(['wsl', '-e', 'bash', '-lc', 'nm -S --defined-only %s' % exe], capture_output=True, text=True)
+    else:
+        r = subprocess.run(['nm', '-S', '--defined-only', exe], capture_output=True, text=True)
+    if r.returncode:
+        sys.exit('rp: nm failed: %s' % r.stderr[-300:])
+    open(nmf, 'w').write(r.stdout)
+    if subprocess.run([sys.executable, os.path.join(ROOT, 'port', 'tools', 'gen_dgroup.py'), '--nm', nmf, '--masks']).returncode:
+        return 1
+    port_build()
+    return 0
+
+
 def port_replay(rec, out, exe=None, timeout=1800):
     """replays REC (a RECORD.OUT of the replay DOS build) in the port (--dos-replay), from the
     character [_chargen] makes, as tools/replay.py's run_port does: a fresh home folder with the
@@ -487,6 +509,7 @@ def main():
     p = sub.add_parser('replay'); p.add_argument('rec'); p.add_argument('out')
     p = sub.add_parser('port'); p.add_argument('rec'); p.add_argument('out')
     p = sub.add_parser('port-build')
+    p = sub.add_parser('port-dgroup')
     p = sub.add_parser('port-check'); p.add_argument('out')
     p.add_argument('--rec', default=os.path.join(ROOT, 'tests', 'replay', 'first.rec'),
                    help='a RECORD.OUT of the replay DOS build (default tests/replay/first.rec)')
@@ -508,6 +531,8 @@ def main():
         return replay(a.rec, a.out)
     if a.cmd == 'port':
         return port_replay(a.rec, a.out)
+    if a.cmd == 'port-dgroup':
+        return port_dgroup()
     if a.cmd == 'port-build':
         print('rp: %s' % port_build())
         return 0
