@@ -213,6 +213,29 @@ working platform, so the proof comes first and then guards the platform swap.
       `dosmem_reset` zeroes the arena and empties the far heap, before END.EXE and before
       GAME.EXE (after U.EXE). The ending now plays ("A glowing portal springs from the
       floor!").
+
+## 22. Port hazards from the code review (2026-11-26, by the coordinator)
+
+docs/CODE_REVIEW.md (146 findings, by an Opus worker) ranks the port hazards. The first three:
+- **CR-020: `AddObj` has no return,** yet about 25 callers use its value (DOS: AX from the inner
+  call). Now `return AddMapObj(...)` / `return AddInvObj(...)` in object.c: the same bytes under
+  Turbo C (gate 3 of 3; the replay build too, RGAME.EXE `b2975855` unchanged, so no recording
+  changes).
+- **CR-008: the fountain reads 10 entries of a 5-entry table.** DOS reads the next words as near
+  pointers: entries 5 and 6 are DS:0100 and DS:0101, zero bytes in every dump, so an empty wish
+  matches (shown in DOS: an empty wish gets "Failed", the matched-but-unlucky answer; "xyz" gets
+  "No effect"). The host read 5 wild pointers. u6port.h's `FOUNTAIN_WISH(i)` is the original
+  tokens under Turbo C and "" past the table on the host. Session `[fountain]`
+  (tests/replay/fountain.rec): an empty wish, "xyz", three times "food"; DOS: recording =
+  replay 1 = replay 2; the port identical to DOS in all four builds.
+- **CR-009: a string LET from an array, `lstack[-1]`.** The disassembly of parse_factor (the
+  normal build, TALKDR_TEXT 0ECB:050E) shows `sub sp,92h; push si; push di` with lstack[0] at
+  [bp-92h] and sidx in SI: lstack[-1] is the caller's saved DI (low word) and SI (high word). In
+  DOS, OP_DATA with one operand reads them as the array address and writes the 16-bit result over
+  them, so the caller's DI and SI come back changed. Copying that exactly needs the callers'
+  register use (TALK_ResolveAddress, execute_op) and a shop session to show it in DOS. Open.
+- Noted on the way: the user's gamedata/GAME.EXE (sha1 360a999a...) is another version than the
+  one the sources rebuild (5129af96...); the disassembly used build/dos/game/GAME.EXE.
 - Goldens from DOS (twice, identical) committed with their recordings.
 - `make test` = gate + port build + every session against its golden; pre-push hook; CI
   on Linux and Windows from an encrypted bundle (Exhume's ci-bundle).
@@ -269,6 +292,20 @@ model (runtime/port/sys/enhance.c and enhance.h, Underworld Exhumed's docs/ENHAN
     session; STACK_JUNK_FILL already gives it a fixed value, a fix would not add it at all).
   
   Each needs a session that reaches it, and the fix must be shown to change only what it says.
+- **A guard before burying a moonstone** (the user, 2026-11-26): ask "Bury the moonstone here?"
+  in objcmd.c's UseMoonstone before it buries. It reads a key, so it changes the inputs: a flag
+  like any other, carried by the recordings it is on in. What the code says about burying:
+  - UseMoonstone buries only on grass and earth tiles (else "Cannot be buried here!"); it puts
+    the stone on the ground as an ordinary map object and records `MoonstonePos[phase]`;
+  - it is not irreversible: Get takes the stone back and clears its MoonstonePos
+    (objcmd.c:989). Moonstones carry status 01h (OK to take), not LOCAL, so nothing deletes
+    them (OBJ_PurgeFarLocals only touches NPC slots E0h..FFh);
+  - while either moon is above the horizon, UpdateMoongates keeps a moongate on the stone,
+    which covers it: it can be taken when both moons are down;
+  - it can be found: its moongate shows where it is; entering any moongate leads to the stone
+    of the phase of the moon nearer the zenith (npctrack.c's GateTravel(TrammelPhase or
+    FeluccaPhase)); the Gate Travel spell goes to stone N directly. So the trouble is that the
+    player loses track, and that phase's moongates lead to the burial place from then on.
 - **Then the rest:** presentation (scaling filters, a wider view), timing (a faster pace, no
   waits), gameplay changes (quality of life). Each needs the same flag, session and log line.
 - **Exit:** every fix is a flag, off by default; all sessions identical to DOS with all flags off.

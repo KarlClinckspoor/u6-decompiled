@@ -748,10 +748,11 @@
 /*create an object from a status and a struct coord (map location or
   container depending on the status); does not return the new object*/
 /*C_1184_134C*/AddObj(int16 status, struct coord location, int16 shapeType, int16 shapeNum, int16 amount) {
+	/*the original has no return (CR-020): its callers take the inner call's AX*/
 	if((status & 0x18) == LOCXYZ)
-		AddMapObj(shapeType | (shapeNum << 10), status, amount, GetCoordX(location), GetCoordY(location), GetCoordZ(location));
+		return AddMapObj(shapeType | (shapeNum << 10), status, amount, GetCoordX(location), GetCoordY(location), GetCoordZ(location));
 	else
-		AddInvObj(shapeType | (shapeNum << 10), status, amount, GetCoordAssoc(location));
+		return AddInvObj(shapeType | (shapeNum << 10), status, amount, GetCoordAssoc(location));
 }
 
 /*create an object on the map at (x, y, z) (in front of the objects

@@ -2637,7 +2637,7 @@ uint16 ShrineY[] = {0x108,0x170,0x394,0x02C,0x064,0x33C,0x000,0x360};
 		/*bug: FountainWishes has only 5 entries, the loop reads 5 more pointers
 		past its end (whatever follows in the data segment)*/
 		for(i = 0; i < 10/*bug?*/; i ++) {
-			if(stricmp(wish, FountainWishes[i]) == 0) {
+			if(stricmp(wish, FOUNTAIN_WISH(i)) == 0) {/*u6port.h: past the table, what DOS reads*/
 				if(OSI_rand(0, 4) == 0) {
 					CON_printf(/*25BC*/"\n\nYou got food");
 					STAT_ComputeWeights(actor);

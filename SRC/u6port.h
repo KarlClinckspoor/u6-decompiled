@@ -90,6 +90,19 @@ void u6_writable(char *buf, const char *init, unsigned n);
 #define WRITABLE_STR(s) ({ static char writable_[] = s; u6_writable(writable_, s, sizeof writable_); writable_; })
 #endif
 
+/*FOUNTAIN_WISH(i): objcmd.c's UseFountain compares the wish with FountainWishes[0..9], a table
+  of 5 (docs/CODE_REVIEW.md, CR-008). DOS reads past it the next words, UnboardDirX/Y, as near
+  pointers: entries 5 and 6 are DS:0100 and DS:0101, zero bytes of Turbo C's run-time data (in
+  every dump), so an empty wish matches entry 5; 7 to 9 are DS:FF00 and DS:FFFF, the stack, whose
+  text a typed wish matches only by chance. The host's table is 5 native pointers followed by
+  unrelated memory: past it the port gives "", which entries 5 and 6 are in DOS. The original
+  tokens under Turbo C, so the gate is unchanged*/
+#ifdef __TURBOC__
+#define FOUNTAIN_WISH(i) FountainWishes[i]
+#else
+#define FOUNTAIN_WISH(i) ((i) < 5 ? FountainWishes[i] : "")
+#endif
+
 /*STACK_JUNK_FILL(a, v): Exhume's STACK_JUNK_SET (portable.h) for every element of a local
   array the original may read before it sets it: nothing under Turbo C, so GAME.EXE's bytes
   are the same (the gate proves it); in the replay build and the port each element starts as

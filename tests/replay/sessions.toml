@@ -84,6 +84,16 @@ setup = ["teleport 923 856 0", "give avatar 0x18A 0", "give avatar 0x18C 0", "gi
          "put 0x49 0 0 4", "put 0x49 0 0 5", "put 0x49 0 0 6", "put 0x49 0 0 7"]
 keys = "up up up left left up d right right enter up enter right right right right d right right enter up enter u tab enter space space"
 
+# The fountain (docs/CODE_REVIEW.md, CR-008): UseFountain compares the wish with 10 entries of a
+# 5-entry table. In DOS entries 5 and 6 point at zero bytes (DS:0100, DS:0101), so an empty wish
+# matches; the port gives "" past the table (u6port.h's FOUNTAIN_WISH). The party at (309, 379),
+# below the castle courtyard's fountain at (309, 378): an empty wish, a wish no entry matches,
+# then "food" three times (each a 1 in 5 chance of a portion of meat)
+[fountain]
+feed = 40
+setup = ["teleport 309 379 0"]
+keys = "u up Y enter space u up Y t:xyz enter space u up Y t:food enter space u up Y t:food enter space u up Y t:food enter space"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no
