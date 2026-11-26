@@ -10,7 +10,6 @@
  */
 #include "osi.h"
 #include "dosint.h"
-#include "../replay/replay.h"
 
 static uint16_t seed_lo = 1;   /* D_3088 */
 static uint16_t seed_hi = 0;   /* D_308A */
@@ -77,13 +76,14 @@ uint16_t osi_seed_from_time(uint8_t hour, uint8_t minute, uint8_t second, uint8_
 	return (uint16_t)((ax ^ 0x91EBu) & 0x0FFFu);
 }
 
-/* The seed is what the game reads from the outside world: it goes through the replay. */
+/* The seed is what the game reads from the outside world: main.c records it
+ * (RECORDED16(RV_SEED, OSI_timeSeed())), and a replay never calls this. */
 int OSI_timeSeed(void)
 {
 	uint8_t h, m, s, hs;
 
 	dos_time_live(&h, &m, &s, &hs);
-	return (int16_t)(uint16_t)rp_value(RP_SEED, osi_seed_from_time(h, m, s, hs));
+	return (int16_t)osi_seed_from_time(h, m, s, hs);
 }
 
 /* For tests: the generator's state. */

@@ -13,8 +13,10 @@
    - the random state is port/sys/rand.c's two words (u6_rand_seed);
    - DS:0 and the vector table are stand-ins (port/sys/rpport.c): the port has neither, and
      tools/replay.py checks NULL in each build alone;
-   - the files: REPLAY.IN is the recording given with --dos-replay, STATE.OUT and the others go
-     to the port's home folder (rpport.c), where tools/replay.py's run_port looks;
+   - the files (rpport.c, chosen by port/sys/session.c): REPLAY.IN is the recording given with
+     --replay or --dos-replay; RECORD.OUT and STATE.OUT go to --record's folder, else to the
+     folder the game runs in (the home folder, where tools/replay.py's run_port looks); the
+     black box's RECORD.OUT goes to its session folder, by replay.c's rp_blackbox_name;
    - the dump (task 1 of Phase 2): GSTA (gamestat.c's packed block, port/game/gamestat_port.c,
      DOS's offsets), OBJS and NPCS (BSS.ASM's arrays in the port's BSS block, port/sys/bss.c,
      and the far blocks in the DOS arena), SEGS (the arena's segments of the same blocks), the
@@ -87,8 +89,8 @@ int u6_rp_open_out(const char *name, int flags);
 #define RP_OPEN_IN(name)        u6_rp_open_in(name)
 #define RP_OPEN_OUT(name, fl)   u6_rp_open_out(name, fl)
 
-/* replay.c's port-only references (Exhume's runtime has them; this port does not yet):
-   no enhancements, no cheats, no black box through replay.c */
+/* replay.c's port-only references (Exhume's runtime has them; this port does not): no
+   enhancements, no cheats (test set-ups go through the saved game instead) */
 extern int enhance_on;
 char *enhance_names(int on, char *buf, int n);
 int cheat_scripted(void);

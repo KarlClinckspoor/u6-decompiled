@@ -155,20 +155,19 @@ extern int16_t SoundFlag;
  * timed in real time from it, so it only changes their rounding; see OSILIB.md. */
 extern uint16_t osi_cpu_speed;
 
-/* The 18.2065 Hz timer tick counter (ticks since plat_init), read through
- * rp_value(RP_TICKS). Every read is a recorded value. */
+/* The 18.2065 Hz timer tick counter (ticks since plat_init); under replay a virtual one that
+ * OSI_delay's waits advance (timer.c). Not recorded: nothing the game decides on reads it. */
 uint32_t osi_ticks(void);
-/* 1 while a replay gives the inputs (rp_mode RP_REPLAY and not run out, or a --dos-replay
- * run): no waiting, no live input read, the speaker silent. */
+/* 1 while Exhume's replay.c replays a recording (--replay, --dos-replay): no live input read,
+ * the busy loops return at once, the speaker silent. */
 int osi_replaying(void);
-/* --dos-replay: the whole run is Exhume's replay of a DOS recording; the tick count is a
- * virtual one that OSI_delay's waits advance (timer.c). */
-void osi_set_dos_replay(int on);
-/* The same, live, not recorded: for code that only paces itself (no game decision). */
+/* the session (session.c): a replay starts (1), or the player takes it over (0) */
+void osi_set_replay(int on);
+/* how fast a replay plays: 1, 2, 4, 8 times its own pace, or 0 as fast as the host can */
+void osi_set_replay_speed(int speed);
+int osi_replay_speed(void);
+/* The live tick count (U.EXE's part, which no replay covers). */
 uint32_t osi_ticks_live(void);
-/* Called under replay with each tick value the game reads (0: none): lets the session
- * pace a replay (session_pace_tick); without it a replay runs as fast as it can. */
-extern void (*osi_replay_tick_hook)(uint32_t tick);
 
 /* Internal to port/sys. */
 void osi_wait_tick(uint32_t seen);  /* one pass of a tick wait (seen: the tick read): pump, sleep */

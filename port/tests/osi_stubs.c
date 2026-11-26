@@ -180,6 +180,6 @@ extern int16_t u6_mouse_regs[3];
 void u6_mouse_poll(void);
 void rp_mouse(void) { u6_mouse_poll(); }
 int rp_mbuttons(void) { return u6_mouse_regs[2]; }
-uint32_t u6_rp_recorded(int id, uint32_t v) { (void)id; return v; }
+uint32_t rp_value(int id, uint32_t v) { (void)id; return v; }
 /* the graphics driver's last entry number (port/game/rpport.c), which port/sys/mouse.c sets */
 unsigned short u6_gr_entry;

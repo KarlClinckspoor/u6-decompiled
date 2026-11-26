@@ -29,9 +29,11 @@ unsigned char u6_rp_keystate[1];
 int16_t u6_rp_joy[4];
 uint32_t u6_rp_clock;
 
-/* port/sys/portmain.c sets it from --dos-replay: the recording, read as replay.c's REPLAY.IN */
+/* the session sets them (u6_rp_set_replay, u6_rp_set_record, below): the recording read as
+ * replay.c's REPLAY.IN, and --record's folder */
 const char *u6_rp_replay_path;
-const char *session_home(void);
+static const char *u6_rp_out_dir;
+const char *session_game_home(void);
 long dos_linear(const volatile void *p);
 extern uint8_t *dos_base;
 
@@ -103,9 +105,11 @@ void u6_port_rp_shutdown(void)
 	OBJ_DeleteTmpBlocks();
 }
 
+/* replay.c's other files (STATE.OUT, RECORD.OUT, TRACE.OUT): in --record's folder, else in the
+ * folder the game runs in (the home folder, or a replay's) */
 static void home_path(char *out, size_t n, const char *name)
 {
-	const char *h = session_home();
+	const char *h = u6_rp_out_dir ? u6_rp_out_dir : session_game_home();
 	snprintf(out, n, "%s/%s", h && h[0] ? h : ".", name);
 }
 
@@ -193,24 +197,40 @@ void u6_rp_heap_bounds(uint32_t b[4])
 	b[3] = lin(Mem_BP);
 }
 
-/* RECORDED for the port's own C (port/sys/mouse.c), where the port's older recorder's
- * rp_value macro (port/replay/replay.h) takes the name */
-uint32_t u6_rp_recorded(int id, uint32_t v)
-{
-	return rp_value(id, v);
-}
-
-/* replay.c's mode, which the port's main chooses before the game starts (replay.c: RP_OFF 0,
- * RP_REPLAY 2): off unless --dos-replay names a recording made by the replay DOS build */
+/* replay.c's mode, which the session (port/sys/session.c) chooses before the game starts
+ * (replay.c: RP_OFF 0, RP_RECORD 1, RP_REPLAY 2):
+ *   - off: no recording (--no-recording, the setting off), and U.EXE's and END.EXE's parts;
+ *   - record (--record DIR): RECORD.OUT and STATE.OUT, the dumps, go to DIR, and the stop key
+ *     (F9) ends the session;
+ *   - the black box (every player's session): RECORD.OUT alone, at the path given, no dumps,
+ *     no stop key (replay.c's rp_blackbox);
+ *   - replay: REPLAY.IN is the file given (a RECORD.OUT of the port or of the replay DOS
+ *     build); with watch set (a replay shown to the player) no dumps are written. */
 extern int16 rp_request;
+extern int16 rp_blackbox;
+extern const char *rp_blackbox_name;
 void u6_rp_set_off(void)
 {
 	rp_request = 0;
+	rp_blackbox = 0;
 }
-void u6_rp_set_dos_replay(const char *path)
+void u6_rp_set_record(const char *dir)
 {
-	u6_rp_replay_path = path;
+	u6_rp_out_dir = dir;
+	rp_request = 1;
+	rp_blackbox = 0;
+}
+void u6_rp_set_blackbox(const char *file)
+{
+	rp_blackbox_name = file;
+	rp_request = 1;
+	rp_blackbox = 1;
+}
+void u6_rp_set_replay(const char *file, int watch)
+{
+	u6_rp_replay_path = file;
 	rp_request = 2;
+	rp_blackbox = (int16)(watch != 0);
 }
 
 /* portable.h's FAR_COPY, which replay.c's dump_far copies through: Exhume's runtime resolves

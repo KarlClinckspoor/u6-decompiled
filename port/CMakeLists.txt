@@ -52,7 +52,7 @@ endforeach()
 # build compiles it), with the port's bindings (include/rpport.h, through SRC/rpgame.h) and
 # their helpers (game/rpport.c): PLAN-exact-port.md, Phase 2
 set(EXHUME_REPLAY ${CMAKE_CURRENT_SOURCE_DIR}/../exhume/runtime/replay/replay.c)
-add_library(u6game OBJECT ${GAME_C} game/digest.c game/gamestat_port.c game/monsdata_port.c
+add_library(u6game OBJECT ${GAME_C} game/gamestat_port.c game/monsdata_port.c
 	game/rpport.c game/dgroup_port.c ${TU_WRAP} ${EXHUME_REPLAY})
 target_include_directories(u6game PRIVATE ${GAME_SRC} ${CMAKE_CURRENT_SOURCE_DIR}/include ${EXHUME_INC})
 foreach(f ${GAME_C})
@@ -129,7 +129,7 @@ endif()
 
 # ---- the port ----
 file(GLOB PORT_C
-	sys/*.c gfx/*.c replay/*.c ui/*.c u/*.c end/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c
+	sys/*.c gfx/*.c ui/*.c u/*.c end/*.c platform/hostfs.c platform/sdl2/plat_sdl2.c
 	third_party/nuked-opl3/opl3.c)
 add_executable(u6 ${PORT_C} $<TARGET_OBJECTS:u6game> $<TARGET_OBJECTS:u6u> $<TARGET_OBJECTS:u6end>)
 target_include_directories(u6 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/platform)

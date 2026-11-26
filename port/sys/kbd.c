@@ -10,14 +10,12 @@
  *                               -> 0x100 + scan code (keypad digits become directions)
  *   else                        -> the ASCII code
  *
- * Port: plat_key_get() gives the BIOS words. The word KBD_GetKey ends up with (0 when the
- * buffer was empty) is the value read from the outside world: one rp_value(RP_KEY) per
- * call. Each call is a poll point: plat_pump() runs first so that the host's events are
- * in. Under replay the live keyboard is not read (keys pressed then stay for the overlay).
+ * Port: plat_key_get() gives the BIOS words. Each call is a poll point: plat_pump() runs
+ * first so that the host's events are in. The game calls it through KEY (Exhume's rp_key),
+ * which records its result, and under replay gives the recorded one without calling it.
  */
 #include "osi.h"
 #include "../platform/plat.h"
-#include "../replay/replay.h"
 
 static uint16_t kbd_live(int keepLastOnly)
 {
@@ -54,11 +52,10 @@ static int kbd_translate(uint16_t ax)
 
 int KBD_GetKey(int keepLastOnly)
 {
-	uint16_t live, ax;
+	uint16_t ax;
 
 	plat_pump();
-	live = osi_replaying() ? 0 : kbd_live((uint16_t)keepLastOnly != 0);
-	ax = (uint16_t)rp_value(RP_KEY, live);
+	ax = osi_replaying() ? 0 : kbd_live((uint16_t)keepLastOnly != 0);
 	osi_poll_idle(ax != 0);
 	return kbd_translate(ax);
 }

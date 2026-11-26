@@ -1,10 +1,9 @@
 /* Helpers for osilib_diff.py (ctypes): batch calls into port/sys so that the Python side
  * only compares arrays. Built into libosi_test.so with the port/sys files, osi_stubs.c,
- * port/gfx/vgadac.c and port/replay/replay.c (see run_osilib_tests.sh). */
+ * and port/gfx/vgadac.c (see run_osilib_tests.sh). */
 #include "../sys/osi.h"
 #include "../sys/dosfs.h"
 #include "../sys/dosmem.h"
-#include "../replay/replay.h"
 
 #include <string.h>
 
@@ -69,4 +68,5 @@ uint32_t t_trace_count(void) { return ntrace; }
 const uint32_t *t_trace(void) { return trace; }
 uint64_t t_loops(void) { return osi_loop_count; }
 void t_set_cpu_speed(uint16_t s) { CpuSpeed = s; }
-void t_set_rp_mode(int m) { rp_mode = m; }
+/* 1: as under replay, the delays do not wait (timer.c); 0: live */
+void t_set_replay(int on) { osi_set_replay(on); osi_set_replay_speed(0); }

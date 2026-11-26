@@ -1,12 +1,11 @@
 /* Unit tests of port/sys: the DOS file system layer (dosfs), the OSI file error protocol,
- * OSI_delay and the timer (simulated clock, record and replay), dosmem and dosint.
+ * OSI_delay and the timer (simulated clock, live and under replay), dosmem and dosint.
  * Built and run by run_osilib_tests.sh; POSIX host (temporary folders, fork). */
 #define _POSIX_C_SOURCE 200809L
 #include "../sys/osi.h"
 #include "../sys/dosfs.h"
 #include "../sys/dosmem.h"
 #include "../sys/dosint.h"
-#include "../replay/replay.h"
 #include "../gfx/vgadac.h"
 
 #include <dirent.h>
@@ -497,78 +496,38 @@ static void test_timer(void)
 	stub_set_fake_clock(0, 0);
 }
 
-/* ---- record and replay: the game sees the recorded ticks and keys, without waiting ---- */
-
-static void scripted(int16_t *out, int n)
-{
-	int i;
-	OSI_delay_init();
-	for (i = 0; i < n; i++) {
-		if (i % 3 == 0)
-			stub_key_push((uint16_t)(0x1E61 + i));
-		out[2 * i] = (int16_t)KBD_GetKey(i & 1);
-		OSI_delay(1 + (i % 2));
-		out[2 * i + 1] = (int16_t)osi_ticks();
-	}
-}
+/* ---- under replay: a virtual clock that the waits advance, no live input, no sleeping;
+ * when the player takes over, the live clock goes on from the virtual one ---- */
 
 static void test_replay(void)
 {
-	char path[256];
-	int16_t rec[80], rep[80];
-	int st;
-	pid_t pid;
-	uint32_t ms0;
+	uint32_t ms0, t0, t;
+	int i, keys = 0;
 
-	pjoin(path, sizeof path, overlay, "RECORD.U6R");
-	pid = fork();
-	if (pid == 0) {
-		FILE *f;
-		stub_set_fake_clock(1, 1000);
-		rp_start_record(path);
-		scripted(rec, 40);
-		rp_flush();
-		pjoin(path, sizeof path, overlay, "expect.bin");
-		f = fopen(path, "wb");
-		fwrite(rec, sizeof rec, 1, f);
-		fclose(f);
-		_exit(0);
-	}
-	waitpid(pid, &st, 0);
-	CHECK(WIFEXITED(st) && WEXITSTATUS(st) == 0);
-	{
-		FILE *f;
-		char p2[256];
-		pjoin(p2, sizeof p2, overlay, "expect.bin");
-		f = fopen(p2, "rb");
-		CHECK(f != 0);
-		if (f) {
-			CHECK_EQ(fread(rec, sizeof rec, 1, f), 1);
-			fclose(f);
-		}
-	}
-	CHECK_EQ(rp_start_replay(path), 0);
-	stub_set_fake_clock(1, 777777);   /* another time, other live keys: not seen */
+	stub_set_fake_clock(1, 777777);
 	stub_key_clear();
-	stub_key_push(0x2C7A);
+	stub_key_push(0x2C7A);            /* a live key: not read under replay */
+	osi_set_replay(1);
+	osi_set_replay_speed(0);
+	CHECK(osi_replaying());
 	ms0 = stub_sleep_total();
-	scripted(rep, 40);
-	CHECK(memcmp(rec, rep, sizeof rec) == 0);
-	CHECK_EQ(stub_sleep_total(), ms0);   /* no sleeping under replay */
-	/* the recording is over: the live clock takes over from the last replayed tick */
-	{
-		uint32_t last = (uint32_t)(uint16_t)rep[79], t;
-		t = osi_ticks();
-		CHECK(rp_finished());
-		CHECK_EQ((uint16_t)t, (uint16_t)last);
-		OSI_delay(2);
-		t = osi_ticks();
-		CHECK_EQ((uint16_t)t, (uint16_t)(last + 2));
-		CHECK(stub_sleep_total() - ms0 <= 115);
+	OSI_delay_init();
+	t0 = osi_ticks();
+	for (i = 0; i < 40; i++) {
+		keys += KBD_GetKey(i & 1) != 0;
+		OSI_delay(1 + (i % 2));
 	}
-	rp_take_over();
-	OSI_delay(1);
-	CHECK(stub_sleep_total() - ms0 <= 175);
+	t = osi_ticks();
+	CHECK_EQ(keys, 0);
+	CHECK_EQ(t - t0, 60u);            /* 20 waits of 1 tick and 20 of 2 */
+	CHECK_EQ(stub_sleep_total(), ms0);   /* no sleeping under replay */
+	osi_set_replay(0);                /* taken over */
+	CHECK(!osi_replaying());
+	CHECK_EQ(osi_ticks(), t);         /* the live clock goes on from the virtual one */
+	OSI_delay(2);
+	CHECK_EQ(osi_ticks() - t, 2u);
+	CHECK(stub_sleep_total() - ms0 <= 115);
+	CHECK_EQ(KBD_GetKey(0), 0x7A);    /* the live key, now read */
 	stub_set_fake_clock(0, 0);
 	stub_key_clear();
 }

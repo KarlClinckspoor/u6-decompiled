@@ -88,33 +88,43 @@ usual GOG folders.
 
 ## Recordings and replays
 
-Every session is recorded (unless turned off): `recordings/YYYYMMDD-HHMMSS/` in the home
-folder holds `RECORD.U6R` and `stage/`, a copy of the saved game the session started from.
-The newest five are kept. A replay copies `stage/` into a temporary folder (your own save is
-never touched) and feeds the game the recorded inputs.
+Every session is recorded (unless turned off), the black box: `recordings/YYYYMMDD-HHMMSS/`
+in the home folder holds `RECORD.OUT` and `stage/`, a copy of the saved game the session
+started from. The newest five are kept. The game's exit, closing the window and a crash all
+close the recording, so a crash can be replayed up to the moment it happened. A replay copies
+`stage/` into a temporary folder (your own save is never touched) and feeds the game the
+recorded inputs; the port exits at the end of the recording, unless you take over (F11,
+Replay) and play on from there.
 
-What is recorded is every value the game reads from outside: the timer ticks, the keys and
-the shift state, the mouse, the random seed, the date and time. Each is a stream of
-(value, repeat count) runs. Every 4096 reads the recording also stores a digest of the
-game's state (objects, NPCs, party, clock, map position, the random generator), and the
-replay compares it: a replay that went another way says so (and `u6 --replay` exits with
-code 3). Because the game's C is compiled as Turbo C saw it (16-bit `int`, packed structs,
-Borland's random generator, the DOS memory layout where the game depends on it), a
-recording made on Windows replays identically on Linux and the other way round.
+The recorder is Exhume's `runtime/replay/replay.c`, the same code the replay DOS build runs
+(docs/replay.md), so a port recording and a DOS recording are in the same format. It records
+every value the game's own code reads from outside: the keys, the mouse, the random seed, and
+the few machine values the game asks DOS and the BIOS for (the DOS version, the drives, the
+memory). The timer ticks are not among them: they only pace the game, so a replay runs on a
+virtual clock, as fast as you ask. Because the game's C is compiled as Turbo C saw it (16-bit
+`int`, packed structs, Borland's random generator, the DOS memory layout where the game
+depends on it), a recording made on Windows replays identically on Linux and the other way
+round.
 
     u6 --replay 20261025-093612           # a recording in the home folder, at its own pace
     u6 --replay DIR --speed 0 --hidden    # as fast as possible, no window
-    u6 --replay DIR --continue            # play on from where the recording ends
+    u6 --replay DIR --out OUT             # run it in OUT, writing its dumps (STATE.OUT) there
+    u6 --record DIR --keys "..."          # a test session, with dumps; F9 ends it
+
+A `--record` session also writes the state dumps (`STATE.OUT`, docs/replay.md) at every key,
+mouse button change and at its end; its replay with `--out` writes the same dumps, and
+`tools/replay.py compare` (or `python tools/rp.py port-self OUT`) compares them.
 
 ## Options
 
     --data DIR          the game folder (remembered)
     --home DIR          where settings, saved games and recordings go
     --replay REC        play a recording (a folder, or a name in recordings/)
+    --out DIR           with --replay: run it in DIR and write its dumps there (tests)
     --speed N           replay speed: 1, 2, 4, 8, or 0 for as fast as possible
-    --continue          after a replay ends, keep playing (default: quit)
-    --record DIR        record this session into DIR
-    --dos-replay FILE   replay a recording of the replay DOS build (docs/replay.md)
+    --record DIR        record this session into DIR, with dumps; F9 ends it (tests)
+    --dos-replay FILE   replay a RECORD.OUT (the replay DOS build's or the port's) from the
+                        saved game in --home, writing STATE.OUT there (docs/replay.md)
     --no-recording      no black box recording this time
     --hidden            no window (replays, tests)
     --settings          open the settings screen before the game
@@ -124,7 +134,8 @@ recording made on Windows replays identically on Linux and the other way round.
     --ending Y,M,D      play the ending (END.EXE), as after Y years, M months and D days
     --screenshot FILE   write the screen as a BMP when the session ends (tests)
     --run-ms N          end the session after N ms (tests)
-    --keys SCRIPT       type keys at given times (tests): "1500:up 2000:a 2500:^s"
+    --keys SCRIPT       type keys at given times (tests): "1500:up 2000:a 2500:^s"; each
+                        key waits until the game has taken the one before
 
 ## How it is put together
 
@@ -160,8 +171,9 @@ recording made on Windows replays identically on Linux and the other way round.
   `END.EXE` runs it in the same process, after the session (the ending is not recorded).
 - `port/sys/adlib.c`: the AdLib driver U6ADLIB.DRV in C, run at 60 Hz in the audio
   callback, through Nuked OPL3 (`port/third_party/nuked-opl3`, LGPL 2.1).
-- `port/replay/`: the recording format; `port/ui/`: the settings screen, the settings
-  file; `port/platform/`: `plat.h` and its SDL2 backend.
+- Recording and replaying: Exhume's `runtime/replay/replay.c`, with the port's bindings
+  (`port/include/rpport.h`, `port/game/rpport.c`); `port/ui/`: the settings screen, the
+  settings file; `port/platform/`: `plat.h` and its SDL2 backend.
 - Not ported: the other music drivers (Roland, CMS, Tandy, ...: the port plays AdLib), the
   graphics modes other than VGA. The parts in `U.EXE` and `END.EXE` are not recorded; the
   recording is the game's.
@@ -175,5 +187,8 @@ recording made on Windows replays identically on Linux and the other way round.
   driver and OSI library against MCGADRV.BIN and `U.EXE`'s own routines in unicorn.
 - `python3 port/tests/adlib_diff.py`: the AdLib driver's OPL writes against U6ADLIB.DRV's,
   every song.
-- Replays: a recording made with `--keys` and replayed with `--hidden --speed 0` must report
-  "all identical".
+- Replays: `python tools/rp.py port-self OUT [--all]` records a session with `--record` and
+  `--keys`, replays it with `--out`, and compares the dumps and the saved games; then the same
+  keys as a black box session, whose replay must leave the same saved game.
+  `python tools/rp.py port-check OUT --all` replays DOS's recordings in the port
+  (docs/replay.md).

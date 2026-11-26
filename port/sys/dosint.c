@@ -3,7 +3,6 @@
 #include "dosmem.h"
 #include "osi.h"
 #include "../platform/plat.h"
-#include "../replay/replay.h"
 #include "../gfx/vgadac.h"
 
 #include <errno.h>
@@ -91,24 +90,20 @@ static void int21(union REGS *r, struct SREGS *s)
 	case 0x2A: { /* get date */
 		uint16_t y;
 		uint8_t m, d, w;
-		uint32_t v;
 		dos_date_live(&y, &m, &d, &w);
-		v = rp_value(RP_DATE, ((uint32_t)y << 16) | ((uint32_t)m << 8) | d);
-		r->x.cx = (uint16_t)(v >> 16);
-		r->h.dh = (uint8_t)(v >> 8);
-		r->h.dl = (uint8_t)v;
-		r->h.al = (uint8_t)rp_value(RP_DATE, w);
+		r->x.cx = y;
+		r->h.dh = m;
+		r->h.dl = d;
+		r->h.al = w;
 		break;
 	}
 	case 0x2C: { /* get time */
 		uint8_t h, m, sec, hs;
-		uint32_t v;
 		dos_time_live(&h, &m, &sec, &hs);
-		v = rp_value(RP_DATE, ((uint32_t)h << 24) | ((uint32_t)m << 16) | ((uint32_t)sec << 8) | hs);
-		r->h.ch = (uint8_t)(v >> 24);
-		r->h.cl = (uint8_t)(v >> 16);
-		r->h.dh = (uint8_t)(v >> 8);
-		r->h.dl = (uint8_t)v;
+		r->h.ch = h;
+		r->h.cl = m;
+		r->h.dh = sec;
+		r->h.dl = hs;
 		break;
 	}
 	case 0x30:   /* DOS version */
@@ -337,9 +332,10 @@ int dos_execl_list(int n, const char *const *args)
 		if (exec_handler)
 			exec_handler(args[0], argc, args + 1);
 	} else {
-		/* the game retries forever: wait for the user (or the replay) to end it */
+		/* the game retries forever: wait for the user to end it (a replay ends at its last
+		 * input) */
 		plat_pump();
-		if (plat_quit_requested() || (rp_mode == RP_REPLAY && rp_finished()))
+		if (plat_quit_requested())
 			dos_exit(0);
 		if (!osi_replaying())
 			plat_sleep_ms(20);

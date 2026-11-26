@@ -15,9 +15,8 @@
  * rp_mbuttons, in the game's 320x200 pixels; and MOUSE_INIT's reset (int 33h AX=0) gives
  * its AX (FFFFh: a driver) and BX (the buttons) through RECORDED, ids RV_MOUSE_RESET and
  * RV_MOUSE_NBTN, and returns BX, as MOUSE.ASM does. So a session recorded in DOS replays
- * here call for call (port/include/rpport.h). The port's own recording (port/replay) then
- * takes the values as before, until Phase 2 retires it: RP_MOUSE_X, RP_MOUSE_Y and
- * RP_MOUSE_BTN, and whether a mouse is present as RP_MISC.
+ * here call for call (port/include/rpport.h), and the port's own recordings are in the
+ * same format.
  *
  * Showing and hiding nest with a counter (_nMouseSem): -1 hidden, 0 shown. Showing
  * saves the background under the pointer (driver entry 0Ch) and draws it (30h); hiding
@@ -32,19 +31,18 @@
 #include "dosmem.h"
 #include "../gfx/mcga.h"   /* GRDRV_0C, GRDRV_0F, GRDRV_30 */
 #include "../platform/plat.h"
-#include "../replay/replay.h"
 
-/* Exhume's replay.c (its hooks, portable.h) and port/game/rpport.c */
+/* Exhume's replay.c (its hooks, portable.h: MOUSE, MBUTTONS and RECORDED) */
 void rp_mouse(void);
 int rp_mbuttons(void);
-uint32_t u6_rp_recorded(int id, uint32_t v);
+uint32_t rp_value(int id, uint32_t v);
 #define RV_MOUSE_RESET 12   /* SRC/hookgame.h */
 #define RV_MOUSE_NBTN  13
 extern unsigned short u6_gr_entry;   /* port/game/rpport.c: GrDriver's offset word in DOS */
 
 /* the poll (rpport.h's RP_MOUSE_READ, MOUSERP.ASM's _u6_mouse_poll): x, y and the buttons of
- * the live mouse, in the game's pixels, where rp_mouse and rp_mbuttons take them; a replay of
- * the port's own recording reads no live mouse */
+ * the live mouse, in the game's pixels, where rp_mouse and rp_mbuttons take them; a replay
+ * never calls it */
 int16_t u6_mouse_regs[3];
 void u6_mouse_poll(void)
 {
@@ -111,9 +109,9 @@ int MOUSE_INIT(struct tMouse *mouse)
 	mouse->installed = 0;
 	/* int 33h AX=0: reset, AX = FFFFh if a driver is there, BX = number of buttons */
 	present = plat_mouse_present();
-	ax = (uint16_t)u6_rp_recorded(RV_MOUSE_RESET, present ? 0xFFFFu : 0u);
-	bx = (uint16_t)u6_rp_recorded(RV_MOUSE_NBTN, present ? 2u : 0u);
-	if (!rp_value(RP_MISC, ax ? 1u : 0u))
+	ax = (uint16_t)rp_value(RV_MOUSE_RESET, present ? 0xFFFFu : 0u);
+	bx = (uint16_t)rp_value(RV_MOUSE_NBTN, present ? 2u : 0u);
+	if (!ax)
 		return 0;
 	mouse->installed = 1;
 	nMouseSem = -1;
@@ -149,9 +147,6 @@ int MOUSE_SERVE(void)
 	b = (uint16_t)rp_mbuttons();    /* the buttons */
 	x = (uint16_t)u6_mouse_regs[0];
 	y = (uint16_t)u6_mouse_regs[1];
-	x = (uint16_t)rp_value(RP_MOUSE_X, x);
-	y = (uint16_t)rp_value(RP_MOUSE_Y, y);
-	b = (uint16_t)rp_value(RP_MOUSE_BTN, b);
 	if (((lastL ^ b) & 1) == 0 && ((lastR ^ b) & 2) == 0 && lastX == x && lastY == y) {
 		osi_poll_idle(0);
 		return 0;

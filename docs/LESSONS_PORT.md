@@ -4,8 +4,8 @@ The native port (`port/`, see `docs/port/PORT.md`) compiles the game's own decom
 the same files that still build byte-identical DOS programs, for 64-bit Windows and Linux on
 SDL2. It runs all three programs of the game, `U.EXE` (menu, introduction, character
 creation), `GAME.EXE` and `END.EXE` (the ending), in one executable, with the AdLib music, a
-settings screen (F11), and a recording of every session that replays exactly on any
-platform. This file collects what the port taught.
+settings screen (F11), and a recording of every session (Exhume's format, the replay DOS
+build's) that replays exactly on any platform. This file collects what the port taught.
 
 ## 1. One source, two targets
 
@@ -105,18 +105,29 @@ In DOS, `ULTIMA6.EXE` runs `U.EXE`, which runs `GAME.EXE`, which runs `END.EXE` 
 
 ## 6. Recording and replaying exactly
 
-Every value the game reads from the outside world (timer ticks, keys, shift state, mouse,
-random seed, date and time) goes through one function that either records it or returns the
-recorded value. Every 4096 reads, a digest of the game state is stored, and a replay checks
-it. What it took to make a recording made on Windows replay identically on Linux, across
-gcc and clang, `-O0` and `-O3`:
+Every value the game reads from the outside world goes through a hook that either records it
+or returns the recorded value. The port first had a recorder of its own, below the game (timer
+ticks, keys, shift state, mouse, seed, date, a digest of the game state every 4096 reads). It
+now uses Exhume's `replay.c`, the recorder the replay DOS build runs, with its hooks in the
+game's own C (the key read, the mouse, `RECORDED` values): one format for DOS and the port, and
+state dumps that compare section by section instead of one digest. What it took to make a
+recording made on Windows replay identically on Linux, across gcc and clang, `-O0` and `-O3`:
 
 - no host-dependent value may reach the game: Borland's own `rand`, packed structs, explicit
   integer widths, the DOS memory layout;
 - no uninitialised memory may reach a file (the stack garbage above);
-- the digests make divergence visible at the first wrong step instead of hours later;
+- checks along the way (digests, then dumps at every input) make divergence visible at the
+  first wrong step instead of hours later;
 - sessions with random input, replayed across builds (and under AddressSanitizer), are the
   test.
+- **Record where the original decides, not where the port reads.** The old recorder took
+  the timer ticks, because the port's clock is real time. But nothing the game decides reads
+  them, and DOS's recordings replay without them. Recording at the game's own hooks instead of
+  the port's inputs made the port's recordings DOS's format, and dropped a stream.
+- **Test scripts must not race the program.** A key script on real time lost keys whenever the
+  game was busy: `KBD_GetKey(1)` keeps only the last key in the buffer, and a save typed as
+  ctrl+s, Y happened in one run out of three. A key now waits until the game has taken the one
+  before, as KEYFEED.COM does in DOS.
 
 ### Replaying the original DOS build (Exhume's replay build, docs/replay.md)
 

@@ -34,7 +34,6 @@
 #include "osi.h"
 #include "dosint.h"
 #include "../platform/plat.h"
-#include "../replay/replay.h"
 
 #define PIT_HZ 1193182u
 

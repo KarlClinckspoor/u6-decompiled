@@ -1,22 +1,30 @@
 /* replaces nothing: the session around the game: where its files are, the black box
  * recording of every session, replaying a recording, and what the overlay asks for
- * (overlay.h).
+ * (overlay.h). Recording and replaying are Exhume's runtime/replay/replay.c, the code the
+ * replay DOS build runs, so the port's recordings are in its format (RECORD.OUT) and a
+ * recording of either replays in the port (port/include/rpport.h, port/game/rpport.c).
  *
- * Recording: each session (unless --no-recording or the setting is off) records its
- * inputs to recordings/YYYYMMDD-HHMMSS/RECORD.U6R in the home directory, with stage/, a
- * copy of the saved game (SAVEGAME/) the session started from. The newest five are kept.
- * Replaying (--replay DIR, or the overlay's Replay tab): the saved game is copied from
- * stage/ into a fresh temporary home, so the replay never touches the player's own saves,
- * and the inputs come from RECORD.U6R.
+ * The black box: each player's session (unless --no-recording or the setting is off) is
+ * recorded to recordings/YYYYMMDD-HHMMSS/RECORD.OUT in the home directory, with stage/, a copy
+ * of the saved game (SAVEGAME/) the session started from. No dumps are written and F9 does
+ * not end it; the game's exit, the window's closing and a fault close it (rp_blackbox_close).
+ * The newest five are kept.
+ * --record DIR: the same in DIR, with the dumps (STATE.OUT), ended by F9 (a test's).
+ * Replaying (--replay DIR, or the overlay's Replay tab): the saved game is copied from stage/
+ * into a fresh temporary home, so the replay never touches the player's own saves, and the
+ * inputs come from RECORD.OUT; it writes no dumps, and the port exits at its end (or the
+ * player takes over). With --out OUT the replay runs in OUT instead and writes its dumps
+ * there, to compare with the recording's (tools/rp.py port-self).
  */
 #include "session.h"
+#include "osi.h"
 #include "adlib.h"
-#include "../replay/replay.h"
 #include "../platform/plat.h"
 #include "../platform/hostfs.h"
 #include "../ui/overlay.h"
 #include "../ui/settings.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,13 +32,25 @@
 
 #define KEEP_RECORDINGS 5
 
+/* port/game/rpport.c: replay.c's mode and files; replay.c's black box end and take-over */
+void u6_rp_set_off(void);
+void u6_rp_set_record(const char *dir);
+void u6_rp_set_blackbox(const char *file);
+void u6_rp_set_replay(const char *file, int watch);
+void rp_blackbox_close(int crashed);
+int rp_take_over(void);
+
+enum { S_OFF, S_RECORD, S_BLACKBOX, S_REPLAY };
+
 static char home[1024];        /* the port's home directory */
 static char game_home[1024];   /* the directory laid over the game folder (home, or a replay's) */
 static char rec_dir[1024];     /* this session's recording, if any */
+static char rec_file[1100];    /* its RECORD.OUT */
 static char replay_dir[1024];  /* the recording being replayed, if any */
+static char replay_file[1100];
 static char self_path[1024];
-static int replay_speed = 1;
-static uint32_t pace_first_tick, pace_start_ms, pace_have;
+static int mode = S_OFF;
+static int temp_home;          /* game_home is a temporary folder, removed at the end */
 static int took_over;
 
 const char *session_home(void) { return home; }
@@ -41,29 +61,28 @@ void session_set_home(const char *dir)
 }
 const char *session_game_home(void) { return game_home; }
 
-int session_is_replaying(void) { return rp_mode == RP_REPLAY && !rp_finished(); }
-int session_is_recording(void) { return rp_mode == RP_RECORD; }
+int session_is_replaying(void) { return mode == S_REPLAY && osi_replaying(); }
+int session_is_recording(void) { return mode == S_RECORD || mode == S_BLACKBOX; }
+
+static const char *base_name(const char *p)
+{
+	const char *s = strrchr(p, '/'), *b = strrchr(p, '\\');
+	if (b > s)
+		s = b;
+	return s ? s + 1 : p;
+}
 
 const char *session_status(void)
 {
 	static char buf[64];
-	if (rp_mode == RP_REPLAY) {
-		const char *name = strrchr(replay_dir, '/');
-		name = name ? name + 1 : replay_dir;
-		if (rp_diverged())
-			snprintf(buf, sizeof buf, "Replay DIFFERS from recording");
-		else if (rp_finished())
-			snprintf(buf, sizeof buf, "Replay ended (%u checks ok)", rp_checks_compared());
-		else
-			snprintf(buf, sizeof buf, "Replaying %.20s", name);
-	} else if (rp_mode == RP_RECORD) {
-		const char *name = strrchr(rec_dir, '/');
-		snprintf(buf, sizeof buf, "Recording %.20s", name ? name + 1 : rec_dir);
-	} else if (took_over) {
+	if (took_over)
 		snprintf(buf, sizeof buf, "Took over from the replay");
-	} else {
+	else if (mode == S_REPLAY)
+		snprintf(buf, sizeof buf, "Replaying %.20s", base_name(replay_dir));
+	else if (mode == S_RECORD || mode == S_BLACKBOX)
+		snprintf(buf, sizeof buf, "Recording %.20s", base_name(rec_dir));
+	else
 		snprintf(buf, sizeof buf, "Not recording");
-	}
 	return buf;
 }
 
@@ -97,7 +116,7 @@ int session_recordings(char names[][64], int max)
 		char p[1100];
 		if (rec_dir[0] && strstr(rec_dir, l.names[i]))
 			continue;	/* not the one being written */
-		snprintf(p, sizeof p, "%s/recordings/%s/RECORD.U6R", home, l.names[i]);
+		snprintf(p, sizeof p, "%s/recordings/%s/RECORD.OUT", home, l.names[i]);
 		if (hostfs_exists(p))
 			snprintf(names[n++], 64, "%s", l.names[i]);
 	}
@@ -165,38 +184,90 @@ static void stage_savegame(const char *stage)
 		hostfs_mkdirs(stage);
 }
 
-int session_start(const char *home_dir, const char *replay, const char *record, int black_box,
-	const char *argv0)
+/* whether f starts as a recording replay.c reads (its magic, rpport.h's RP_MAGIC_TAG) */
+static int is_recording(const char *f)
 {
-	snprintf(home, sizeof home, "%s", home_dir);
-	snprintf(game_home, sizeof game_home, "%s", home_dir);
+	char b[4];
+	FILE *fp = fopen(f, "rb");
+	int ok = fp && fread(b, 1, 4, fp) == 4 && !memcmp(b, "U6GR", 4);
+	if (fp)
+		fclose(fp);
+	return ok;
+}
+
+/* A fault in the port: the recording's buffered runs are written and its file closed, so the
+ * black box holds the session up to the fault, then the fault goes on as it would have. */
+static void on_fault(int sig)
+{
+	rp_blackbox_close(1);
+	signal(sig, SIG_DFL);
+	raise(sig);
+}
+
+static void catch_faults(void)
+{
+	signal(SIGSEGV, on_fault);
+	signal(SIGFPE, on_fault);
+	signal(SIGILL, on_fault);
+	signal(SIGABRT, on_fault);
+}
+
+int session_start_file(const char *home_dir, const char *file)
+{
+	session_set_home(home_dir);
+	if (!is_recording(file)) {
+		plat_log("%s is not a recording", file);
+		return -1;
+	}
+	snprintf(replay_file, sizeof replay_file, "%s", file);
+	snprintf(replay_dir, sizeof replay_dir, "%s", file);
+	u6_rp_set_replay(replay_file, 0);
+	osi_set_replay(1);
+	osi_set_replay_speed(0);
+	mode = S_REPLAY;
+	return 0;
+}
+
+int session_start(const char *home_dir, const char *replay, const char *replay_out,
+	const char *record, int black_box, const char *argv0)
+{
+	session_set_home(home_dir);
 	snprintf(self_path, sizeof self_path, "%s", argv0 ? argv0 : "u6");
+	u6_rp_set_off();
 	if (replay && replay[0]) {
-		char f[1100], stage[1100], dst[1100];
-		const char *tmp;
+		char stage[1100], dst[1100], f[1100];
 		snprintf(replay_dir, sizeof replay_dir, "%s", replay);
 		if (!strchr(replay, '/') && !strchr(replay, '\\'))	/* a name from recordings/ */
 			snprintf(replay_dir, sizeof replay_dir, "%s/recordings/%s", home, replay);
-		hostfs_join(f, sizeof f, replay_dir, "RECORD.U6R");
+		hostfs_join(replay_file, sizeof replay_file, replay_dir, "RECORD.OUT");
+		if (!is_recording(replay_file)) {
+			plat_log("cannot read the recording %s", replay_file);
+			return -1;
+		}
+		if (replay_out && replay_out[0]) {
+			snprintf(game_home, sizeof game_home, "%s", replay_out);
+			hostfs_mkdirs(game_home);
+			if (path_ci(dst, sizeof dst, game_home, "SAVEGAME"))
+				hostfs_remove_tree(dst);
+		} else {
+			snprintf(game_home, sizeof game_home, "%s", hostfs_temp_dir("u6replay-"));
+			temp_home = 1;
+		}
 		hostfs_join(stage, sizeof stage, replay_dir, "stage");
-		tmp = hostfs_temp_dir("u6replay-");
-		snprintf(game_home, sizeof game_home, "%s", tmp);
 		hostfs_join(dst, sizeof dst, game_home, "SAVEGAME");
 		hostfs_copy_tree(stage, dst);
 		hostfs_join(f, sizeof f, replay_dir, DELETED_LIST);
 		hostfs_join(dst, sizeof dst, game_home, DELETED_LIST);
 		if (hostfs_exists(f))
 			hostfs_copy_file(f, dst);
-		hostfs_join(f, sizeof f, replay_dir, "RECORD.U6R");
-		if (rp_start_replay(f) != 0) {
-			plat_log("cannot read the recording %s", f);
-			return -1;
-		}
+		u6_rp_set_replay(replay_file, !(replay_out && replay_out[0]));
+		osi_set_replay(1);
+		mode = S_REPLAY;
 		plat_log("replaying %s", replay_dir);
 		return 0;
 	}
 	if (record || black_box) {
-		char stage[1100], f[1100], recs[1100];
+		char stage[1100], recs[1100];
 		if (record && record[0]) {
 			snprintf(rec_dir, sizeof rec_dir, "%s", record);
 		} else {
@@ -211,21 +282,27 @@ int session_start(const char *home_dir, const char *replay, const char *record, 
 		hostfs_mkdirs(rec_dir);
 		hostfs_join(stage, sizeof stage, rec_dir, "stage");
 		stage_savegame(stage);
-		hostfs_join(f, sizeof f, rec_dir, "RECORD.U6R");
-		if (rp_start_record(f) != 0)
-			plat_log("cannot write the recording %s", f);
-		if (!record || !record[0])
+		hostfs_join(rec_file, sizeof rec_file, rec_dir, "RECORD.OUT");
+		if (record && record[0]) {
+			u6_rp_set_record(rec_dir);
+			mode = S_RECORD;
+		} else {
+			u6_rp_set_blackbox(rec_file);
+			mode = S_BLACKBOX;
 			prune_recordings();
+		}
+		catch_faults();
 	}
 	return 0;
 }
 
 void session_end(void)
 {
-	if (rp_mode == RP_RECORD)
-		rp_flush();
-	if (replay_dir[0] && game_home[0] && strcmp(game_home, home))
+	rp_blackbox_close(0);	/* a recording's last runs and its header (none: nothing) */
+	if (temp_home && game_home[0] && strcmp(game_home, home)) {
 		hostfs_remove_tree(game_home);
+		temp_home = 0;
+	}
 }
 
 /* restarts the port with these options (and the same home) */
@@ -264,7 +341,7 @@ void session_play_recording(const char *name)
  * there, the creation screen comes first. */
 int session_can_start_new_game(void)
 {
-	return rp_mode != RP_REPLAY && !took_over;
+	return mode != S_REPLAY && !took_over;
 }
 
 void session_new_game(void)
@@ -290,16 +367,18 @@ void session_new_game(void)
 	restart(0, 0);
 }
 
+/* The player takes over (the overlay): replay.c reads the world from the next hook call on,
+ * and the clock goes on from the replay's. Nothing is recorded after it. */
 void session_take_over(void)
 {
-	if (rp_mode == RP_REPLAY) {
-		rp_take_over();
+	if (mode == S_REPLAY && rp_take_over()) {
+		osi_set_replay(0);
 		took_over = 1;
 	}
 }
 
-int session_replay_speed(void) { return replay_speed; }
-void session_set_replay_speed(int speed) { replay_speed = speed; pace_have = 0; }
+int session_replay_speed(void) { return osi_replay_speed(); }
+void session_set_replay_speed(int speed) { osi_set_replay_speed(speed); }
 
 void session_apply_settings(void)
 {
@@ -314,31 +393,6 @@ void session_apply_settings(void)
 	c.title = "Ultima VI";
 	plat_apply_config(&c);
 	adlib_set_volume(settings.music ? settings.music_volume : 0);
-}
-
-/* Replay pacing: called with each timer tick value the replayed game reads; waits so
- * that the recording plays at replay_speed times its own pace (0: no waiting). */
-void session_pace_tick(uint32_t tick)
-{
-	uint32_t due, now;
-	if (rp_mode != RP_REPLAY || replay_speed == 0)
-		return;
-	now = plat_ms();
-	if (!pace_have || tick < pace_first_tick) {
-		pace_have = 1;
-		pace_first_tick = tick;
-		pace_start_ms = now;
-		return;
-	}
-	due = pace_start_ms + (uint32_t)((uint64_t)(tick - pace_first_tick) * 10000u / 182u / (uint32_t)replay_speed);
-	while ((int32_t)(due - now) > 0 && !plat_quit_requested()) {
-		uint32_t wait = due - now;
-		plat_pump();
-		plat_sleep_ms(wait > 10 ? 10 : wait);
-		now = plat_ms();
-		if (rp_mode != RP_REPLAY || replay_speed == 0)
-			break;
-	}
 }
 
 /* ---- exec ---- */

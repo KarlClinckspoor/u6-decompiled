@@ -158,8 +158,8 @@ on PATH, for SDL2.dll. `U6_PORT` still names an executable that is used as it is
 
 A `--dos-replay` run takes about a second. Its clock is a virtual one that OSI_delay's waits
 advance (`port/sys/timer.c`): nothing the game decides on reads the tick count, which the DOS
-build keeps outside DGROUP (DELAYRP.ASM). Like the port's own replays, it reads no live input,
-and the busy delay loops return at once.
+build keeps outside DGROUP (DELAYRP.ASM). It reads no live input, and the busy delay loops
+return at once.
 
 The port writes every section DOS does.
 
@@ -224,6 +224,37 @@ Task 1's result, before DATA and BSS were written:
 - **Speed:** the port's replay takes about three minutes, because OSI_delay waits in real time,
   as DOS's does.
 
+### The port's own recordings (Phase 2 task 4)
+
+The port records and replays through the same `replay.c`; its old recorder (`port/replay`, a
+digest of the game state every 4096 reads) is gone. `port/sys/session.c` sets replay.c's mode
+before the game starts:
+
+| | what replay.c does | files |
+|---|---|---|
+| the black box (every player's session) | records, no dumps, F9 passes to the game; closed at exit, when the window closes and at a fault | `recordings/YYYYMMDD-HHMMSS/RECORD.OUT` and `stage/` in the home folder |
+| `--record DIR` (tests) | records with the dumps; F9 ends it | `DIR/RECORD.OUT`, `DIR/STATE.OUT`, `DIR/stage/` |
+| `--replay REC` (the player, or the settings screen) | replays in a temporary home, no dumps; the port exits at the end, or the player takes over | |
+| `--replay REC --out OUT` (tests) | replays in OUT, with the dumps | `OUT/STATE.OUT`, `OUT/SAVEGAME/` |
+| `--dos-replay FILE` | replays FILE from the saved game in `--home`, with the dumps | `STATE.OUT` in the home |
+
+A replay that only shows a recording sets replay.c's `rp_blackbox`, which also stops it writing
+STATE.OUT. Taking over is Exhume's `rp_take_over` (port only): between two hook calls the replay
+ends, and the hooks read the world from then on. A replay runs on the virtual clock above, paced
+to `--speed` (or the settings screen's), so the ticks need no stream.
+
+    python tools/rp.py port-self OUT [--variant V ... | --all]
+
+records a session with `--record` and a key script, replays it with `--out`, and compares the
+two runs' dumps (`replay.py compare --same-build`) and saved games. Then it plays the same keys
+as a black box session and checks that its replay leaves the same saved game. The port's
+`--keys` gives each key once the game has taken the one before, so no key is lost while the game
+is busy (`KBD_GetKey(1)` keeps only the last key in the buffer).
+
+**Task 4 result:** port-self is identical in all four builds: 14 checkpoints, and the saved game
+(OBJLIST and four OBJBLK files) the same after the replay, for both kinds of session. `first.rec`
+and `smoke` are still identical to DOS in all four builds.
+
 ### The stop key
 
 **F9** (143h) ends a recording. `rpgame.h`'s `RP_STOP_KEY` defines it, and exhume.toml's
@@ -235,5 +266,4 @@ reaches it writes no RECORD.OUT.
 ## Not yet
 
 Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); a mask scope for two
-different DOSes (above); retiring the port's own recorder (Phase 2 task 4); music cards other
-than AdLib, and video other than VGA.
+different DOSes (above); music cards other than AdLib, and video other than VGA.

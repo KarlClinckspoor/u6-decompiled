@@ -2,16 +2,15 @@
  * the session (black box recording or a replay), opens the window and runs the game's own
  * main (renamed game_main by compat.h).
  *
- *   u6 [--data DIR] [--home DIR] [--replay REC] [--record DIR] [--no-recording]
- *      [--speed N] [--hidden] [--scale N] [--fullscreen] [--no-aspect] [--no-integer]
- *      [--no-audio] [--screenshot FILE] [--settings] [--new-avatar SPEC] [--help]
+ *   u6 [--data DIR] [--home DIR] [--replay REC [--out DIR]] [--record DIR] [--no-recording]
+ *      [--dos-replay FILE] [--speed N] [--hidden] [--scale N] [--fullscreen] [--no-aspect]
+ *      [--no-integer] [--no-audio] [--screenshot FILE] [--settings] [--new-avatar SPEC] [--help]
  */
 #include "session.h"
 #include "dosfs.h"
 #include "dosmem.h"
 #include "dosint.h"
 #include "osi.h"
-#include "../replay/replay.h"
 #include "../platform/plat.h"
 #include "../platform/hostfs.h"
 #include "../ui/overlay.h"
@@ -29,10 +28,8 @@
 #include <string.h>
 
 int game_main(int argc, char **argv);
-uint64_t port_game_digest(void);
 
 static uint8_t font[2048];
-static int quit_after_replay = 1;
 static const char *screenshot_path;
 static int hidden;
 void port_exit(int code);
@@ -110,12 +107,12 @@ static void on_exec_end(const char *path, int argc, const char *const *argv)
  * not recorded) */
 static void on_exec(const char *path, int argc, const char *const *argv)
 {
-	if (same_name(path, "ultima6.exe") && rp_mode != RP_REPLAY) {
+	if (same_name(path, "ultima6.exe") && !session_is_replaying()) {
 		plat_log("the game runs ULTIMA6.EXE: back to the main menu");
 		session_end();
 		session_restart_menu();
 	}
-	if (same_name(path, "end.exe") && rp_mode != RP_REPLAY) {
+	if (same_name(path, "end.exe") && !session_is_replaying()) {
 		plat_log("the game runs END.EXE: the ending");
 		session_end();
 		MUSDRV_9();
@@ -169,39 +166,26 @@ static void write_screenshot(const char *path)
 }
 
 void u6_rp_set_off(void);
-void u6_rp_set_dos_replay(const char *path);
 
-/* Called by the game's exit (compat.h renames exit to port_exit). */
+/* Called by the game's exit (compat.h renames exit to port_exit), and by replay.c's at the end
+ * of a replay or a --record session. */
 void port_exit(int code)
 {
-	if (rp_mode == RP_REPLAY || rp_finished())
-		plat_log("replay: %u input reads, %u of %u checkpoints compared, %s", rp_call_count(),
-			rp_checks_compared(), rp_checks_total(), rp_diverged() ? "DIFFERENT from the recording" : "all identical");
 	if (screenshot_path)
 		write_screenshot(screenshot_path);
 	session_end();
 	plat_shutdown();
-	exit(rp_diverged() ? 3 : code);
-}
-
-/* Replays: when the recording runs out, stop (tests) or let the player take over. */
-static void replay_watch(void)
-{
-	static int reported;
-	if (rp_mode == RP_REPLAY && rp_finished() && !reported) {
-		reported = 1;
-		if (quit_after_replay)
-			port_exit(0);
-		session_take_over();
-	}
+	exit(code);
 }
 
 static void pump_hook_chain(void);
 static void test_options(void);
 
 /* --keys "MS:KEY MS:KEY ...": keys typed at those times (tests; the recording has them as
- * the game read them). KEY: a character, or up down left right enter esc space bksp tab,
- * f1..f12, ^x for Ctrl+x. */
+ * the game read them), each one once the game has taken the one before: the game's
+ * KBD_GetKey(1) keeps only the last key in the buffer, so keys typed while it is busy would
+ * be lost. KEY: a character, or up down left right enter esc space bksp tab, f1..f12, ^x for
+ * Ctrl+x. */
 static const char *key_script;
 static const char scan_row[] = "1234567890-=\0\0qwertyuiop[]\0\0asdfghjkl;'`\0\\zxcvbnm,./";
 
@@ -248,7 +232,7 @@ static void run_key_script(void)
 			return;
 		}
 		at = strtoul(p, 0, 10);
-		if (plat_real_ms() < at)
+		if (plat_real_ms() < at || plat_key_available())
 			return;
 		colon = strchr(p, ':');
 		if (!colon) {
@@ -268,12 +252,14 @@ static void usage(void)
 	printf("Ultima VI, native port\n\n"
 		"  --data DIR          the game folder (remembered)\n"
 		"  --home DIR          where settings, saved games and recordings go\n"
-		"  --replay REC        play a recording (a folder, or a name in recordings/)\n"
+		"  --replay REC        play a recording (a folder, or a name in recordings/); the port\n"
+		"                      exits at its end, unless you take over (F11)\n"
+		"  --out DIR           with --replay: run the replay in DIR and write its dumps\n"
+		"                      (STATE.OUT) there, to compare with the recording's (tests)\n"
 		"  --speed N           replay speed: 1, 2, 4, 8, or 0 for as fast as possible\n"
-		"  --continue          after a replay ends, keep playing (default: quit)\n"
-		"  --record DIR        record this session into DIR\n"
-		"  --dos-replay FILE   replay a recording of the replay DOS build (Exhume's RECORD.OUT)\n"
-		"                      from the saved game in --home, writing STATE.OUT there\n"
+		"  --record DIR        record this session into DIR, with the dumps; F9 ends it (tests)\n"
+		"  --dos-replay FILE   replay a RECORD.OUT (of the replay DOS build, or the port's) from\n"
+		"                      the saved game in --home, writing STATE.OUT there\n"
 		"  --no-recording      no black box recording this time\n"
 		"  --hidden            no window (replays, tests)\n"
 		"  --screenshot FILE   write the screen as a BMP when the game ends\n"
@@ -293,7 +279,7 @@ static void usage(void)
 int main(int argc, char **argv)
 {
 	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0, *ending = 0;
-	const char *dos_replay = 0;
+	const char *dos_replay = 0, *replay_out = 0;
 	int menu = -1;
 	int recording = -1, speed = -1, audio = 1, settings_now = 0, i;
 	int scale = 0, fullscreen = -1, aspect = -1, integer = -1, first_run;
@@ -308,11 +294,11 @@ int main(int argc, char **argv)
 		if (!strcmp(a, "--data")) data = ARG;
 		else if (!strcmp(a, "--home")) home = ARG;
 		else if (!strcmp(a, "--replay")) replay = ARG;
+		else if (!strcmp(a, "--out")) replay_out = ARG;
 		else if (!strcmp(a, "--record")) record = ARG;
 		else if (!strcmp(a, "--dos-replay")) dos_replay = ARG;
 		else if (!strcmp(a, "--no-recording")) recording = 0;
 		else if (!strcmp(a, "--speed")) speed = atoi(ARG);
-		else if (!strcmp(a, "--continue")) quit_after_replay = 0;
 		else if (!strcmp(a, "--hidden")) hidden = 1;
 		else if (!strcmp(a, "--screenshot")) screenshot_path = ARG;
 		else if (!strcmp(a, "--scale")) scale = atoi(ARG);
@@ -332,13 +318,11 @@ int main(int argc, char **argv)
 #undef ARG
 	}
 
-	/* Exhume's replay.c (port/include/rpport.h): off, unless a DOS recording is replayed. That
-	 * replay is the game alone, from the saved game in the home folder (tools/replay.py's
-	 * run_port puts the session's stage there), with nothing of the port's own recording */
+	/* Exhume's replay.c (port/include/rpport.h): off until the session starts (U.EXE's part is
+	 * never recorded). --dos-replay is the game alone, from the saved game in the home folder
+	 * (tools/replay.py's run_port puts the session's stage there). */
 	u6_rp_set_off();
 	if (dos_replay) {
-		u6_rp_set_dos_replay(dos_replay);
-		osi_set_dos_replay(1);
 		replay = 0;
 		record = 0;
 		recording = 0;
@@ -473,8 +457,11 @@ int main(int argc, char **argv)
 		plat_speaker(0);
 	}
 
-	if (session_start(home, replay, record, !replay && (recording < 0 ? settings.recording : recording),
-			argv[0]) != 0)
+	if (dos_replay) {
+		if (session_start_file(home, dos_replay) != 0)
+			return 1;
+	} else if (session_start(home, replay, replay_out, record,
+			!replay && (recording < 0 ? settings.recording : recording), argv[0]) != 0)
 		return 1;
 	if (dosfs_init(settings.data, session_game_home()) != 0) {
 		fprintf(stderr, "cannot use the game folder %s\n", settings.data);
@@ -483,12 +470,10 @@ int main(int argc, char **argv)
 	dosmem_init();
 	dos_set_exec_handler(on_exec);
 	dos_exit_hook = port_exit;
-	if (speed >= 0)
-		session_set_replay_speed(speed);
-	else if (hidden)
+	if (dos_replay || replay_out)
 		session_set_replay_speed(0);
-	osi_replay_tick_hook = session_pace_tick;
-	rp_set_digest(port_game_digest);
+	else
+		session_set_replay_speed(speed >= 0 ? speed : hidden ? 0 : 1);
 
 
 	gargv[0] = "GAME.EXE";
@@ -497,7 +482,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-/* the overlay's pump hook (set by overlay_init) runs first, then the replay's end check */
+/* the overlay's pump hook (set by overlay_init) runs first, then the test options */
 extern void overlay_pump_hook(void);
 static void test_options(void)
 {
@@ -509,7 +494,6 @@ static void test_options(void)
 static void pump_hook_chain(void)
 {
 	overlay_pump_hook();
-	replay_watch();
 	test_options();
 	if (plat_quit_requested())
 		port_exit(0);

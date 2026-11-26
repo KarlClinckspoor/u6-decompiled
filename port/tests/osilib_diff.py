@@ -484,7 +484,7 @@ def test_sound(exe, m, lib, rep):
             events.append(('gate', 1 if (value & 3) == 3 else 0))
     m.port_out = out
     m.port_in[0x61] = lambda: port61[0]
-    lib.t_set_rp_mode(2)   # replay mode: the C side does not wait
+    lib.t_set_replay(1)    # as under replay: the C side does not wait
     sflag = ctypes.c_int16.in_dll(lib, 'SoundFlag')
 
     def c_events():
@@ -557,7 +557,7 @@ def test_sound(exe, m, lib, rep):
                 names[kind], tuple(args), speed, flag, loops[0], cl, len(events), len(ce), first,
                 events[first:first + 3], ce[first:first + 3])
             break
-    lib.t_set_rp_mode(0)
+    lib.t_set_replay(0)
     rep.result('SOUND', bad is None, '%d calls, %d delay loop iterations, speaker programming and loop counts '
                'compared%s' % (len(calls), total_loops, (': ' + bad) if bad else ''))
 

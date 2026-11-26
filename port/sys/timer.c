@@ -9,11 +9,12 @@
  * which freezes the counter.
  *
  * Port: the tick count is derived from plat_ms() (tick n starts at n*65536/1193182 s
- * after plat_init) and every read of it goes through rp_value(RP_TICKS): OSI_delay
- * remembers the tick at which it last returned, and each pass of its loop reads the
- * counter once. A pass that has to wait pumps the platform and sleeps until the next
- * tick is due; under replay it only pumps, so a replay runs as fast as the host can,
- * seeing exactly the recorded tick values.
+ * after plat_init): OSI_delay remembers the tick at which it last returned, and each pass
+ * of its loop reads the counter once. A pass that has to wait pumps the platform and
+ * sleeps until the next tick is due. The count is not recorded: nothing the game decides
+ * on reads it (the replay DOS build's DELAYRP.ASM keeps it outside DGROUP, and DOS's
+ * recordings replay without it), so under replay (Exhume's replay.c, osi_set_replay) it is
+ * a virtual clock that each wait advances by one tick, paced to the replay's speed.
  *
  * The busy loops (DELAY_CXAX in SOUND.INC) count CX*AX iterations of "dec word; jnz",
  * calibrated by CpuSpeed: OSI_lowInit counted N iterations of a loop of the same cost
@@ -25,7 +26,6 @@
 #include "osi.h"
 #include "dosint.h"
 #include "../platform/plat.h"
-#include "../replay/replay.h"
 
 #define PIT_HZ 1193182u
 #define TICK_NS 54925416u          /* 65536 / 1193182 s, in ns */
@@ -37,31 +37,49 @@ static uint32_t raw_ticks(void)
 	return (uint32_t)(((uint64_t)plat_ms() * PIT_HZ) / 65536000u);
 }
 
-/* The game's tick count is the host's plus tick_offset. The offset is 0 until a replay
- * hands over to the live clock (it ran out, or the player took over): the recorded ticks
- * came from another session's clock, so from then on the count goes on from the last
- * replayed tick instead of jumping (OSI_delay would wait up to an hour otherwise). */
-static uint32_t tick_offset, last_tick;
-static int was_replaying;
-
-/* --dos-replay (portmain.c): Exhume's replay.c replays a recording of the replay DOS build,
- * and the run is a replay from start to end (it ends at the recording's stop key). The DOS
- * build records every outside value the game decides on, and the tick count is none of them:
- * only OSI_delay reads it (DELAYRP.ASM counts outside DGROUP, which the dumps hold), so it
- * waits for nothing the dumps show. So the clock is a virtual one here, which advances a
- * tick each time OSI_delay waits for one, and like the port's own replays this reads no live
- * input and the busy loops return at once: the replay runs as fast as the host can. */
-static int dos_replay;
-static uint32_t dos_replay_ticks;
-
-void osi_set_dos_replay(int on)
+/* ms (on the plat_ms clock) at which tick t starts */
+static uint32_t tick_start_ms(uint32_t t)
 {
-	dos_replay = on;
+	return (uint32_t)(((uint64_t)t * 65536000u + PIT_HZ - 1) / PIT_HZ);
+}
+
+/* Live, the game's tick count is the host's plus tick_offset, which is 0 until the player
+ * takes over a replay: from then on the count goes on from the replay's virtual one instead
+ * of jumping (OSI_delay would wait up to an hour otherwise). */
+static uint32_t tick_offset;
+
+/* Under replay (osi_set_replay: --replay, --dos-replay) Exhume's replay.c gives every outside
+ * value the game decides on, and the tick count is none of them, so it is a virtual clock that
+ * advances a tick each time OSI_delay waits for one. A replay reads no live input and the busy
+ * loops return at once. At speed 0 it runs as fast as the host can; at speed N each virtual
+ * tick is due N times as fast as a real one, counted from when the speed was last set. */
+static int replaying;
+static uint32_t virt_ticks;
+static int replay_speed;
+static uint32_t pace_tick, pace_ms;
+
+void osi_set_replay(int on)
+{
+	if (replaying && !on)
+		tick_offset = virt_ticks - raw_ticks();	/* the player took over */
+	replaying = on;
+}
+
+void osi_set_replay_speed(int speed)
+{
+	replay_speed = speed < 0 ? 0 : speed;
+	pace_tick = virt_ticks;
+	pace_ms = plat_ms();
+}
+
+int osi_replay_speed(void)
+{
+	return replay_speed;
 }
 
 int osi_replaying(void)
 {
-	return dos_replay || (rp_mode == RP_REPLAY && !rp_finished());
+	return replaying;
 }
 
 uint32_t osi_ticks_live(void)
@@ -69,35 +87,24 @@ uint32_t osi_ticks_live(void)
 	return raw_ticks() + tick_offset;
 }
 
-void (*osi_replay_tick_hook)(uint32_t tick);
-
 uint32_t osi_ticks(void)
 {
-	uint32_t raw = raw_ticks(), t;
-	int rep = osi_replaying();
-
-	if (dos_replay)
-		return dos_replay_ticks;
-	if (was_replaying && !rep)
-		tick_offset = last_tick - raw;   /* taken over between two reads */
-	t = rp_value(RP_TICKS, raw + tick_offset);
-	if (rep && !osi_replaying()) {
-		/* the recording ran out at this read, which gave the live value */
-		tick_offset = last_tick - raw;
-		t = last_tick;
-		rep = 0;
-	}
-	if (rep && osi_replay_tick_hook)
-		osi_replay_tick_hook(t);
-	was_replaying = rep;
-	last_tick = t;
-	return t;
+	return replaying ? virt_ticks : raw_ticks() + tick_offset;
 }
 
-/* ms (on the plat_ms clock) at which tick t starts */
-static uint32_t tick_start_ms(uint32_t t)
+/* a paced replay: wait (pumping) until virtual tick t is due at the replay's speed */
+static void pace_to(uint32_t t)
 {
-	return (uint32_t)(((uint64_t)t * 65536000u + PIT_HZ - 1) / PIT_HZ);
+	for (;;) {
+		uint32_t now = plat_ms(), due;
+		if (!replaying || replay_speed == 0 || plat_quit_requested())
+			return;
+		due = pace_ms + tick_start_ms(t - pace_tick) / (uint32_t)replay_speed;
+		if ((int32_t)(due - now) <= 0)
+			return;
+		plat_sleep_ms(due - now > 10 ? 10 : due - now);
+		plat_pump();
+	}
 }
 
 static uint32_t last_pump_ms = 0xFFFFFFFFu;
@@ -117,10 +124,11 @@ void osi_wait_tick(uint32_t seen)
 	uint32_t now, next;
 
 	plat_pump();
-	if (dos_replay)
-		dos_replay_ticks = seen + 1;
-	if (osi_replaying())
+	if (replaying) {
+		virt_ticks = seen + 1;
+		pace_to(virt_ticks);
 		return;
+	}
 	now = plat_ms();
 	next = tick_start_ms(seen + 1 - tick_offset);
 	/* sleep until shortly before the next tick (none if it came during the pump); the

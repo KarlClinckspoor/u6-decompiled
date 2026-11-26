@@ -16,6 +16,10 @@
                                                       REC (default tests/replay/first.rec) in DOS and in each
                                                       port build, the dumps compared across the builds and the
                                                       saved games
+    python3 tools/rp.py port-self OUT [--variant V ... | --all] [--keys SCRIPT]
+                                                      the port against itself: a --record session replayed
+                                                      (dumps and saves compared), and a black box session
+                                                      replayed (saves compared)
     python3 tools/rp.py port-dgroup                   regenerate the port's DGROUP table and the masks from a
                                                       port build's symbols (port/tools/gen_dgroup.py)
     python3 tools/rp.py compare A B [--cross]         compare two STATE.OUT files (or run directories) with
@@ -477,6 +481,104 @@ def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc'):
     return r.returncode
 
 
+def port_run(exe, args, variant, timeout=600):
+    """runs the port EXE with ARGS (paths turned into WSL's for a WSL build), no window, no sound;
+    returns (exit code, output)"""
+    if on_wsl_side(variant):
+        line = 'SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout %d %s %s' % (
+            timeout, exe, ' '.join(shlex.quote(wsl_path(a)) if os.path.isabs(a) else shlex.quote(a) for a in args))
+        r = subprocess.run(['wsl', '-e', 'bash', '-lc', line], capture_output=True, text=True, errors='replace')
+        return r.returncode, r.stdout + r.stderr
+    try:
+        r = subprocess.run([exe] + args, capture_output=True, text=True, errors='replace', timeout=timeout,
+                           env=port_env(variant))
+    except subprocess.TimeoutExpired:
+        return -1, 'timed out after %d s' % timeout
+    return r.returncode, r.stdout + r.stderr
+
+
+# the port's own session for port-self: from the character [_chargen] makes, a few steps, a look
+# north, passes, the game saved (ctrl+s, Y); times in ms from the start (each key also waits for
+# the game to take the one before: portmain.c's --keys)
+SELF_KEYS = ('3000:left 3400:down 3800:down 4200:right 4600:l 5000:up 5400:enter 6000:space '
+             '6400:space 6800:space 7200:space 8000:^s 9000:Y')
+
+
+def save_files(d):
+    """{NAME: sha1} of the files in the SAVEGAME folder of d (matched without case)"""
+    if not os.path.isdir(d):
+        return {}
+    sg = [n for n in os.listdir(d) if n.upper() == 'SAVEGAME']
+    if not sg:
+        return {}
+    p = os.path.join(d, sg[0])
+    return {n.upper(): sha1(os.path.join(p, n)) for n in os.listdir(p) if os.path.isfile(os.path.join(p, n))}
+
+
+def same_saves(what, a, b):
+    fa, fb = save_files(a), save_files(b)
+    bad = sorted(n for n in set(fa) | set(fb) if fa.get(n) != fb.get(n))
+    print('rp: saves (%s): %d files, %s' % (what, len(fa), 'all identical' if not bad and fa else
+                                           'DIFFER: ' + ' '.join(bad) if bad else 'none'))
+    return 1 if bad or not fa else 0
+
+
+def port_self(out, variant='linux-gcc', keys=SELF_KEYS):
+    """The port against itself, through Exhume's recorder (PLAN-exact-port.md, Phase 2 task 4):
+    1. a session recorded with --record (the dumps too) from [_chargen]'s character, KEYS typed
+       and then F9; replayed with --replay --out, and the two runs' dumps compared (replay.py
+       compare --same-build) and their saved games;
+    2. the same keys in a black box session (no --record, ended by --run-ms), replayed from its
+       recordings/ folder with --out: the saved games compared (a black box has no dumps)."""
+    out = os.path.abspath(out)
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    exe = port_build(variant)
+    R = rc()
+    data = os.path.join(ROOT, R.data) if not os.path.isabs(R.data) else R.data
+    stage = chargen()
+    common = ['--data', data, '--hidden', '--no-audio']
+    res = {}
+
+    def home(name):
+        h = os.path.join(out, name)
+        shutil.copytree(stage, h)
+        return h
+
+    def run(what, args, log):
+        t0 = time.time()
+        code, text = port_run(exe, common + args, variant)
+        open(os.path.join(out, log), 'w').write(text)
+        print('rp: %s: exit %d after %.0f s (%s)' % (what, code, time.time() - t0, log))
+        return code
+
+    print('== 1. --record, --replay --out (%s)' % variant)
+    h1 = home('home-rec')
+    run('record', ['--home', h1, '--game', '--record', os.path.join(out, 'rec'), '--keys', keys + ' 16000:f9',
+                   '--run-ms', '60000'], 'rec.log')
+    run('replay', ['--home', home('home-rep'), '--replay', os.path.join(out, 'rec'), '--out', os.path.join(out, 'rep')],
+        'rep.log')
+    res['recording = replay'] = exhume('compare', os.path.join(out, 'rec'), os.path.join(out, 'rep'), '--same-build')
+    res['saves: recording = replay'] = same_saves('recording, replay', h1, os.path.join(out, 'rep'))
+
+    print('\n== 2. the black box (%s)' % variant)
+    h2 = home('home-bb')
+    run('black box', ['--home', h2, '--game', '--keys', keys, '--run-ms', '16000'], 'bb.log')
+    recs = sorted(os.listdir(os.path.join(h2, 'recordings'))) if os.path.isdir(os.path.join(h2, 'recordings')) else []
+    if not recs:
+        print('rp: the black box session left no recording')
+        res['black box'] = 1
+    else:
+        bb = os.path.join(h2, 'recordings', recs[-1])
+        run('black box replay', ['--home', home('home-bbrep'), '--replay', bb, '--out', os.path.join(out, 'bbrep')],
+            'bbrep.log')
+        res['saves: black box = replay'] = same_saves('black box, replay', h2, os.path.join(out, 'bbrep'))
+    print()
+    for k, v in res.items():
+        print('rp port-self: %-28s %s' % (k, 'DIFFERENT' if v else 'identical'))
+    return 1 if any(res.values()) else 0
+
+
 def port_saves(dos, port):
     """the saved game the session left, DOS's against the port's. DOS's run holds the whole
     SAVEGAME (the game's copy, the stage over it, and what the session wrote); the port's home
@@ -576,6 +678,8 @@ def main():
     p = sub.add_parser('port-check'); p.add_argument('out'); variant_args(p, True)
     p.add_argument('--rec', default=os.path.join(ROOT, 'tests', 'replay', 'first.rec'),
                    help='a RECORD.OUT of the replay DOS build (default tests/replay/first.rec)')
+    p = sub.add_parser('port-self'); p.add_argument('out'); variant_args(p, True)
+    p.add_argument('--keys', default=SELF_KEYS, help="the port's --keys script (MS:KEY ...; F9 is added)")
     p = sub.add_parser('compare'); p.add_argument('a'); p.add_argument('b'); p.add_argument('--cross', action='store_true')
     p = sub.add_parser('show'); p.add_argument('state'); p.add_argument('pngdir', nargs='?')
     p = sub.add_parser('log'); p.add_argument('rec')
@@ -603,6 +707,11 @@ def main():
         return 0
     if a.cmd == 'port-check':
         return port_check(a.out, a.rec, variants)
+    if a.cmd == 'port-self':
+        bad = 0
+        for v in variants:
+            bad |= port_self(a.out if len(variants) == 1 else os.path.join(a.out, v), v, a.keys)
+        return bad
     if a.cmd == 'compare':
         return exhume('compare', a.a, a.b, *([] if a.cross else ['--same-build']))
     if a.cmd == 'show':

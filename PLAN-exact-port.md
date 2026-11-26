@@ -612,3 +612,32 @@ The port now writes every section DOS writes, and `first.rec` is identical at 69
   - Near pointers to string literals are still masked, not compared.
   - More sessions.
 - **Decided (the user, 2026-11-26): test set-ups go through saved games, not runtime cheats.** A Phase 3 tool will edit the staged saved game: positions (teleport), attributes and levels, inventory, quest flags, and the global state block. DOS and the port then start from the same file, so a session stays proved against DOS. Exhume's runtime cheats are port-only, and DOS can't replay them.
+
+## 20. Phase 2 task 4: the port's own recorder retired (2026-11-26, by the coordinator)
+
+The port records and replays through Exhume's `replay.c` only. `port/replay/` (RECORD.U6R: streams of ticks, keys, shift, mouse, seed and date below the game, and a digest every 4096 reads) and `port/game/digest.c` are gone.
+
+- **What replaced each stream.** The game's own hooks already held every outside value it decides on: KEY, the mouse poll, and the RECORDED values (seed, far memory, DOS version, drives, CPU speed, mouse reset). The port's extra streams were all below them or decided nothing:
+  - Keys, shift, mouse: under KEY, MOUSE and MBUTTONS, which record the results.
+  - Seed: under `RECORDED16(RV_SEED, ...)`.
+  - Date and time: only OSI_timeSeed reads them.
+  - Ticks: nothing the game decides on reads them (task 3). Every replay now runs on task 3's virtual clock, paced to `--speed` (`osi_set_replay_speed`). `session_pace_tick` and the tick stream went with it.
+- **The modes** (`port/sys/session.c`, `u6_rp_set_*` in `port/game/rpport.c`):
+  - The black box: every player's session, `recordings/YYYYMMDD-HHMMSS/RECORD.OUT` and `stage/`, through replay.c's `rp_blackbox`. No dumps, no stop key. It is closed at exit, when the window closes, and at a fault: session.c catches SIGSEGV, SIGFPE, SIGILL and SIGABRT, calls `rp_blackbox_close(1)`, then re-raises.
+  - `--record DIR`: with the dumps; F9 ends it.
+  - `--replay REC`: shown to the player. It runs in a temporary home with no dumps (`rp_blackbox` also turns off STATE.OUT) and exits at its end.
+  - `--replay REC --out OUT`: the replay runs in OUT, with the dumps.
+  - `--dos-replay FILE`: unchanged, and it also takes the port's RECORD.OUT.
+- **Exhume:** a port-only `rp_take_over()` lets the settings screen's "Take over" end a replay between two hook calls, after which the hooks read the world. It is not in the DOS build (`#ifndef __TURBOC__`). `--continue` is gone: replay.c ends a replay inside the hook that runs out of input, where the game can't go on.
+- **`--keys`** now gives each key once the game has taken the one before. On real time, keys typed while the game was busy were lost to `KBD_GetKey(1)`, which keeps only the last one in the buffer, and the save in the test session happened in one run out of three.
+- **Tools:** `rp.py port-self OUT [--all]`, the port against itself:
+  - a `--record` session (a scripted walk, a look, passes, ctrl+s Y), replayed with `--out`, with both runs' dumps compared (`--same-build`) and their saved games;
+  - the same keys as a black box session (ended by `--run-ms`), whose replay must leave the same saved game.
+  
+  It replaces the old `--replay` digest check, the "107 of 107".
+- **Checks:**
+  - port-self `--all`: identical in all four builds (14 checkpoints; OBJLIST and four OBJBLK files after both replays).
+  - port-check `--all` on first.rec and smoke: still identical to DOS, saves identical, all four builds.
+  - OSI tests: 255 unit checks (the replay test now checks the virtual clock and take-over), and the RAND, SEED, LZW, KBD, SOUND and MOUSE Unicorn diffs.
+  - Gate 3 of 3. No SRC file changed. RGAME.EXE is unchanged (`def703cb`).
+- **Next:** the save editor for Phase 3's set-ups (`tools/u6save.py`).
