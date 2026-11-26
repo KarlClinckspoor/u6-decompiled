@@ -24,6 +24,9 @@ data = "${U6_GAMEDATA:-gamedata}"
 data_skip = ["DOSBOX", "cloud_saves", "webcache.zip", "manual.pdf", "unins000.exe", "unins000.dat",
              "dosboxULTIMA6.conf", "dosboxULTIMA6_single.conf"]
 dosbox_conf = "tests/replay/dosbox-x.conf"   # replays (replaydos.mjs) and recordings (tools/rp.py)
+# the saved game every run starts from is not in the repository: tools/rp.py chargen makes it with
+# the real U.EXE ([_chargen] in tests/replay/sessions.toml) into build/dos/replay/stage, and passes
+# it as --stage
 # Exhume's replay build is the modding link, which this project does not have: the replay
 # build swaps OSILIB's MOUSE and DELAY for MOUSERP and DELAYRP, adds STACKRP and rpfar.asm, and
 # fails if DGROUP moved (tools/rpbuild.py)
@@ -31,12 +34,16 @@ build = "{python} tools/rpbuild.py --out {work}"
 shared_opts = "-d -mm -p -Z -O -DRP_FAR_STORAGE"
 # rpgame.h's RP_STOP_KEY: F9 (143h). KBD_GetKey's int 16h function 0 never gives F11 or F12,
 # the game uses F1..F8 and F10. tools/rp.py record sends it after the keys; replaydos.mjs
-# (a js-dos recording, Phase 1 task 8) sends this
+# (a js-dos recording) sends this
 stop_key = "F9"
 keystate_len = 1                 # rpgame.h's RP_KEYSTATE_LEN
 # the replay build's own switches passed into DOS when set (runtime/replay/replay.c)
 env = ["UWRPCK", "UWRPTRACE", "UWRPFULL", "UWRPHOOK"]
 out_files = ["RECORD.OUT", "STATE.OUT", "TRACE.OUT"]
+# the saved game a session leaves (the game's own save, Ctrl+S then Y, writes OBJLIST and the
+# OBJBLK files there): replaydos.mjs and tools/rp.py record copy it out of every run, and
+# replay.py saves A B (tools/rp.py check) compares two runs' file for file
+saves = ["SAVEGAME"]
 
 # SEGS (rpgame.h): 30 words, DGROUP first, then the far heap blocks (FarHeap, Mem_BP, the
 # drivers, the game's blocks). DGROUP is EXE paragraph 329Bh in the replay build (RGAME.MAP);
@@ -71,3 +78,17 @@ lo = 4
 hi = 6
 scope = "always"
 why = "STACKRP's lowest stack address written: interrupts push wherever SP is when they come; a measurement, not state"
+
+[[replay.mask]]
+section = "NULL"
+lo = 0x8B
+hi = 0x8F
+scope = "always"
+why = "the int 16h vector (NULL holds DS:0..30h, the checksum word, then the vector table from 33h): in a recording typed by tools/keyfeed.py's KEYFEED.COM it points into KEYFEED, in a replay at the BIOS. The game neither sets nor reads it"
+
+[[replay.mask]]
+section = "NULL"
+lo = 0xB7
+hi = 0xBB
+scope = "always"
+why = "the int 21h vector: KEYFEED.COM's in a recording (it gives the program a fixed date and time, so a fixed seed), DOS's in a replay. The game neither sets nor reads it"

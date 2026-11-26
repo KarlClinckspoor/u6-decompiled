@@ -1,11 +1,43 @@
-# Key scripts for tools/rp.py record and check (docs/replay.md). keys: DOSBox-X AUTOTYPE's
-# mapper names, typed `pace` seconds apart after `wait` seconds (the game reaches the map from
-# the staged saved game in about 15). rp.py sends the stop key, F9, after the last key; a
-# script must not contain it.
+# Key scripts for tools/rp.py record and check (docs/replay.md). Every session starts from the
+# character [_chargen] makes (below). rp.py sends the stop key, F9, after the last key; a script
+# must not contain it.
 
-# a minute of the opening fight (gargoyles in the throne room, from the staged saved game): moves,
-# a look north, a talk attempt and typed words the game answers with "what?", passes
+# Sessions with `feed` are typed by tools/keyfeed.py's KEYFEED.COM (mode bios), loaded high before
+# GAME.EXE: KEY/N is offered after N polls of the keyboard that said "no key" since the last key
+# was read (default `feed`), and the clock reads 1990-01-01 12:00:00 (so GAME's seed is fixed).
+# The run is then the same on every host and every time, and keys like ctrl+s can be typed.
+# Names: tools/keyfeed.py (esc enter space left right up down home end pageup pagedown f1..f10,
+# one character as typed, ctrl+X, alt+X, t:TEXT). A session without `feed` is typed in real time
+# by DOSBox-X's AUTOTYPE (its names, `wait` and `pace` seconds), which loses keys now and then
+# (tests/replay/README.md).
+
+# a minute of the opening fight (gargoyles in the throne room): moves, a look north, a talk
+# attempt and typed words the game answers with "what?", passes
 [smoke]
+feed = 30
 keys = "left down down right l up enter t down enter n a m e enter j o b enter enter esc space space space space"
-wait = 25
-pace = 2
+
+# the first real session (PLAN-exact-port.md, task 8; its recording is first.rec): a talk with
+# Dupre (to the Avatar's lower right) asking name, job and join, then bye; the Avatar's
+# inventory (F1) and the party again (F10); a look at Lord British (four tiles up); combat (b)
+# with six attacks north; six steps south, out of the throne room; ten turns passed; the game
+# saved (ctrl+s, Y). All four survive and the gargoyles die
+[first]
+feed = 40
+keys = "t pagedown enter t:name enter t:job enter t:join enter t:bye enter space/60 f1/60 f1/60 f10/60 l up up up up enter b a up enter a up enter a up enter a up enter a up enter a up enter down down down down down down space space space space space space space space space space ctrl+s Y"
+
+# Character creation, before every session: U.EXE (the real one, from the game directory) run in
+# DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
+# U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no
+# key" since the last key was read (default `gap`), so every run reads the same key in the same
+# frame. It also gives U.EXE a fixed date and time, the seed of the gypsy's shuffles (srand(time(0))).
+# tools/rp.py checks the OBJLIST against objlist_sha1 and fails on any other.
+[_chargen]
+# made: Avatar, male, the first male portrait; strength 17, dexterity 20, intelligence 22
+# (answers A: the lower virtue of each pair, so Honesty wins the last question)
+u_sha1 = "b6cde9fb239d56656777ad52adbe1324315b65ac"      # the U.EXE it was made with
+objlist_sha1 = "01572292630827a62cfdfabb0018f7db2f2b2951"
+date = "1990-06-01"
+time = "12:00:00"
+gap = 30
+keys = "esc/5 c/40 t:Avatar/20 enter/20 m/20 c/40 space/60 space/60 space/60 space/60 space/60 space/60 space/60 a/40 a/40 a/40 a/40 a/40 a/40 a/40 esc/60 esc/60 esc/60 esc/60 esc/60 esc/60 esc/60 esc/60 esc/60 esc/60"

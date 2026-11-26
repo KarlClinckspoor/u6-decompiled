@@ -452,3 +452,51 @@ Open, for task 8:
 - A WSL (snap DOSBox-X) replay of a Windows recording took the same path but differed in a few
   DATA/NULL/STAK/BSS bytes, so compare only within one DOSBox-X install.
 - Golden PNGs, checking the saved games, js-dos recording (`stop_key` is passed, untested).
+
+## 15. Phase 1 task 8: scripted character creation and the first real session (2026-11-26)
+
+Done by one worker and reviewed. The coordinator reran the gate, a fresh `rp.py chargen --force`, `rp.py check --session first` and `--rec tests/replay/first.rec`.
+
+- **The character comes from a script, as Underworld Exhumed's `_chargen` does.**
+  - `[_chargen]` in `tests/replay/sessions.toml` drives the real U.EXE in DOSBox-X: Esc, C, "Avatar", male, the first portrait, then A to all seven questions.
+  - The result is Avatar, strength 17, dexterity 20, intelligence 22. OBJLIST is 7539 bytes, sha1 `01572292...`. `rp.py` checks it against `objlist_sha1` and fails loudly on a mismatch.
+  - It is cached in `build/dos/replay/stage` by a sha1 of its inputs.
+  - While U.EXE runs, GAME.EXE is a 63-byte stub that exits.
+  - The committed `tests/replay/stage/OBJLIST` is gone.
+- **Why U.EXE needs help:** `srand(time(0))` shuffles the gypsy's questions, and `DrawPattern` calls rand() every frame after the first answer. No fixed answers give the same character under every order.
+- **`tools/keyfeed.py` builds KEYFEED.COM**, a small TSR that the Python assembles itself; `--list` prints the listing. It types a key script counted in the program's own keyboard polls, not in time, and it gives the program a fixed date and time.
+  - Mode `dos`: int 21h 0Bh, 07h and 08h, for U.EXE.
+  - Mode `bios`: int 16h 01h/11h and 00h/10h, for GAME. This mode also fixes OSI_timeSeed's seed and can type Ctrl+S.
+  - It is loaded with `LH`, so conventional memory matches a replay. A replay doesn't load it: the keys come from RECORD.OUT.
+  - Two new masks, NULL 8B..8E and B7..BA, cover the int 16h and int 21h vectors, which point into KEYFEED only while recording. The game neither sets nor reads them.
+- **The conversation hang was DOSBox-X's AUTOTYPE**, not the game or the harness:
+  - 3 of 37 AUTOTYPE recordings hung.
+  - In one, the game kept polling (2,484 empty KEY polls) and the last keys never reached the BIOS buffer.
+  - In another, DOSBox-X itself froze.
+  - The comment-block link was coincidence. It did expose a bug: `str.replace('[cpu]')` wrote cycles into a comment. This is now a section-aware `conf_set`.
+  - With KEYFEED, the formerly hanging setup recorded 5 of 5 runs, all with the same RECORD.OUT.
+- **The first real session is `[first]`, recorded as `tests/replay/first.rec`.** It covers:
+  - a talk with Dupre (name, job, join, bye);
+  - the inventory (F1, F10);
+  - a look at Lord British;
+  - a fight with six attacks north;
+  - six steps out of the throne room and ten passes;
+  - a save with Ctrl+S, Y.
+
+  It has 70 dumps. A fresh recording is byte-identical to `first.rec` (`679203c9...`).
+- **`rp.py check` now compares the saved games** too (`[replay] saves = ["SAVEGAME"]`).
+- **Recorded in DOSBox-X, not js-dos:** js-dos loads GAME 680h paragraphs lower, so the recorded `farcoreleft` differs and a DOSBox-X replay stalls.
+
+Exit tests:
+- Gate passes, 3 of 3.
+- chargen: the same OBJLIST sha1 on every run, including runs at fixed cycles, at max cycles and under WSL's DOSBox-X. A different clock gives a different character, which shows the clock really is the seed.
+- `rp.py check --session first`: recording = replay 1 = replay 2 apart from the masks, and the saved games are identical. `--rec first.rec` passes. `make replay-check` passes in WSL.
+- Port: builds; a 60 s scripted session replays 1510 of 1510 checkpoints identical (worker).
+
+This closes Phase 1. Open:
+- Why AUTOTYPE fails inside DOSBox-X: untraced, and avoided by using KEYFEED.
+- js-dos recordings replayed in DOSBox-X: the load segment differs.
+- The session has no outdoor walking and no day turning to night.
+- `[replay.segments]` is untested until Phase 2.
+- Golden PNGs.
+- Only OBJLIST is checked. Sessions still take the other SAVEGAME files (the OBJBLKs) from the user's install unchecked.

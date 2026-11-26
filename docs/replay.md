@@ -14,12 +14,13 @@ From the repository's root, in Git Bash on Windows or in WSL/Linux:
 | | |
 |---|---|
 | `make replay` or `python tools/rp.py build` | build it into `build/dos/replay/GAME.EXE` (skipped when nothing changed; `--force`) |
-| `python tools/rp.py record OUT [--session NAME \| --keys "..."]` | record a session (default: `smoke`) |
+| `python tools/rp.py chargen [OUT]` | the character every run starts from: U.EXE run by script (cached in `build/dos/replay/stage/`) |
+| `python tools/rp.py record OUT [--session NAME \| --keys "..." [--feed N]]` | record a session (default: `smoke`) |
 | `python tools/rp.py replay OUT/RECORD.OUT OUT2` | replay it |
 | `python tools/rp.py compare OUT OUT2` | compare two dumps, masks applied |
 | `python tools/rp.py show OUT2 PNGDIR` | list the dumps, write each one's screen as a PNG |
 | `python tools/rp.py log OUT/RECORD.OUT` | what a recording holds |
-| `make replay-check` or `python tools/rp.py check OUT` | all of it: record, replay twice, compare the recording with the first replay and the two replays, PNGs of the second |
+| `make replay-check` or `python tools/rp.py check OUT [--session NAME \| --rec REC]` | all of it: record (or take REC), replay twice, compare the recording with the first replay and the two replays, and their saved games, PNGs of the second |
 
 `rp.py` is a front end. Building, replaying, comparing, showing and the log are Exhume's
 `exhume/tools/replay.py` with `--config exhume.toml`; recording is `rp.py`'s own.
@@ -27,7 +28,8 @@ From the repository's root, in Git Bash on Windows or in WSL/Linux:
 Needs: Python 3.11+, Node.js (Exhume's `replaydos.mjs` runs the replays), DOSBox-X
 (`tools/Dosbox-X` on Windows, `dosbox-x` on PATH elsewhere, or `U6_DOSBOX`), the toolchain the gate
 uses (`tools/turboc20`, `tools/masm300`), and your copy of the game in `gamedata/` (or
-`U6_GAMEDATA`) with `CONFIG.U6` set to VGA, mouse and AdLib (the masks are AdLib's).
+`U6_GAMEDATA`) with `CONFIG.U6` set to VGA, mouse and AdLib (the masks are AdLib's), its `U.EXE`, and
+its installed `SAVEGAME/OBJLIST` (no character yet: U.EXE refuses to write over one).
 
 ## The build
 
@@ -48,18 +50,31 @@ and leaves no GAME.EXE.
 
 Every run copies your game directory (less the GOG release's DOSBox and launcher files,
 `[replay] data_skip`) to a scratch C:, puts the replay build there as GAME.EXE, and copies
-`tests/replay/stage/` over it. That folder holds a saved game with a character
-(`tests/replay/README.md` says how it was made). Every run uses the same DOSBox-X configuration,
+`build/dos/replay/stage/` over it: `SAVEGAME/OBJLIST` with a character, made by the real U.EXE from
+your copy of the game, driven by the key script `[_chargen]` of `tests/replay/sessions.toml` and
+checked against its sha1 (`rp.py chargen`, run first by every command that needs it, cached by its
+inputs; `tests/replay/README.md` explains why it is the same every time). Every run uses the same DOSBox-X configuration,
 `tests/replay/dosbox-x.conf`, and the same start-up batch, so the program loads at the same segment
 in all of them:
 
-- **Recording**: DOSBox-X's `AUTOTYPE` types the session's keys in real time (cycles=max, turbo off),
-  `wait` seconds after the start and `pace` seconds apart (`tests/replay/sessions.toml`). Then it
-  sends **F9**. Exhume records in js-dos through dos-mcp instead; that comes with Phase 1 task 8.
+- **Recording**: a session with `feed` (all of ours) is typed by `tools/keyfeed.py`'s KEYFEED.COM,
+  loaded high before GAME.EXE: each key is offered after N of the game's keyboard polls, and the
+  clock reads a fixed time (so the seed is fixed). The recording is the same file on every run and
+  host, and it runs at the replays' speed. Without `feed`, DOSBox-X's `AUTOTYPE` types the keys in
+  real time (cycles=max, turbo off), `wait` seconds after the start and `pace` seconds apart; it
+  loses keys now and then and the recording never ends (tests/replay/README.md). Either way F9
+  follows the keys. The game's saved game (`[replay] saves`) is copied out too.
+- **Recording in js-dos** (Exhume's `replay.py record`, dos-mcp): it works here (`npm install` in
+  `exhume/`), but its DOS loads GAME.EXE 680h paragraphs (26 KB) lower than DOSBox-X's, so the
+  recorded `farcoreleft` (5BC18h against DOSBox-X's 55418h) promises a DOSBox-X replay memory it
+  does not have, and the replay stalled before its first dump. DOSBox-X's `[dos]` memory settings
+  tried (umb, private area, minimum mcb segment) did not move its kernel's 28 KB. So our sessions
+  are recorded in DOSBox-X until the two DOSes agree.
 - **Replaying**: Exhume's `replaydos.mjs`, DOSBox-X with turbo on. The replay needs no input.
 - **Comparing**: checkpoint by checkpoint. A header that differs means the runs went different
   ways. Within a checkpoint, each section is compared byte for byte, apart from the
-  `[[replay.mask]]` ranges in exhume.toml (rpgame.h has the reasons). Two DOS runs are compared
+  `[[replay.mask]]` ranges in exhume.toml (rpgame.h has the reasons; exhume.toml those of the two
+  interrupt vectors KEYFEED.COM sets in a recording, int 16h and int 21h, which a replay does not). Two DOS runs are compared
   with `--same-build`, which compares every section. `rp.py compare --cross` is for DOS against
   the port (Phase 2): it skips SEGS and NULL, and takes a stored segment word as equal when it
   names the same block (`[replay.segments]`).
@@ -81,6 +96,7 @@ reaches it writes no RECORD.OUT.
 
 ## Not yet
 
-Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); recording in js-dos (task 8);
+Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); replaying a js-dos recording
+in DOSBox-X (above);
 the port linking `replay.c` and replaying DOS's recordings (Phase 2), which is when
 `[replay.segments]` gets its first real use; music cards other than AdLib, and video other than VGA.
