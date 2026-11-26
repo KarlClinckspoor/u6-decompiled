@@ -125,7 +125,26 @@ working platform, so the proof comes first and then guards the platform swap.
 ### Phase 3: sessions, goldens, the test gate
 - About ten sessions of ordinary play: walking and day/night, a long conversation,
   melee and ranged combat, spells, camping, a dungeon, a boat and a moongate, shops,
-  save and reload.
+  save and reload. Each starts where it needs to through its `setup` (`tools/u6save.py`,
+  section 21). The user's suggestions (2026-11-26):
+  - **A gargoyle-held shrine** for combat: many enemies, melee, ranged and spells in one place.
+    Each surface shrine has a gargoyle egg (gargoyles and winged gargoyles) a few tiles off,
+    e.g. the shrine at (3A7h, 107h) with its egg at (3ACh, FBh), and (397h, 3A7h) with
+    (39Eh, 3A7h). The setup gives arms, ammunition, reagents and magic points.
+  - **A jailed drake at a wizard's** for melee. Not yet found: no drake is an NPC, and no drake
+    egg is near Nystul, Nicodemus, Xiao, Mariah, Horance or Zellivan.
+  - **The endgame.** The cube and the lenses are placed, and the Codex vanishes
+    (objcmd.c's UseVortexCube): all 8 moonstones in the vortex cube, the Britannia lens at
+    (399h, 353h), the Gargoyle lens at (39Dh, 353h), and the Codex at (39Bh, 353h) within 5
+    tiles of the party; then LaunchEndGame runs END.EXE. The setup teleports the party there
+    with the cube (holding the moonstones) and both lenses; the session places them and uses
+    the cube. Needs:
+    - a u6save command to put items in a container;
+    - the replay DOS build to close its recording before GAME's `execl` of END.EXE (a hook
+      under REPLAY only, so the gate is unchanged); in DOS, the exec replaces the program
+      before replay.c writes its last chunks;
+    - the cutscene itself is END.EXE, proved in Phase 4. In the port, a replay already stops
+      at the exec (portmain.c's on_exec).
 - Goldens from DOS (twice, identical) committed with their recordings.
 - `make test` = gate + port build + every session against its golden; pre-push hook; CI
   on Linux and Windows from an encrypted bundle (Exhume's ci-bundle).
