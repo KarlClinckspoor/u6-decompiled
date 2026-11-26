@@ -181,6 +181,17 @@ setup = ["teleport 132 80 5", "place 0x1A4 132 80 5", "npc avatar level 4", "giv
          "give avatar 0x45 9", "give avatar 0x46 9", "give avatar 0x47 9", "give avatar 0x48 9"]
 keys = "u enter space c r h enter down u left space space space space space space space space space space space space space space space u enter space"
 
+# The powder keg's stale object number (docs/CODE_REVIEW.md, CR-004): UsePowderKeg remembers the
+# lit keg as KegObject, and when the fuse (3 minutes) runs out gameloop.c calls Detonate on that
+# number without checking it is still the keg. A keg (0DFh) east of the party in the castle's
+# northwest tower at (291, 348): light it (Use, east); down the ladder (north): the surface area
+# is unloaded and its slots freed, and level 1's objects take them; then wait. In a port trial
+# the keg's slot held a stalagmite of level 1 after the ladder, and Detonate deleted it
+[keg]
+feed = 40
+setup = ["teleport 291 348 0", "place 0xDF 292 348 0"]
+keys = "u right space u up space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space space"
+
 # Every spell (the 80 a player can cast, spells.h 00h..79h), in three sessions by circle (magic
 # points are a byte: all 80 need 360). The Avatar in the castle courtyard at (309, 379), level 8,
 # 255 magic points, a readied spellbook with the session's spells and 99 of each reagent. Each
