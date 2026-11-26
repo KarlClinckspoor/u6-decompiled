@@ -500,3 +500,24 @@ This closes Phase 1. Open:
 - `[replay.segments]` is untested until Phase 2.
 - Golden PNGs.
 - Only OBJLIST is checked. Sessions still take the other SAVEGAME files (the OBJBLKs) from the user's install unchecked.
+
+## 16. js-dos and DOSBox-X agree; Exhume updated (2026-11-26, by the coordinator)
+
+- **Exhume:** merged upstream `abedegno/Exhume` master (81 commits, clean) into `u6-tc20` (`098996a`). Upstream didn't touch the replay code. RGAME.EXE is unchanged (`def703cb...`), and `first.rec` replayed identically on it.
+  - New fork commits: `fb89053`, `[replay] dos_env` / replaydos `--dos-set`; `c4244a5`, its docs.
+- **Why js-dos and DOSBox-X differed:** DOSBox-X loaded GAME at PSP 812h, js-dos at 192h, 680h paragraphs apart. GAME records `farcoreleft`, so a js-dos recording promised a DOSBox-X replay 26 KB it didn't have, and the replay stalled. Two causes:
+  - DOSBox-X's `minimum mcb free`: when it is 0, DOSBox-X uses 700h and pads with a DOS-owned block up to that segment.
+  - DOSBox-X's environment: a longer PATH, a PROMPT, and 1024 bytes of slack per program environment block where mainline DOSBox gives 83. Turbo C's start-up sizes the near heap by the environment.
+- **Fix, all in our configuration:**
+  - `tests/replay/dosbox-x.conf` `[dos]`: `kernel allocation in umb=true`, `minimum mcb free=BE`, `additional environment block size on exec=83`, `drive z expand path=false`.
+  - exhume.toml `[replay] dos_env`: PROMPT removed, then PATH, COMSPEC and BLASTER set. The same lines go to both DOSes and to `rp.py record`'s batch.
+  - A probe COM measured it: PSP 192h, memory top 9FFFh, environment segment 188h, and the same environment bytes in both DOSes.
+- **Proof:**
+  - A js-dos recording replays in DOSBox-X, and the new `first.rec` (recorded in DOSBox-X, sha1 `900d1655...`) replays in js-dos.
+  - In both directions, every checkpoint is identical apart from addresses in each emulator's BIOS (DATA 75..81h and 305Eh, the NULL vector table). The saved games are identical.
+  - WSL: `make replay-check` passes. `first.rec` replayed under WSL's snap DOSBox-X now differs from the Windows run only in BIOS addresses (DATA 78h, the vector table). This closes task 7's open item, which was the environment.
+  - DOSBox-X 2026.10.01 gives the same layout and differs from 2022.12.26 only in BIOS addresses. The bundled 2022.12.26 stays.
+  - `first.rec` was re-recorded because the layout changed. Two recordings gave the same sha1. `rp.py check --session first`: recording = replay 1 = replay 2 apart from the masks, and the saves are identical. Character creation is unchanged (`01572292...`).
+- **Open:**
+  - A mask scope for two different DOSes (Exhume has `always` and `cross`).
+  - Phase 2's `cross` masks will need the C runtime's saved vectors (DATA 74..83h).

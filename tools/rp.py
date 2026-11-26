@@ -254,8 +254,8 @@ def record(out, keys, wait=25, pace=2, timeout=300, feed=None):
         shutil.copytree(stage, g, dirs_exist_ok=True)
         # the same batch as replaydos.mjs's but for the AUTOTYPE line: another start-up (an
         # autoexec, a redirection) changed the environment's size and moved the program
-        # (and the replay build's switches, [replay] env, set as replaydos.mjs sets them)
-        sets = ['set %s=%s' % (k, os.environ[k]) for k in R.env if os.environ.get(k)]
+        # (and [replay] dos_env, then the replay build's switches, [replay] env, set as replaydos.mjs sets them)
+        sets = ['set %s' % e for e in R.dos_env] + ['set %s=%s' % (k, os.environ[k]) for k in R.env if os.environ.get(k)]
         conf = open(R.dosbox_conf, encoding='latin-1').read() if R.dosbox_conf else '[cpu]\n'
         if feed is None:
             bat = sets + ['autotype -w %g -p %g %s' % (wait, pace, ' '.join(keys)), R.exe_name, 'echo done > DONE.TXT', '']

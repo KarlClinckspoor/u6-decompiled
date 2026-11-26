@@ -15,6 +15,8 @@ What the replay DOS build's runs read (docs/replay.md):
   runs the same file with the same switches and the same kind of start-up batch, so that a
   recording and its replays load the program at the same segment (the user's DOSBox-X settings,
   or another start-up, moved it by a paragraph).
+  Its `[dos]` settings load the program where js-dos does, with the same environment block
+  (docs/replay.md, "js-dos and DOSBox-X").
 
 Nothing from the game is in this folder: the saved game is made from your copy of the game by
 the real U.EXE at every run (or taken from the cache).

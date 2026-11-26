@@ -118,6 +118,45 @@ gcc and clang, `-O0` and `-O3`:
 - sessions with random input, replayed across builds (and under AddressSanitizer), are the
   test.
 
+### Replaying the original DOS build (Exhume's replay build, docs/replay.md)
+
+The same recording also has to replay in the original DOS program, built with Exhume's hooks
+and run in an emulator, before it can prove the port. Emulators turned out to be part of the
+program's input:
+
+- **Type keys in the program's time, not in real time.** DOSBox-X's AUTOTYPE types from a host
+  thread: keys arrive after a number of frames that varies with the host's load. They were lost
+  now and then, and in 3 of 37 runs the recording hung. U.EXE seeds rand() from the clock and
+  calls it every animation frame, so even the character creation came out different each time.
+  A small TSR of ours, KEYFEED.COM (`tools/keyfeed.py`), offers each key after a fixed number of
+  the program's own keyboard polls and reports a fixed date and time. Every recording of a
+  script is now the same file, on any host, at any emulator speed. The scripted character
+  creation (`[_chargen]`) is checked against a sha1, so a change in the game files or the
+  emulator fails loudly.
+- **Where DOS loads the program is input too.** GAME records how much far memory is free, so
+  a recording only replays in a DOS that loads GAME at the same segment. Out of the box
+  DOSBox-X loaded it 26 KB higher than js-dos, and a js-dos recording stalled in DOSBox-X. Two
+  causes, both found in DOSBox-X's source rather than by trying settings:
+  - When `minimum mcb free` is 0, DOSBox-X pads low memory with a DOS-owned block up to segment
+    700h. With its kernel tables moved to upper memory and that floor set, the program's PSP
+    lands where js-dos puts it.
+  - The shell's environment differs (a longer PATH, a PROMPT, 1024 bytes of slack per block
+    against mainline DOSBox's 83), and Turbo C's start-up sizes the near heap by the
+    environment.
+
+  Matching both (`tests/replay/dosbox-x.conf`, `[replay] dos_env`) makes the two DOSes hold
+  identical game state at every checkpoint, in either direction.
+- **Measure the layout with a probe, not with the game.** A 60-byte COM that writes its PSP
+  segment, memory top and environment block answers in a second whether two configurations
+  agree. A full replay takes minutes and fails far from the cause.
+- **What can never match is the BIOS.** The C runtime saves the vectors of int 0, 4, 5 and 6
+  at start-up. They and the vector table point into each emulator's own BIOS, and differ
+  between js-dos, DOSBox-X 2022 and DOSBox-X 2026. Everything else matched, so these are the
+  only ranges a comparison across emulators needs to mask.
+- **Order matters in a DOS environment.** SET moves a variable to the end, and a short PATH set
+  too early hides the emulator's own MOUNT. The same SET lines, in the same order, run in the
+  batch after the mount, give every DOS the same block whatever it started with.
+
 ## 7. Sound
 
 The AdLib driver (U6ADLIB.DRV) is C, ticked at 60 Hz inside the SDL audio callback, on an
@@ -156,6 +195,9 @@ compare that first; it separates "the logic is wrong" from "the delivery is wron
   out-of-bounds reads.
 - Record every outside input from day one; deterministic replay found bugs nothing else
   would have.
+- Treat the emulator as input: drive it by the program's own polls (not real time), and pin
+  the memory layout and the environment, so a recording is the same file everywhere and replays
+  in any DOS.
 
 ## 10. What we would do differently
 

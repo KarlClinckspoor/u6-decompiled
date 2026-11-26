@@ -39,6 +39,13 @@ stop_key = "F9"
 keystate_len = 1                 # rpgame.h's RP_KEYSTATE_LEN
 # the replay build's own switches passed into DOS when set (runtime/replay/replay.c)
 env = ["UWRPCK", "UWRPTRACE", "UWRPFULL", "UWRPHOOK"]
+# the DOS environment, set in this order in the batch before the program, in every DOS (js-dos,
+# DOSBox-X; replaydos.mjs --dos-set, tools/rp.py record): js-dos's own variables. The program's
+# environment block is a copy of the shell's, and Turbo C's start-up sizes the near heap by it
+# (__ENVLNG, environ, ___BRKLVL), so a recording made in one DOS replays in the other with the
+# same DGROUP. Together with tests/replay/dosbox-x.conf's [dos] settings, which load GAME at
+# js-dos's segment (docs/replay.md, "js-dos and DOSBox-X")
+dos_env = ["PROMPT=", "PATH=Z:\\", "COMSPEC=Z:\\COMMAND.COM", "BLASTER=A220 I7 D1 H5 T6"]
 out_files = ["RECORD.OUT", "STATE.OUT", "TRACE.OUT"]
 # the saved game a session leaves (the game's own save, Ctrl+S then Y, writes OBJLIST and the
 # OBJBLK files there): replaydos.mjs and tools/rp.py record copy it out of every run, and

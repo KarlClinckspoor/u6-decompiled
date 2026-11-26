@@ -64,12 +64,10 @@ in all of them:
   real time (cycles=max, turbo off), `wait` seconds after the start and `pace` seconds apart; it
   loses keys now and then and the recording never ends (tests/replay/README.md). Either way F9
   follows the keys. The game's saved game (`[replay] saves`) is copied out too.
-- **Recording in js-dos** (Exhume's `replay.py record`, dos-mcp): it works here (`npm install` in
-  `exhume/`), but its DOS loads GAME.EXE 680h paragraphs (26 KB) lower than DOSBox-X's, so the
-  recorded `farcoreleft` (5BC18h against DOSBox-X's 55418h) promises a DOSBox-X replay memory it
-  does not have, and the replay stalled before its first dump. DOSBox-X's `[dos]` memory settings
-  tried (umb, private area, minimum mcb segment) did not move its kernel's 28 KB. So our sessions
-  are recorded in DOSBox-X until the two DOSes agree.
+- **Recording in js-dos** (Exhume's `replay.py record`, dos-mcp; `npm install` in `exhume/`):
+  its recordings replay in DOSBox-X (below, "js-dos and DOSBox-X"). Ours are recorded in
+  DOSBox-X with KEYFEED all the same, since a js-dos recording types keys in real time and is a
+  different file every time.
 - **Replaying**: Exhume's `replaydos.mjs`, DOSBox-X with turbo on. The replay needs no input.
 - **Comparing**: checkpoint by checkpoint. A header that differs means the runs went different
   ways. Within a checkpoint, each section is compared byte for byte, apart from the
@@ -81,10 +79,48 @@ in all of them:
 - **Pictures**: the dumps' `SCRN` section (the 320x200 mode 13h frame) with `PAL`. Exhume's
   `replay.py` reads SCRN in place of the VGA planes, which in chain-4 make no picture.
 
-Compare runs made by one DOSBox-X install. A replay under WSL's snap DOSBox-X of a recording made
-with Windows' `tools/Dosbox-X` went the same way at every checkpoint, but a few bytes differed:
-DATA 78h, 88h..8Ah and 9Eh (C0's variables), interrupt vectors in NULL, STACKRP's start in STAK, and one
-BSS byte.
+### js-dos and DOSBox-X
+
+Both DOSes load GAME.EXE at the same place and give it the same environment, so a recording
+made in either replays in the other, and runs in both hold the same game state.
+`tests/replay/dosbox-x.conf`'s `[dos]` settings and exhume.toml's `[replay] dos_env` do this.
+
+Why it was needed: GAME records how much far memory is free (`farcoreleft`, RECORDED). Out of
+the box DOSBox-X loaded it 680h paragraphs (26 KB) higher than js-dos, at PSP 812h against
+192h. A js-dos recording (5BC18h free) therefore promised a DOSBox-X replay (55418h free) memory
+it did not have, and the replay stalled. The 26 KB came from two places:
+
+- **DOSBox-X's padding below 700h.** When `minimum mcb free` is 0, DOSBox-X sets it to 700h. It
+  then allocates a DOS-owned block from the end of its kernel tables up to that segment
+  (src/dos/dos.cpp: "parity with main DOSBox SVN", against a corruption seen near segment 800h).
+  The kernel tables themselves fill 70h..21Ch in conventional memory.
+- **The environment.** DOSBox-X's shell has a longer PATH and a PROMPT (62h bytes of strings
+  against js-dos's 3Ah), and it gives every program's environment block 1024 bytes of slack
+  where mainline DOSBox gives 83. Turbo C's start-up sizes the near heap by the environment
+  (`__ENVLNG`, `environ`, `___BRKLVL`), so the size changes DGROUP too.
+
+The settings, checked with a probe that writes its PSP, memory top and environment block in
+both DOSes:
+
+| setting | what it does |
+|---|---|
+| `kernel allocation in umb=true` | DOSBox-X's kernel tables go to upper memory |
+| `minimum mcb free=BE` | the padding ends where js-dos's first free block is, so the PSP is 192h |
+| `additional environment block size on exec=83` | mainline DOSBox's slack: the environment block is the same size (segment 188h in both) |
+| `drive z expand path=false` | `set PATH=Z:\` stays that, not all of Z:'s directories |
+| `[replay] dos_env` | PROMPT removed, then PATH, COMSPEC and BLASTER set in that order in the batch before GAME (SET moves a variable to the end, so both DOSes end up with js-dos's block). replaydos.mjs passes it as `--dos-set` to either DOS, and `rp.py record` writes it into its batch. It has to come after the mount: a short PATH in the conf's `[autoexec]` hides DOSBox-X's MOUNT. |
+
+`minimum mcb free` is calibrated to the environment above. If `dos_env` changes, measure the
+PSP again.
+
+Result: a js-dos recording replayed in DOSBox-X 2022.12.26 (tools/Dosbox-X) and in
+2026.10.01, `first.rec` (DOSBox-X) replayed in js-dos, and `first.rec` replayed under WSL's
+snap DOSBox-X. Every section is identical to the recording's own dumps, apart from addresses inside
+each emulator's BIOS: the C runtime's saved vectors of int 0, 4, 5 and 6 (DATA 75..81h), a far
+pointer at DATA 305Eh, and the vector table in NULL. The saved games are identical. The two
+DOSBox-X versions differ from each other in the same way, by BIOS addresses only. No mask
+covers those ranges yet: Exhume's mask scopes are `always` and `cross` (DOS against the port),
+so `compare --same-build` of a js-dos run against a DOSBox-X run lists them.
 
 ### The stop key
 
@@ -96,7 +132,6 @@ reaches it writes no RECORD.OUT.
 
 ## Not yet
 
-Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); replaying a js-dos recording
-in DOSBox-X (above);
+Goldens and `verify` (Exhume's `replay.py golden`/`verify`, Phase 3); a mask scope for two different DOSes (above);
 the port linking `replay.c` and replaying DOS's recordings (Phase 2), which is when
 `[replay.segments]` gets its first real use; music cards other than AdLib, and video other than VGA.
