@@ -21,18 +21,24 @@ enum {
 	FIX_FULL_OBJECT_TABLE,  /* CR-007 */
 	FIX_FOUNTAIN_WISH,      /* CR-008 */
 	FIX_MAP_SEAM,           /* CR-010 */
-	FIX_COUNT
+	FIX_COUNT,
+	/* the enhancements: changes to what the original does by design (--enhance, enhance= in
+	 * u6port.cfg), off by default like the fixes, recorded and replayed the same way */
+	ENH_MOONSTONE_GUARD = FIX_COUNT,   /* ask before burying a moonstone */
+	FLAG_COUNT
 };
+enum { KIND_FIX, KIND_ENHANCE, KIND_ANY };
 
 extern uint32_t enhance_on;     /* replay.c's name: the session's flags */
 
 /* LIST ("all", "none", or names comma-separated, a "-" before a name turning it off) into
- * *mask; -1 (and a message) for an unknown name, *mask unchanged */
-int fixes_parse(const char *list, uint32_t *mask);
+ * *mask, for the flags of KIND (KIND_FIX: --fixes, KIND_ENHANCE: --enhance, KIND_ANY: a
+ * recording's); -1 (and a message) for an unknown name, *mask unchanged */
+int fixes_parse(const char *list, uint32_t *mask, int kind);
 /* MASK's names comma-separated ("" for none); replay.c writes them into a recording */
 char *enhance_names(uint32_t mask, char *buf, int n);
-/* --fixes list */
-void fixes_list(FILE *f);
+/* --fixes list, --enhance list */
+void fixes_list(FILE *f, int kind);
 /* the fixes a recording was made with (format 5's chunk of stream 9) into *mask: 0, or -1
  * for a recording that names a fix this build lacks */
 int fixes_from_recording(const char *path, uint32_t *mask);

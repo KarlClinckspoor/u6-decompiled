@@ -1029,9 +1029,14 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
    END.EXE runs after the endgame session in the port now, but nothing proves it yet.
 5. **Phase 7, enhancements:**
    - ~~the fixes of the critical findings~~: done (section 24, port/sys/fixes.c, `--fixes`);
-   - the moonstone burial guard, as an enhancement (not a fix: the original does what it says),
-     off by default (the user: no exception), beside the fixes; then the high findings'
-     fixes as each is confirmed.
+   - ~~the moonstone burial guard~~: done (2026-11-27), as an enhancement: `--enhance
+     moonstone-guard`, off by default, session `[moonstone]` (docs/port/FIXES.md);
+   - then the high findings' fixes as each is confirmed.
+7. **Pinned (the user, 2026-11-27): a speedrun trick.** A party member dies of poison in a skiff
+   and becomes another world object, a dungeon entrance. A Sonnet worker found no written source:
+   speedrun.com refused it (403), and YouTube gave only titles. A guess to test: a dead body's
+   quality 0 points at object 0, the vehicle slot. To be taken up later, from the run's own
+   notes or a session built with u6save.
 6. **Keep in mind:**
    - any change to the replay build's code size changes farcoreleft(), so every recording is
      made again (`rp.py check OUT --session NAME`, copy rec/RECORD.OUT to tests/replay/);

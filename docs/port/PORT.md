@@ -103,6 +103,10 @@ On, they correct ten faults:
 - the fountain's empty wish;
 - the object order where the map wraps.
 
+Enhancements, which change what the original does by design, are turned on apart from the fixes:
+`--enhance moonstone-guard`, or `enhance=` in `u6port.cfg`. This one asks before a moonstone is
+buried.
+
 A session played with fixes is recorded with them and replays with them. What each one does,
 how they are built (port-only lines in SRC, so GAME.EXE stays identical) and how they are tested:
 [docs/port/FIXES.md](FIXES.md); `u6 --fixes list`.
@@ -158,6 +162,9 @@ mouse button change and at its end; its replay with `--out` writes the same dump
     --fixes LIST        fix the original's faults: all, none, or names (--fixes list;
                         docs/port/FIXES.md); off by default. With --dos-replay (tests) a DOS
                         recording is replayed with them
+    --enhance LIST      changes to the original's design: all, none, or names (--enhance
+                        list: moonstone-guard, which asks before burying a moonstone); off by
+                        default
     --keys SCRIPT       type keys at given times (tests): "1500:up 2000:a 2500:^s"; each
                         key waits until the game has taken the one before. The mouse too, in
                         the game's pixels: MS:mouse:X,Y moves it, MS:click:X,Y and

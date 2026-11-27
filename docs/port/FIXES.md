@@ -35,6 +35,26 @@ Not here:
 - **CR-008's crash on the host** (the 5 pointers past the table) is also handled unconditionally
   (SRC/u6port.h's FOUNTAIN_WISH). The fix above only changes what an empty wish does.
 
+## Enhancements
+
+Changes to what the original does by design, not faults. They are kept apart from the fixes, so
+`--fixes all` does not turn them on. They are also off by default and are recorded and replayed
+the same way.
+
+    u6 --enhance moonstone-guard   # or enhance=moonstone-guard in u6port.cfg; --enhance list
+
+| Name | The original | With it |
+|---|---|---|
+| `moonstone-guard` | Using a moonstone on grass or earth buries it at once ("buried."). From then on, its phase's moongates lead there, and its own moongate stands on it, so the player can lose track of where it is. Burying is not permanent: Get takes it back when both moons are down. | The game asks "Bury the moonstone here?" first (Y or N, as "Save game?" does). N leaves it in the pack: "Not buried." |
+
+It is a few lines in objcmd.c's UseMoonstone, under the same `U6_FIX` guard
+(`ENH_MOONSTONE_GUARD`). The `moonstone` session tests it:
+- **Off:** DOS buries the stone, `MoonstonePos[3]` becomes (309,379), and the port is identical
+  in all four builds.
+- **On** (`rp.py port-record OUT moonstone --enhance moonstone-guard`): N leaves
+  `MoonstonePos[3]` at its moongate (295,38); Y sets it.
+  - The recording carries the name (format 5), and its `--replay` is identical.
+
 ## How a fix is built
 
 - **In the shared sources:** each fix is a few lines in SRC under `#ifndef __TURBOC__`, guarded by

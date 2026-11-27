@@ -1724,6 +1724,9 @@ c_2237:
 /*C_27A1_3425*/UseMoonstone(int16 objNum) {
 	int16 x, y;
 	int16 numTile, stoneNum;
+#ifndef __TURBOC__
+	int16 key;
+#endif
 
 	x = GetX(Party[Active]);
 	y = GetY(Party[Active]);
@@ -1733,6 +1736,19 @@ c_2237:
 		(numTile >= TIL_001 && numTile <= TIL_007) ||
 		(numTile >= TIL_010 && numTile <= TIL_06F)
 	) {
+#ifndef __TURBOC__
+		/*enhancement (port/sys/fixes.h, moonstone-guard): ask first, as "Save game?" does;
+		  a buried stone sends its phase's moongates here from then on (Get takes it back)*/
+		if(U6_FIX(ENH_MOONSTONE_GUARD)) {
+			CON_printf("\nBury the moonstone here? ");
+			while((key = CON_getch()) != 'Y' && key != 'N');
+			CON_printf("%c\n", key);
+			if(key == 'N') {
+				CON_printf("Not buried.\n");
+				return;
+			}
+		}
+#endif
 		CON_printf(/*223C*/"buried.\n");
 		stoneNum = GetFrame(objNum);
 		MoonstonePos[stoneNum][0] = x;

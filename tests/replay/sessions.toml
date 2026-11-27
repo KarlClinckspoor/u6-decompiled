@@ -297,6 +297,16 @@ keys = "b u left space up up up up up up space down down down down down down spa
 # the four. Talk, yes: Tiberius walks the object chain from the Avatar and raises the first body,
 # slot E5h (its HP becomes 1); NPC 6 stays dead and he offers again for "another slain friend";
 # no, bye
+# Burying a moonstone (the port's moonstone-guard enhancement, docs/port/FIXES.md): the Avatar on
+# grass with the moonstone of phase 3. Use it from the inventory: buried there, MoonstonePos[3]
+# set. With --enhance moonstone-guard the game asks first ("Bury the moonstone here?"); the
+# port_keys answer N, then use it again (the slot cursor stays on it) and answer Y
+[moonstone]
+feed = 40
+setup = ["teleport 309 379 0", "give avatar 0x49 0 0 3"]
+keys = "u tab right right enter space space"
+port_keys = "2000:u 2800:tab 3600:right 4400:right 5200:enter 6000:n 6800:space 7600:u 8400:tab 9200:enter 10000:y 10800:space"
+
 [cr005]
 feed = 40
 setup = ["teleport 356 362 0", "set Time_H 12", "give avatar 0x153 1 0xE5", "give avatar 0x153 1 6", "npc 6 status 0x10", "npc 6 hp 0", "npc 26 mode 0x90", "give avatar 0x58 250", "give 2 0x58 250", "give 3 0x58 250", "give 4 0x58 250"]

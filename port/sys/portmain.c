@@ -288,6 +288,8 @@ static void usage(void)
 		"  --farcore N         farcoreleft() at most N (tests: DOS's, so that DOS replays it)\n"
 		"  --fixes LIST        fix the original game's faults: all, none, or names (--fixes list);\n"
 		"                      off by default: the port then plays exactly as DOS\n"
+		"  --enhance LIST      changes to the original's design: all, none, or names\n"
+		"                      (--enhance list: moonstone-guard); off by default\n"
 		"  --scale N, --fullscreen, --no-aspect, --no-integer, --no-audio\n"
 		"  --settings          open the settings screen before the game\n"
 		"  --menu, --game      start with the main menu (U.EXE: title, introduction,\n"
@@ -302,7 +304,7 @@ static void usage(void)
 int main(int argc, char **argv)
 {
 	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0, *ending = 0;
-	const char *dos_replay = 0, *replay_out = 0, *fixes_opt = 0;
+	const char *dos_replay = 0, *replay_out = 0, *fixes_opt = 0, *enhance_opt = 0;
 	int menu = -1;
 	int recording = -1, speed = -1, audio = 1, settings_now = 0, i;
 	int scale = 0, fullscreen = -1, aspect = -1, integer = -1, first_run;
@@ -343,7 +345,14 @@ int main(int argc, char **argv)
 		else if (!strcmp(a, "--fixes")) {
 			fixes_opt = ARG;
 			if (!strcmp(fixes_opt, "list")) {
-				fixes_list(stdout);
+				fixes_list(stdout, KIND_FIX);
+				return 0;
+			}
+		}
+		else if (!strcmp(a, "--enhance")) {
+			enhance_opt = ARG;
+			if (!strcmp(enhance_opt, "list")) {
+				fixes_list(stdout, KIND_ENHANCE);
 				return 0;
 			}
 		}
@@ -509,9 +518,13 @@ int main(int argc, char **argv)
 				return 1;
 			/* tests: a DOS recording replayed with fixes; where none is reached, the run
 			 * must stay DOS's (tools/rp.py port-check --fixes) */
-			if (dos_replay && fixes_opt && fixes_parse(fixes_opt, &m) != 0)
+			if (dos_replay && ((fixes_opt && fixes_parse(fixes_opt, &m, KIND_FIX) != 0) ||
+					(enhance_opt && fixes_parse(enhance_opt, &m, KIND_ENHANCE) != 0)))
 				return 1;
-		} else if (fixes_parse(settings.fixes, &m) != 0 || (fixes_opt && fixes_parse(fixes_opt, &m) != 0))
+		} else if (fixes_parse(settings.fixes, &m, KIND_FIX) != 0 ||
+				fixes_parse(settings.enhance, &m, KIND_ENHANCE) != 0 ||
+				(fixes_opt && fixes_parse(fixes_opt, &m, KIND_FIX) != 0) ||
+				(enhance_opt && fixes_parse(enhance_opt, &m, KIND_ENHANCE) != 0))
 			return 1;
 		enhance_on = m;
 		fixes_log();

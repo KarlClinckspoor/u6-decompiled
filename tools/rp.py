@@ -643,7 +643,7 @@ def port_keys_of(keys, gap=800, start=2000):
     return ' '.join(out)
 
 
-def port_record(out, name, variant='linux-gcc', fixes=None):
+def port_record(out, name, variant='linux-gcc', fixes=None, enhance=None):
     """A session recorded in the port: for what DOS's key feeders cannot type, the mouse
     (sessions.toml `port_keys`, the port's --keys script: MS:KEY, MS:click:X,Y ...; F9 is added),
     or a session's own `keys` (port_keys_of) played with the port's FIXES (--fixes, port/sys/fixes.h).
@@ -667,12 +667,12 @@ def port_record(out, name, variant='linux-gcc', fixes=None):
     shutil.copytree(session_stage(name), home)
     args = ['--data', data, '--home', home, '--hidden', '--no-audio', '--game', '--record', os.path.join(out, 'rec'),
             '--farcore', str(dos_farcore()), '--keys', ' '.join(keys + ['%d:f9' % (last + 3000)]),
-            '--run-ms', str(last + 60000)] + (['--fixes', fixes] if fixes else [])
+            '--run-ms', str(last + 60000)] + (['--fixes', fixes] if fixes else []) + (['--enhance', enhance] if enhance else [])
     t0 = time.time()
     code, text = port_run(exe, args, variant)
     open(os.path.join(out, 'rec.log'), 'w').write(text)
     print('rp: [%s] recorded in the port (%s%s): exit %d after %.0f s' % (
-        name, variant, ', fixes ' + fixes if fixes else '', code, time.time() - t0))
+        name, variant, (', fixes ' + fixes if fixes else '') + (', enhance ' + enhance if enhance else ''), code, time.time() - t0))
     rec = os.path.join(out, 'rec', 'RECORD.OUT')
     if not os.path.exists(rec):
         print('rp: no %s (%s)' % (rec, os.path.join(out, 'rec.log')))
@@ -808,6 +808,7 @@ def main():
     p = sub.add_parser('stage'); p.add_argument('session')
     p = sub.add_parser('port-record'); p.add_argument('out'); p.add_argument('session'); variant_args(p, False)
     p.add_argument('--fixes', help="the port's fixes (port/sys/fixes.h): all, or names")
+    p.add_argument('--enhance', help="the port's enhancements (port/sys/fixes.h): all, or names")
     p = sub.add_parser('port-self'); p.add_argument('out'); variant_args(p, True)
     p.add_argument('--keys', default=SELF_KEYS, help="the port's --keys script (MS:KEY ...; F9 is added)")
     p = sub.add_parser('compare'); p.add_argument('a'); p.add_argument('b'); p.add_argument('--cross', action='store_true')
@@ -842,7 +843,7 @@ def main():
     if a.cmd == 'port-dgroup':
         return port_dgroup()
     if a.cmd == 'port-record':
-        return port_record(a.out, a.session, a.variant or 'linux-gcc', a.fixes)
+        return port_record(a.out, a.session, a.variant or 'linux-gcc', a.fixes, a.enhance)
     variants = PORT_VARIANTS if getattr(a, 'all', False) else (getattr(a, 'variant', None) or ['linux-gcc'])
     if a.cmd == 'port-build':
         for v in variants:
