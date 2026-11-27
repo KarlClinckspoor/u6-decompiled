@@ -91,6 +91,11 @@ void plat_push_key(uint16_t bios_key);    /* BIOS shift flags: 1 right shift, 2 
 
 int plat_mouse_present(void);
 void plat_mouse_state(int16_t *x, int16_t *y, uint16_t *buttons); /* buttons: 1 left, 2 right */
+/* Tests (--keys "MS:click:X,Y"): a mouse even without a window, moved and pressed by the script.
+ * plat_test_mouse before the game starts; plat_set_mouse moves it to X, Y and, with buttons,
+ * presses them for a moment, as a click. */
+void plat_test_mouse(void);
+void plat_set_mouse(int16_t x, int16_t y, uint16_t buttons);
 
 /* ---- Sound: the PC speaker ---- */
 

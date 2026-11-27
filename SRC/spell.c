@@ -671,6 +671,11 @@ static /*C_1944_06EF*/TakeReagents(int16 objNum, int16 spellNum, int16 index) {
 			}
 		}
 	}
+#ifndef __TURBOC__
+	/*fix (CR-003): only a line of the page*/
+	if(U6_FIX(FIX_CAST_TARGET) && (index < 0 || index >= 8))
+		return;
+#endif
 	if(spellNum != SPELL_HELP)
 		SpellPageCounts[index] --;
 }
@@ -2763,6 +2768,13 @@ extern unsigned char __ShowNPCInven;*/
 		CON_printf(/*16F1*/"\n\nNo Reagents.\n");
 	} else {
 		/*(when targetPreset, Selection.obj is the target, not a page line)*/
+#ifndef __TURBOC__
+		/*fix (CR-003): cast at a map target, the spell's own line (TakeReagents skips -1, a
+		  spell not on the page); the target's object number decremented a byte of memory*/
+		if(targetPreset && U6_FIX(FIX_CAST_TARGET))
+			TakeReagents(caster, spellNum, SPELL_FindPageLine(spellNum));
+		else
+#endif
 		TakeReagents(caster, spellNum, Selection.obj);
 		MAGIC[caster] -= circle;
 		SubMov(caster, circle * 3 + 10);/*casting takes movement points*/

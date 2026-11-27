@@ -837,6 +837,14 @@ time-dependent state) and process everything that depends on it*/
 		KegFuse -= minutes;
 	} else if(KegFuse) {
 		KegFuse = 0;
+#ifndef __TURBOC__
+		/*fix (CR-004): only if the slot still holds a lit keg; the keg blown up early,
+		  vanished, doused or left behind on another level freed or changed it, and the
+		  original blew up whatever took the slot*/
+		if(U6_FIX(FIX_KEG_FUSE) && (GetType(KegObject) != OBJ_POWDER_KEG || GetFrame(KegObject) != 1))
+			;
+		else
+#endif
 		Detonate(KegObject);
 	}
 	/*possible eruption*/

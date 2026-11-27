@@ -961,6 +961,20 @@ returns 0:ok, 1:syntax error, -1:unknown opcode*/
 		break;
 		case OP_RESURRECT:/*(npc): raise the dead body in npc's inventory*/
 			arg0 = mk_npcnum(parse_factor());
+#ifndef __TURBOC__
+			/*fix (CR-005): a body arg0 carries (its own inventory, not the global chain
+			  past it), and a person's, as the Resurrect spell checks: quality 1..DFh, an
+			  NPC's number (a temporary creature's body has its slot number, E0h or more, and
+			  0 is too old); none, nothing happens (the original revived object -1)*/
+			if(U6_FIX(FIX_HEALER_BODY)) {
+				for(arg1 = FindInv(arg0); arg1 >= 0; arg1 = NextInv())
+					if(GetType(arg1) == OBJ_DEAD_BODY && GetQual(arg1) != 0 && GetQual(arg1) < 0xe0)
+						break;
+				if(arg1 >= 0)
+					SPELL_ReviveNPC(arg1);
+				break;
+			}
+#endif
 			for(arg1 = Link[arg0]; arg1 >= 0; arg1 = Link[arg1])
 				if(GetType(arg1) == OBJ_DEAD_BODY)
 					break;

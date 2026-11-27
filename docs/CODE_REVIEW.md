@@ -244,6 +244,26 @@ comment, `FINDINGS.md` or `docs/GAME_MECHANICS.md`.
 
 Line numbers are those of the current tree. Each code quote is copied from the file.
 
+### 5.0 The critical findings, tested (2026-11-26)
+
+Each critical finding was played out in the DOS game: a session in tests/replay/sessions.toml,
+recorded in DOS (CR-003's in the port, replayed in DOS), replayed twice identically, and identical
+in the port's four builds. The port fixes the nine that change the game, all off by default
+(`--fixes all`, docs/port/FIXES.md).
+
+| Id | Session | What DOS did | Against the review | Port fix |
+|---|---|---|---|---|
+| CR-001 | potions | eight potions (frames 0-7) in the cube on the carpet: the Codex vanished and GAME ran END.EXE | as stated | `vortex-cube` |
+| CR-002 | invhang | 14 items, a dagger readied from a bag of two, scroll down: the third down is the last key the game reads | as stated | `inventory-scroll` |
+| CR-003 | cr003 | Heal cast by clicking Tiberius (object 1Ah): `SpellPageCounts[0x1A]`, DS:EBD8 = `FormationObjs[3]`, went 00 to FF; Heal's count stayed 99 | as stated; this neighbour is a scratch array of MoveFollowers | `cast-target` |
+| CR-004 | keg | a keg lit, then down a ladder: its slot (463) taken by a stalagmite of level 1, which the fuse deleted with an explosion | as stated (Vanish on a lit keg says "No effect") | `keg-fuse` |
+| CR-005 | cr005 | a creature's corpse (quality E5h) carried before NPC 6's: Tiberius took 400 gold and raised slot E5h; NPC 6 stayed dead, and he offered again for "another slain friend" | as stated | `healer-body` |
+| CR-006 | cr006, cr006b | party at (926,856) and (920,846): the beams went to `Obj_11x11[0][-1]` (MapObjPtr[39][39]'s high byte, which was FFh) and `[10][11]` (`CellObjNext[0]`, the free list's head); each time the beam's node was hung on the view's free list | milder: no corruption of MapObjPtr unless an NPC is the first object of that corner cell; one beam missing at the edge | `lens-beam` |
+| CR-007 | cr007 | 2,000 stones added to OBJBLKCC, then Ctrl+S: CC saved with 2,771 of 2,864, CD (Britain) and BD saved empty: 1,111 objects lost | worse: the areas loaded after the full one lose everything | `full-object-table` |
+| CR-008 | fountain | an empty wish compared past the table; matched an empty entry | as stated (the port reads "" there, as DOS) | `fountain-wish` |
+| CR-009 | shop | `lstack[-1]` is the caller's saved registers in DOS: harmless | port hazard only, made safe always | none needed |
+| CR-010 | cr010 | a ship at each edge of the ocean (x 1008 and x 4, water reaches x 4..1012), sailed north and back: ship B's stern at (4,500) linked after ship A's at (1010,500), the chain out of order | reachable (the review said "possible"); it also needs the cache rebuilt after the far area loaded, which CR-019 delays | `map-seam` |
+
 ### 5.1 Critical
 
 #### CR-001: Vortex cube indexes an 8-entry stack array by any item's frame (A+B, new)

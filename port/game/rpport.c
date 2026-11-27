@@ -37,15 +37,8 @@ const char *session_game_home(void);
 long dos_linear(const volatile void *p);
 extern uint8_t *dos_base;
 
-/* replay.c's port-only references, none of which this port has (Exhume's runtime does) */
-int enhance_on;
-char *enhance_names(int on, char *buf, int n)
-{
-	(void)on;
-	if (n > 0)
-		buf[0] = 0;
-	return buf;
-}
+/* replay.c's port-only references: enhance_on and enhance_names are the fixes' (port/sys/fixes.c);
+ * no cheats (test set-ups go through the saved game instead) */
 int cheat_scripted(void) { return 0; }
 int bc_open_host(const char *name, int flags, int mode) { return open(name, flags | O_BINARY, mode); }
 

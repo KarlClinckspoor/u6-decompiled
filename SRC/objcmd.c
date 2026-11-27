@@ -2637,6 +2637,11 @@ uint16 ShrineY[] = {0x108,0x170,0x394,0x02C,0x064,0x33C,0x000,0x360};
 		/*bug: FountainWishes has only 5 entries, the loop reads 5 more pointers
 		past its end (whatever follows in the data segment)*/
 		for(i = 0; i < 10/*bug?*/; i ++) {
+#ifndef __TURBOC__
+			/*fix (CR-008): only the table's 5 wishes (past it an empty wish matched)*/
+			if(i >= 5 && U6_FIX(FIX_FOUNTAIN_WISH))
+				break;
+#endif
 			if(stricmp(wish, FOUNTAIN_WISH(i)) == 0) {/*u6port.h: past the table, what DOS reads*/
 				if(OSI_rand(0, 4) == 0) {
 					CON_printf(/*25BC*/"\n\nYou got food");
@@ -3164,6 +3169,11 @@ uint16 ShrineY[] = {0x108,0x170,0x394,0x02C,0x064,0x33C,0x000,0x360};
 	for(i = 0; i < 8; i ++)
 		hasStone[i] = 0;
 	for(stone = FindInv(objNum); stone >= 0; stone = NextInv())
+#ifndef __TURBOC__
+		/*fix (CR-001): count only moonstones; any item's frame indexed the array, and eight
+		  items of frames 0..7 (the eight potions) ended the game*/
+		if(!U6_FIX(FIX_VORTEX_CUBE) || (GetType(stone) == OBJ_MOONSTONE && GetFrame(stone) < 8))
+#endif
 		hasStone[GetFrame(stone)] = 1;
 	for(i = 0; i < 8; i ++) {
 		if(!hasStone[i])

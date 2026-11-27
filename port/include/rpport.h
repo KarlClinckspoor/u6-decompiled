@@ -89,10 +89,11 @@ int u6_rp_open_out(const char *name, int flags);
 #define RP_OPEN_IN(name)        u6_rp_open_in(name)
 #define RP_OPEN_OUT(name, fl)   u6_rp_open_out(name, fl)
 
-/* replay.c's port-only references (Exhume's runtime has them; this port does not): no
-   enhancements, no cheats (test set-ups go through the saved game instead) */
-extern int enhance_on;
-char *enhance_names(int on, char *buf, int n);
+/* replay.c's port-only references: the session's fixes (port/sys/fixes.h: a recording made with
+   any carries their names, format 5), no cheats (test set-ups go through the saved game instead) */
+#include <stdint.h>
+extern uint32_t enhance_on;
+char *enhance_names(uint32_t mask, char *buf, int n);
 int cheat_scripted(void);
 int bc_open_host(const char *name, int flags, int mode);
 

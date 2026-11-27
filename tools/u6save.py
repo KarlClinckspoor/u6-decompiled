@@ -26,7 +26,10 @@ one argument (quote it):
     place TYPE X Y Z [QUANTITY [QUALITY [FRAME]]]
                                 a new object on the map (a cannon: 0DDh, frame its
                                 direction, 0 north, 1 east, 2 south, 3 west)
+    fill TYPE X0 Y0 X1 Y1 Z [QUANTITY [QUALITY [FRAME]]]
+                                place on every tile of a rectangle (a crowded area)
     map X Y Z [R]               the terrain around a place (. passable, ~ water, # not)
+    count X Y Z                 the number of objects in the area file of a place
     put TYPE [QUANTITY [QUALITY [FRAME]]]
                                 a new item inside the item the last give or place made: a spell
                                 (3Ah, quality its number) in a spellbook (39h), a moonstone
@@ -434,6 +437,22 @@ class Save:
         self.last = (name, o)
         self.changed.add(name)
 
+    def cmd_fill(self, typ, x0, y0, x1, y1, z, *rest):
+        """fill TYPE X0 Y0 X1 Y1 Z [QUANTITY [QUALITY [FRAME]]]: one new object on every tile of
+        the rectangle (inclusive), as place does each, for a crowded area (docs/CODE_REVIEW.md,
+        CR-007: the object table full while an area loads)"""
+        x0, y0, x1, y1 = num(x0), num(y0), num(x1), num(y1)
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                self.cmd_place(typ, str(x), str(y), z, *rest)
+                if len(self.area(area_file(x, y, num(z))).objs) >= 0xC00:
+                    sys.exit('u6save: fill: %s would hold too many objects' % area_file(x, y, num(z)))
+
+    def cmd_count(self, x, y, z):
+        """count X Y Z: the number of objects in the area file of that place"""
+        name = area_file(num(x), num(y), num(z))
+        print('%s: %d objects' % (name, len(self.area(name).objs)))
+
     def cmd_put(self, typ, quantity='1', quality='0', frame='0'):
         """put TYPE [QUANTITY [QUALITY [FRAME]]]: a new item inside the item the last give made
         (a spell in a spellbook: type 3Ah, quality the spell's number; a moonstone in the vortex
@@ -484,7 +503,7 @@ class Save:
             return
         fn = getattr(self, 'cmd_' + w[0], None)
         if not fn:
-            sys.exit('u6save: no command %s (show set npc teleport give put place unequip map)' % w[0])
+            sys.exit('u6save: no command %s (show set npc teleport give put place fill unequip map count)' % w[0])
         try:
             fn(*w[1:])
         except TypeError:

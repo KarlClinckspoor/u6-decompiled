@@ -11,6 +11,7 @@
 #include "dosmem.h"
 #include "dosint.h"
 #include "osi.h"
+#include "fixes.h"
 #include "../platform/plat.h"
 #include "../platform/hostfs.h"
 #include "../ui/overlay.h"
@@ -242,7 +243,25 @@ static void run_key_script(void)
 		end = strchr(colon + 1, ' ');
 		if (!end)
 			end = colon + 1 + strlen(colon + 1);
-		plat_push_key(bios_word(colon + 1, (size_t)(end - colon - 1)));
+		{
+			/* the mouse: mouse:X,Y moves it, click:X,Y and rclick:X,Y move it and press the
+			 * left or the right button (the game's 320x200 pixels) */
+			static const struct { const char *name; uint16_t buttons; } m[] = {
+				{"mouse:", 0}, {"click:", 1}, {"rclick:", 2}, {0, 0}};
+			int j, done = 0;
+			for (j = 0; m[j].name; j++) {
+				size_t n = strlen(m[j].name);
+				if (!strncmp(colon + 1, m[j].name, n)) {
+					int x = atoi(colon + 1 + n);
+					const char *comma = strchr(colon + 1 + n, ',');
+					plat_set_mouse((int16_t)x, (int16_t)(comma && comma < end ? atoi(comma + 1) : 0), m[j].buttons);
+					done = 1;
+					break;
+				}
+			}
+			if (!done)
+				plat_push_key(bios_word(colon + 1, (size_t)(end - colon - 1)));
+		}
 		key_script = end;
 	}
 }
@@ -264,7 +283,11 @@ static void usage(void)
 		"  --hidden            no window (replays, tests)\n"
 		"  --screenshot FILE   write the screen as a BMP when the game ends\n"
 		"  --run-ms N          end the session after N ms (tests)\n"
-		"  --keys SCRIPT       type keys at given times (tests): \"1500:up 2000:a\"\n"
+		"  --keys SCRIPT       type keys at given times (tests): \"1500:up 2000:a\"; and the\n"
+		"                      mouse, in the game's pixels: MS:mouse:X,Y, MS:click:X,Y, MS:rclick:X,Y\n"
+		"  --farcore N         farcoreleft() at most N (tests: DOS's, so that DOS replays it)\n"
+		"  --fixes LIST        fix the original game's faults: all, none, or names (--fixes list);\n"
+		"                      off by default: the port then plays exactly as DOS\n"
 		"  --scale N, --fullscreen, --no-aspect, --no-integer, --no-audio\n"
 		"  --settings          open the settings screen before the game\n"
 		"  --menu, --game      start with the main menu (U.EXE: title, introduction,\n"
@@ -279,7 +302,7 @@ static void usage(void)
 int main(int argc, char **argv)
 {
 	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0, *ending = 0;
-	const char *dos_replay = 0, *replay_out = 0;
+	const char *dos_replay = 0, *replay_out = 0, *fixes_opt = 0;
 	int menu = -1;
 	int recording = -1, speed = -1, audio = 1, settings_now = 0, i;
 	int scale = 0, fullscreen = -1, aspect = -1, integer = -1, first_run;
@@ -311,7 +334,19 @@ int main(int argc, char **argv)
 		else if (!strcmp(a, "--menu")) menu = 1;
 		else if (!strcmp(a, "--game")) menu = 0;
 		else if (!strcmp(a, "--ending")) ending = ARG;
-		else if (!strcmp(a, "--keys")) key_script = ARG;
+		else if (!strcmp(a, "--keys")) {
+			key_script = ARG;
+			if (strstr(key_script, "click:") || strstr(key_script, "mouse:"))
+				plat_test_mouse();	/* a mouse even with --hidden */
+		}
+		else if (!strcmp(a, "--farcore")) dos_farcore_cap = strtoul(ARG, 0, 0);
+		else if (!strcmp(a, "--fixes")) {
+			fixes_opt = ARG;
+			if (!strcmp(fixes_opt, "list")) {
+				fixes_list(stdout);
+				return 0;
+			}
+		}
 		else if (!strcmp(a, "--run-ms")) run_ms = (uint32_t)atol(ARG);
 		else if (!strcmp(a, "--help") || !strcmp(a, "-h")) { usage(); return 0; }
 		else { fprintf(stderr, "unknown option %s\n", a); usage(); return 2; }
@@ -463,6 +498,24 @@ int main(int argc, char **argv)
 	} else if (session_start(home, replay, replay_out, record,
 			!replay && (recording < 0 ? settings.recording : recording), argv[0]) != 0)
 		return 1;
+	{
+		/* the fixes (fixes.h): a replay's are the recording's (a DOS recording has none);
+		 * otherwise the settings' fixes=, then --fixes. Set before the game starts, so that
+		 * replay.c records them in the session's header (format 5) */
+		extern const char *u6_rp_replay_path;	/* port/game/rpport.c: the session's recording */
+		uint32_t m = 0;
+		if (dos_replay || replay) {
+			if (u6_rp_replay_path && fixes_from_recording(u6_rp_replay_path, &m) != 0)
+				return 1;
+			/* tests: a DOS recording replayed with fixes; where none is reached, the run
+			 * must stay DOS's (tools/rp.py port-check --fixes) */
+			if (dos_replay && fixes_opt && fixes_parse(fixes_opt, &m) != 0)
+				return 1;
+		} else if (fixes_parse(settings.fixes, &m) != 0 || (fixes_opt && fixes_parse(fixes_opt, &m) != 0))
+			return 1;
+		enhance_on = m;
+		fixes_log();
+	}
 	if (dosfs_init(settings.data, session_game_home()) != 0) {
 		fprintf(stderr, "cannot use the game folder %s\n", settings.data);
 		return 1;

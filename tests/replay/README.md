@@ -13,6 +13,13 @@ What the replay DOS build's runs read (docs/replay.md):
   with `--session setup`. Likewise `shrine.rec` (`[shrine]`, 484d23bc...), `drake.rec`
   (`[drake]`, 3e4fb65e...) and `endgame.rec` (`[endgame]`, b7a8df86...). first.rec is
   e01afca1....
+- The critical findings of docs/CODE_REVIEW.md each have a session: potions (CR-001), invhang
+  (CR-002, not a test: it hangs), cr003, keg (CR-004), cr005, cr006 and cr006b, cr007, fountain
+  (CR-008), shop (CR-009), cr010. cr003.rec was recorded in the port (`python tools/rp.py
+  port-record OUT cr003`: its `port_keys` click the map, which DOS's key feeder cannot) and
+  replayed in DOS; the others in DOS. `rp.py port-check ... --fixes all` replays them in the
+  port with its fixes on (docs/port/FIXES.md): each then differs from DOS where its fault is,
+  and every other session stays identical.
 - All of them were made with the replay build as it is: a change to that build's code size
   changes the far memory GAME records (farcoreleft), so the recordings are made again
   (`python tools/rp.py check OUT --session NAME`, then copy OUT/rec/RECORD.OUT here).

@@ -50,7 +50,7 @@ KEYFEED.COM at the game's own key polls (the same run every time), one without b
 Environment: U6_DOSBOX or EXHUME_DOSBOX_X (a DOSBox-X; default tools/Dosbox-X on Windows, else
 dosbox-x on PATH), U6_GAMEDATA. Needs Python 3.11+, and Node.js for the replays.
 """
-import argparse, shlex, os, shutil, subprocess, sys, tempfile, time, tomllib
+import argparse, re, shlex, os, shutil, subprocess, sys, tempfile, time, tomllib
 sys.dont_write_bytecode = True   # no __pycache__ in exhume/tools
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -470,7 +470,7 @@ def port_dgroup():
     return 0
 
 
-def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=None):
+def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=None, fixes=None):
     """replays REC (a RECORD.OUT of the replay DOS build) in the port (--dos-replay), from the
     character [_chargen] makes (or STAGE, a session's: session_stage), as tools/replay.py's
     run_port does: a fresh home folder with the stage in it, the game's own directory as --data;
@@ -488,7 +488,9 @@ def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=Non
     shutil.rmtree(os.path.join(out, 'SAVEGAME'), ignore_errors=True)
     data = os.path.join(ROOT, R.data) if not os.path.isabs(R.data) else R.data
     args = ['--data', data, '--home', home, '--hidden', '--no-audio', '--dos-replay', os.path.abspath(rec)]
-    print('rp: replaying %s in the port (%s)' % (rec, os.environ.get('U6_PORT') or variant))
+    if fixes:
+        args += ['--fixes', fixes]
+    print('rp: replaying %s in the port (%s%s)' % (rec, os.environ.get('U6_PORT') or variant, ', fixes ' + fixes if fixes else ''))
     t0 = time.time()
     if on_wsl_side(variant):
         line = 'SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout %d %s %s' % (
@@ -611,6 +613,74 @@ def port_self(out, variant='linux-gcc', keys=SELF_KEYS):
     return 1 if any(res.values()) else 0
 
 
+def dos_farcore():
+    """farcoreleft() as the replay DOS build gets it under DOSBox-X (RV_FARCORE, VALUE2), from
+    tests/replay/smoke.rec: every DOS recording of this build has the same"""
+    cmd = [sys.executable, os.path.join(EXHUME_TOOLS, 'replay.py'), '--config', CONFIG, 'log',
+           os.path.join(ROOT, 'tests', 'replay', 'smoke.rec')]
+    m = re.search(r'VALUE2:([0-9A-F]+)', subprocess.run(cmd, cwd=ROOT, env=env(), capture_output=True, text=True).stdout)
+    if not m:
+        sys.exit('rp: no RV_FARCORE in tests/replay/smoke.rec')
+    return int(m.group(1), 16)
+
+
+def port_keys_of(keys, gap=800, start=2000):
+    """a session's keyfeed key names (tests/replay/sessions.toml `keys`) as the port's --keys
+    script: one key every GAP ms from START (the port types each once the game has taken the one
+    before, so the times are only the earliest); t:TEXT is its letters, ctrl+x is ^x"""
+    out, t = [], start
+    for k in keys.split():
+        k = k.split('/')[0]
+        if k.startswith('t:'):
+            names = list(k[2:])
+        elif k.startswith('ctrl+'):
+            names = ['^' + k[5:]]
+        else:
+            names = [k]
+        for n in names:
+            out.append('%d:%s' % (t, n))
+            t += gap
+    return ' '.join(out)
+
+
+def port_record(out, name, variant='linux-gcc', fixes=None):
+    """A session recorded in the port: for what DOS's key feeders cannot type, the mouse
+    (sessions.toml `port_keys`, the port's --keys script: MS:KEY, MS:click:X,Y ...; F9 is added),
+    or a session's own `keys` (port_keys_of) played with the port's FIXES (--fixes, port/sys/fixes.h).
+    It starts from the session's stage, as DOS's runs do, with --farcore set to DOS's figure, so
+    that a recording without fixes (OUT/rec/RECORD.OUT, with the port's dumps) replays in the
+    replay DOS build: `rp.py check OUT2 --session NAME --rec OUT/rec/RECORD.OUT` replays it twice
+    in DOS, and `rp.py port-check` holds the port to those replays. One with fixes is the port's
+    alone (format 5: DOS reads up to 4)."""
+    s = session(name)
+    if 'port_keys' not in s and 'keys' not in s:
+        sys.exit('rp: session %s has neither port_keys nor keys' % name)
+    keys = (s['port_keys'] if 'port_keys' in s else port_keys_of(s['keys'])).split()
+    last = max(int(k.split(':', 1)[0]) for k in keys)
+    out = os.path.abspath(out)
+    shutil.rmtree(out, ignore_errors=True)
+    os.makedirs(out)
+    exe = port_build(variant)
+    R = rc()
+    data = os.path.join(ROOT, R.data) if not os.path.isabs(R.data) else R.data
+    home = os.path.join(out, 'home')
+    shutil.copytree(session_stage(name), home)
+    args = ['--data', data, '--home', home, '--hidden', '--no-audio', '--game', '--record', os.path.join(out, 'rec'),
+            '--farcore', str(dos_farcore()), '--keys', ' '.join(keys + ['%d:f9' % (last + 3000)]),
+            '--run-ms', str(last + 60000)] + (['--fixes', fixes] if fixes else [])
+    t0 = time.time()
+    code, text = port_run(exe, args, variant)
+    open(os.path.join(out, 'rec.log'), 'w').write(text)
+    print('rp: [%s] recorded in the port (%s%s): exit %d after %.0f s' % (
+        name, variant, ', fixes ' + fixes if fixes else '', code, time.time() - t0))
+    rec = os.path.join(out, 'rec', 'RECORD.OUT')
+    if not os.path.exists(rec):
+        print('rp: no %s (%s)' % (rec, os.path.join(out, 'rec.log')))
+        return 1
+    exhume('log', rec)
+    return 0
+
+
 def port_saves(dos, port, stage=None):
     """the saved game the session left, DOS's against the port's. DOS's run holds the whole
     SAVEGAME (the game's copy, the stage over it, and what the session wrote); the port's home
@@ -663,12 +733,13 @@ def check_dgroup_para():
                  '%04Xh: set it (and run python tools/rp.py port-dgroup)' % (have, para))
 
 
-def port_check(out, rec, variants=('linux-gcc',), stage=None):
+def port_check(out, rec, variants=('linux-gcc',), stage=None, fixes=None):
     """REC replayed in DOS (DOSBox-X) and in each of the port's builds VARIANTS, each one's dumps
     compared with DOS's across the builds (replay.py compare: the masks of both scopes,
     [replay.segments]) and its saved games with DOS's. One variant's run goes to OUT/port, more
     to OUT/port-VARIANT. STAGE: the saved game REC starts from (session_stage), by default the
-    character alone."""
+    character alone. FIXES: the port replays with those fixes on (port/sys/fixes.h); a session
+    that reaches none of the faults must still be DOS's, one that does differs from that point."""
     out = os.path.abspath(out)
     check_dgroup_para()
     exes = [(v, port_build(v)) for v in variants]   # all built before anything runs
@@ -677,7 +748,7 @@ def port_check(out, rec, variants=('linux-gcc',), stage=None):
     res = {}
     for v, exe in exes:
         d = os.path.join(out, 'port' if len(exes) == 1 else 'port-' + v)
-        if port_replay(rec, d, exe, variant=v, stage=stage):
+        if port_replay(rec, d, exe, variant=v, stage=stage, fixes=fixes):
             print('rp: the port failed (%s)' % os.path.join(d, 'port.log'))
         print('\n== DOS against the port (%s)' % v)
         r = exhume('compare', os.path.join(out, 'dos'), d)
@@ -733,7 +804,10 @@ def main():
     p.add_argument('--rec', default=os.path.join(ROOT, 'tests', 'replay', 'first.rec'),
                    help='a RECORD.OUT of the replay DOS build (default tests/replay/first.rec)')
     setup_arg(p)
+    p.add_argument('--fixes', help="the port replays with these fixes on (port/sys/fixes.h): all, or names")
     p = sub.add_parser('stage'); p.add_argument('session')
+    p = sub.add_parser('port-record'); p.add_argument('out'); p.add_argument('session'); variant_args(p, False)
+    p.add_argument('--fixes', help="the port's fixes (port/sys/fixes.h): all, or names")
     p = sub.add_parser('port-self'); p.add_argument('out'); variant_args(p, True)
     p.add_argument('--keys', default=SELF_KEYS, help="the port's --keys script (MS:KEY ...; F9 is added)")
     p = sub.add_parser('compare'); p.add_argument('a'); p.add_argument('b'); p.add_argument('--cross', action='store_true')
@@ -767,13 +841,15 @@ def main():
         return port_replay(a.rec, a.out, variant=a.variant or 'linux-gcc', stage=stage)
     if a.cmd == 'port-dgroup':
         return port_dgroup()
+    if a.cmd == 'port-record':
+        return port_record(a.out, a.session, a.variant or 'linux-gcc', a.fixes)
     variants = PORT_VARIANTS if getattr(a, 'all', False) else (getattr(a, 'variant', None) or ['linux-gcc'])
     if a.cmd == 'port-build':
         for v in variants:
             print('rp: %s: %s' % (v, port_build(v)))
         return 0
     if a.cmd == 'port-check':
-        return port_check(a.out, a.rec, variants, stage)
+        return port_check(a.out, a.rec, variants, stage, a.fixes)
     if a.cmd == 'port-self':
         bad = 0
         for v in variants:

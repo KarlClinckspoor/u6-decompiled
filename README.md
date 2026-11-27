@@ -98,6 +98,26 @@ The same sources also build a native Windows/Linux version on SDL2, with a setti
 over the game (F11), character creation, and a recording of every session that replays
 exactly. The DOS build stays byte-identical. See [docs/port/PORT.md](docs/port/PORT.md).
 
+### Fixes of the original's faults (optional)
+
+A code review of the decompiled source ([docs/CODE_REVIEW.md](docs/CODE_REVIEW.md)) rated ten
+faults of the original game critical. Each was confirmed against the DOS program by a test
+session. One of them (CR-009) is harmless in DOS and only a hazard for a port, which the port
+avoids always. The other nine change the game. For example:
+- eight potions in the vortex cube end the game;
+- the inventory can hang for good;
+- a powder keg can blow up a quest item;
+- a healer can raise a monster's corpse instead of your friend;
+- an over-full area loses objects when saved (a test lost Britain's 944).
+
+The port fixes all of them at once with `u6 --fixes all`, or `fixes=all` in `u6port.cfg`; `u6
+--fixes list` names them. They are **off by default**: off, the port plays exactly as DOS, and
+the replay tests prove it. On, they change gameplay only where a fault would happen. With every
+fix on, the 15 test sessions that reach no fault are still identical to DOS. The changes are
+port-only lines in the shared C, so GAME.EXE still builds byte-identical to the original.
+A session played with fixes is recorded with them and replays with them, but DOS cannot replay
+it. Details, one fix at a time: [docs/port/FIXES.md](docs/port/FIXES.md).
+
 ---
 
 ## Verified with the real compiler: byte-for-byte checks

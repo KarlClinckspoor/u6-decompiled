@@ -235,6 +235,73 @@ feed = 40
 setup = ["teleport 309 379 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 0 0 equip", "put 0x3A 0 0x60", "put 0x3A 0 0x61", "put 0x3A 0 0x62", "put 0x3A 0 0x63", "put 0x3A 0 0x64", "put 0x3A 0 0x65", "put 0x3A 0 0x66", "put 0x3A 0 0x67", "put 0x3A 0 0x68", "put 0x3A 0 0x69", "put 0x3A 0 0x70", "put 0x3A 0 0x71", "put 0x3A 0 0x72", "put 0x3A 0 0x73", "put 0x3A 0 0x74", "put 0x3A 0 0x75", "put 0x3A 0 0x76", "put 0x3A 0 0x77", "put 0x3A 0 0x78", "put 0x3A 0 0x79", "give avatar 0x41 99", "give avatar 0x42 99", "give avatar 0x43 99", "give avatar 0x44 99", "give avatar 0x45 99", "give avatar 0x46 99", "give avatar 0x47 99", "give avatar 0x48 99"]
 keys = "c v o g enter 4 space c i o y enter 4 space c g h enter 4 space c q c enter 4 space c v r p enter t:9 enter space c v a s enter 4 space c v s l enter 4 space c k o x enter 4 space c p o w enter esc space c i c enter 4 space c i m c enter 4 space c c h enter 4 space c v a l enter 4 space c v a x e enter 4 space c v c enter 4 space c v r x enter 4 space c k x c enter 4 space c v p y enter 4 space c a t enter 4 space c v c b m enter 4 space"
 
+# Casting at a map target (docs/CODE_REVIEW.md, CR-003): recorded in the port (`rp.py port-record
+# OUT cr003`), because only the mouse reaches it (cast mode reads no map target from the keys)
+# and DOS's key feeders type keys only; the recording then replays in DOS (`rp.py check OUT2
+# --session cr003 --rec OUT/rec/RECORD.OUT`). The Avatar stands east of Tiberius (NPC 26) with a
+# spellbook whose current spell is Heal and the reagents. Cast, then click Tiberius on the map
+# (tile 4,5 of the view: pixel 72,88): SPELL_CastFromBook casts the book's spell at him and
+# TakeReagents decrements SpellPageCounts[26], a byte of BSS 18 bytes past the 8-byte array.
+# port_keys: the port's --keys script (MS:KEY, MS:click:X,Y); F9 is added
+[cr003]
+setup = ["teleport 356 362 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 6 0 equip", "put 0x3A 0 0x06", "give avatar 0x41 99", "give avatar 0x42 99", "give avatar 0x43 99", "give avatar 0x44 99", "give avatar 0x45 99", "give avatar 0x46 99", "give avatar 0x47 99", "give avatar 0x48 99"]
+port_keys = "3000:c 5000:click:72,88 8000:space 10000:space"
+
+# The lens beams' swapped guards (docs/CODE_REVIEW.md, CR-006): the two lenses on their places
+# (921, 851) and (925, 851); the party at (926, 856), so that the Britannia lens is at the view's
+# top-left cell (objX 0, objY 0) and its beam goes to Obj_11x11[0][-1], the high byte of
+# MapObjPtr[39][39] (FFh: that cell is empty), which ShowObject follows as node FFh of the view's
+# lists: the beam's node is hung on the free list's tail (CellObjNext[0xFF], DS:E6DF, becomes its
+# number). Passes, so that the view is drawn a few times
+[cr006]
+feed = 40
+setup = ["teleport 926 856 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0"]
+keys = "space space space space"
+
+# CR-006's other side: the party at (920, 846), the Gargoyle lens at the bottom-right cell
+# (objX 10, objY 10), its beam to Obj_11x11[10][11], which is CellObjNext[0], the head of the
+# view's free list: the beam's node goes at the free list's end
+[cr006b]
+feed = 40
+setup = ["teleport 920 846 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0"]
+keys = "space space space space"
+
+# The object table full while an area loads (docs/CODE_REVIEW.md, CR-007): 2,000 stones on the
+# tiles 260..309 x 260..299 of OBJBLKCC (u6save fill), 2,864 objects in that area. The window
+# loads BC (44) and CC: the table (2,815) is full 93 objects before CC's end, and CD and BD get
+# none. Ctrl+S, Y: the save writes CC with 2,771, CD (Britain, 944) and BD (74) empty
+# (`python tools/u6save.py OUT/rec "count 300 300 0"`, and so on)
+[cr007]
+feed = 40
+setup = ["fill 0x13B 260 260 309 299 0"]
+keys = "ctrl+s y space space"
+
+# The object cache across the map seam (docs/CODE_REVIEW.md, CR-010). The ocean reaches x 4 and
+# x 1012 (the band between is impassable), so ships can lie on both sides of the seam. Ship A
+# east-west at (1008..1010, 500); ship B north-south at (4, 499..501), the party on the water
+# beside it (force) with its deed. Board it (Use, west): MapX 4 shifts the window of areas over
+# the seam (column H loads) and the 40x40 window AreaX is 1008. North six (AreaY changes, and the
+# cache is rebuilt with ship A in it: until then CR-019 kept it out) and south seven: the stern
+# that comes into row 500 at (4, 500) is linked after ship A's (1010, 500), the chain out of
+# order (from checkpoint 17)
+[cr010]
+feed = 40
+setup = ["teleport 5 500 0 force", "give avatar 0x095 0 8",
+         "place 0x19C 4 499 0 0x96 0 1", "place 0x19C 4 500 0 0x64 8 9", "place 0x19C 4 501 0 0x96 0 17",
+         "place 0x19C 1008 500 0 0x96 0 7", "place 0x19C 1009 500 0 0x64 9 15", "place 0x19C 1010 500 0 0x96 0 23"]
+keys = "b u left space up up up up up up space down down down down down down space down space"
+
+# The healer's resurrection (docs/CODE_REVIEW.md, CR-005): the party east of Tiberius (NPC 26, in
+# his house, set to his shop mode 90h so that he offers at once), the Avatar carrying a creature's
+# corpse (quality E5h, a temporary slot) and then NPC 6's (NPC 6 dead), and 1,000 gold among
+# the four. Talk, yes: Tiberius walks the object chain from the Avatar and raises the first body,
+# slot E5h (its HP becomes 1); NPC 6 stays dead and he offers again for "another slain friend";
+# no, bye
+[cr005]
+feed = 40
+setup = ["teleport 356 362 0", "set Time_H 12", "give avatar 0x153 1 0xE5", "give avatar 0x153 1 6", "npc 6 status 0x10", "npc 6 hp 0", "npc 26 mode 0x90", "give avatar 0x58 250", "give 2 0x58 250", "give 3 0x58 250", "give 4 0x58 250"]
+keys = "t left enter space space y space space space space space space space space space space space space n space t:bye enter space space"
+
 # Character creation, before every session: U.EXE (the real one, from the game directory) run in
 # DOSBox-X from a fresh copy of the game, typed by tools/keyfeed.py's KEYFEED.COM. It counts in
 # U.EXE's own keyboard polls, not in time: KEY/N is offered after N calls of kbhit that said "no

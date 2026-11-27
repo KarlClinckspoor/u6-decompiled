@@ -86,6 +86,27 @@ usual GOG folders.
 - Saving and loading are the game's own: Ctrl+S saves (it asks first), Ctrl+R goes back to
   the last save, Alt+X or Ctrl+Q quits. Neither quitting nor closing the window saves.
 
+## Fixes of the original's faults
+
+The port can fix the faults the code review rated critical (docs/CODE_REVIEW.md), all at once:
+`--fixes all`, or `fixes=all` in `u6port.cfg`. They are **off by default**, and off the port
+plays exactly as DOS.
+
+On, they correct ten faults:
+- the vortex cube ending the game for eight potions;
+- the inventory hang;
+- the spell cast at a map target;
+- the powder keg blowing up whatever takes its place;
+- the healer raising the wrong body;
+- the lens beams drawn outside the view;
+- objects lost when an area is too full;
+- the fountain's empty wish;
+- the object order where the map wraps.
+
+A session played with fixes is recorded with them and replays with them. What each one does,
+how they are built (port-only lines in SRC, so GAME.EXE stays identical) and how they are tested:
+[docs/port/FIXES.md](FIXES.md); `u6 --fixes list`.
+
 ## Recordings and replays
 
 Every session is recorded (unless turned off), the black box: `recordings/YYYYMMDD-HHMMSS/`
@@ -134,8 +155,15 @@ mouse button change and at its end; its replay with `--out` writes the same dump
     --ending Y,M,D      play the ending (END.EXE), as after Y years, M months and D days
     --screenshot FILE   write the screen as a BMP when the session ends (tests)
     --run-ms N          end the session after N ms (tests)
+    --fixes LIST        fix the original's faults: all, none, or names (--fixes list;
+                        docs/port/FIXES.md); off by default. With --dos-replay (tests) a DOS
+                        recording is replayed with them
     --keys SCRIPT       type keys at given times (tests): "1500:up 2000:a 2500:^s"; each
-                        key waits until the game has taken the one before
+                        key waits until the game has taken the one before. The mouse too, in
+                        the game's pixels: MS:mouse:X,Y moves it, MS:click:X,Y and
+                        MS:rclick:X,Y click (a mouse is there even with --hidden)
+    --farcore N         farcoreleft() at most N (tests: the replay DOS build's figure, so that
+                        a session recorded in the port replays in DOS)
 
 ## How it is put together
 
@@ -191,4 +219,7 @@ mouse button change and at its end; its replay with `--out` writes the same dump
   `--keys`, replays it with `--out`, and compares the dumps and the saved games; then the same
   keys as a black box session, whose replay must leave the same saved game.
   `python tools/rp.py port-check OUT --all` replays DOS's recordings in the port
-  (docs/replay.md).
+  (docs/replay.md); with `--fixes all`, with the fixes on (docs/port/FIXES.md).
+  `python tools/rp.py port-record OUT SESSION [--fixes LIST]` records a session in the port
+  from its stage: its `port_keys` (the mouse) or its `keys`; without fixes the recording
+  replays in DOS (`rp.py check OUT2 --session SESSION --rec OUT/rec/RECORD.OUT`).

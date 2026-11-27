@@ -419,7 +419,20 @@ static void update_shift(void)
 }
 
 /* ---- mouse ---- */
-int plat_mouse_present(void) { return !headless; }
+/* the test mouse: a click holds its buttons for TEST_PRESS_POLLS of the game's looks at the
+ * mouse, not for a time, so that the game's command loop sees it however busy the host is */
+#define TEST_PRESS_POLLS 30
+static int test_mouse, test_hold;
+static uint16_t test_buttons;
+int plat_mouse_present(void) { return !headless || test_mouse; }
+void plat_test_mouse(void) { test_mouse = 1; }
+void plat_set_mouse(int16_t x, int16_t y, uint16_t buttons)
+{
+	mouse_x = x;
+	mouse_y = y;
+	test_buttons = buttons;
+	test_hold = buttons ? TEST_PRESS_POLLS : 0;
+}
 
 void plat_mouse_state(int16_t *x, int16_t *y, uint16_t *buttons)
 {
@@ -431,6 +444,10 @@ void plat_mouse_state(int16_t *x, int16_t *y, uint16_t *buttons)
 		if ((mouse_latched & i) && (int32_t)(now - latched_until[i]) >= 0)
 			mouse_latched &= (uint16_t)~i;
 	*buttons = mouse_buttons | mouse_latched;
+	if (test_hold > 0) {
+		*buttons |= test_buttons;
+		test_hold--;
+	}
 }
 
 static void set_mouse_from_window(int wx, int wy)

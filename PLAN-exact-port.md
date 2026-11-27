@@ -1008,10 +1008,7 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
 ### Next steps
 
 1. **The rest of the review's claims:**
-   - CR-005, the healer's resurrect: needs a dead companion and a temporary creature's corpse in
-     the chain; play it out in a session.
-   - CR-003: needs mouse input on the DOS side. KEYFEED types keys only; a mouse feeder, or a way
-     to replay a port-recorded MOUSE stream into DOS, would also open other mouse-only paths.
+   - ~~CR-005, CR-003~~: done, with every other critical one (section 24).
    - The high and medium findings, in order. Each is confirmed or refuted by a session where it
      can be reached, and the result noted in CODE_REVIEW.md's table.
 2. **Phase 3's remaining sessions:**
@@ -1031,10 +1028,69 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
    
    END.EXE runs after the endgame session in the port now, but nothing proves it yet.
 5. **Phase 7, enhancements:**
-   - the registry (Exhume's enhance.c), with every flag off by default (the user: no exception);
-   - the moonstone burial guard first, then the fixes the review ranks highest (CR-001, CR-002,
-     CR-004, CR-005), each with a port session that has the flag on.
+   - ~~the fixes of the critical findings~~: done (section 24, port/sys/fixes.c, `--fixes`);
+   - the moonstone burial guard, as an enhancement (not a fix: the original does what it says),
+     off by default (the user: no exception), beside the fixes; then the high findings'
+     fixes as each is confirmed.
 6. **Keep in mind:**
    - any change to the replay build's code size changes farcoreleft(), so every recording is
      made again (`rp.py check OUT --session NAME`, copy rec/RECORD.OUT to tests/replay/);
    - exhume.toml's first_block_para must follow RGAME.MAP's DGROUP (port-check checks it).
+
+## 24. The critical findings nailed down, and the port's fixes (2026-11-26)
+
+### Every critical finding, tested in DOS
+
+Each one has a session; CODE_REVIEW.md section 5.0 has the table. The new ones:
+
+- **cr003, CR-003:**
+  - recorded in the port and replayed in DOS (below), since only the mouse sets a map target
+    in cast mode;
+  - Heal cast by clicking Tiberius decremented `SpellPageCounts[0x1A]`, which is DS:EBD8,
+    `FormationObjs[3]`.
+- **cr005, CR-005:** Tiberius raised a creature's corpse (slot E5h) carried ahead of a dead
+  NPC's, and took the gold.
+- **cr006 and cr006b, CR-006:**
+  - both out-of-bounds cells were hit: `[0][-1]` and `[10][11]`, which is `CellObjNext[0]`;
+  - the effect is milder than predicted: the beam's node ends up on the view's free list.
+- **cr007, CR-007:**
+  - 2,000 stones added to an area, then a save;
+  - the area kept 2,771 of 2,864 objects, and the two areas loaded after it (Britain's 944, and
+    74) were saved empty.
+- **cr010, CR-010:**
+  - reachable: the ocean runs from x=4 to x=1012, so two ships can lie across the seam;
+  - the chain went out of order at the stern's move into row 500;
+  - it needed the cache rebuilt after the far area loaded, which CR-019 delays until AreaY
+    changes.
+
+### Tools added
+
+- **The port's `--keys` script clicks the mouse:** `MS:click:X,Y`, `MS:rclick:X,Y` and
+  `MS:mouse:X,Y`, with a mouse even under `--hidden`.
+  - A click holds for 30 of the game's looks at the mouse. At 80 ms, it came and went between
+    two looks of the command loop.
+- **`--farcore N`:** the port reports DOS's farcoreleft (0x5BBB8), so a port recording replays
+  in DOS.
+  - The first try hung DOS: it was given the port's 0x8FFF8, and farmalloc failed.
+- **`rp.py port-record OUT SESSION [--fixes]`:** records a session in the port, from a session's
+  `port_keys` or its `keys`.
+- **`rp.py port-check --fixes LIST`:** replays a DOS recording in the port with the fixes on.
+- **u6save:** `fill TYPE X0 Y0 X1 Y1 Z` and `count X Y Z`.
+
+### The fixes
+
+- **Turning them on:** `--fixes all`, or `fixes=all` in u6port.cfg; off by default
+  (docs/port/FIXES.md).
+- **Code:**
+  - port/sys/fixes.c is the registry; replay.c's `enhance_on`/`enhance_names` are its own, so a
+    session with fixes is recorded in format 5 and replays with them;
+  - nine sites in SRC under `#ifndef __TURBOC__` with `U6_FIX(...)`: CR-001 to 008 and CR-010.
+    CR-009 needs none; the port handles it always.
+- **The original builds:** gate 3 of 3, and the replay DOS build has the same sha1 (b2975855),
+  so every recording is still valid.
+- **Fixes off:** all 25 sessions identical to DOS in all four builds.
+- **Fixes on:** the 15 sessions that reach no fault are identical to DOS. The bug sessions
+  differ exactly where their fault is (FIXES.md's table).
+- **What a fix can't change:** a healer still takes the gold for a creature's corpse alone,
+  because the script takes it before the resurrect opcode runs; the fix only stops the wrong
+  body being raised.

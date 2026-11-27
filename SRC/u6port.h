@@ -116,4 +116,14 @@ void u6_writable(char *buf, const char *init, unsigned n);
 		(a)[stack_junk_i_] = (v); }
 #endif
 
+/*U6_FIX(f): whether the port's fix f of the original's faults is on (port/sys/fixes.h,
+  docs/port/FIXES.md; FIX_VORTEX_CUBE ... the critical findings of docs/CODE_REVIEW.md). Used
+  only in lines under #ifndef __TURBOC__, so that neither DOS build sees a fix (GAME.EXE's bytes,
+  the gate, and the replay build's code size, which every recording depends on, are unchanged);
+  off, the port runs the original lines as DOS does*/
+#ifndef __TURBOC__
+#include "../port/sys/fixes.h"
+#define U6_FIX(f) ((enhance_on >> (f)) & 1u)
+#endif
+
 #endif

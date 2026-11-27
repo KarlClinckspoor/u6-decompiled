@@ -45,6 +45,7 @@ long dos_linear(const volatile void *p);
 void *dos_farmalloc(unsigned long size);
 void dos_farfree(void *p);
 unsigned long dos_farcoreleft(void);
+extern unsigned long dos_farcore_cap;   /* --farcore N (tests): farcoreleft() at most N; 0 none */
 
 /* Additions for port/sys. */
 /* The largest free block above the far heap, in paragraphs (what DOS function 48h with

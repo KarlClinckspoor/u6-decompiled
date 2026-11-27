@@ -55,6 +55,7 @@ int settings_load(const char *home)
 		else if (!strcmp(line, "recording")) settings.recording = atoi(v) != 0;
 		else if (!strcmp(line, "settings-at-start")) settings.settings_at_start = atoi(v) != 0;
 		else if (!strcmp(line, "data")) snprintf(settings.data, sizeof settings.data, "%s", v);
+		else if (!strcmp(line, "fixes")) snprintf(settings.fixes, sizeof settings.fixes, "%s", v);
 	}
 	fclose(f);
 	return 1;
@@ -74,5 +75,7 @@ void settings_save(void)
 		settings.scale, settings.fullscreen, settings.aspect, settings.integer_scale, settings.sound,
 		settings.volume, settings.music, settings.music_volume, settings.start_menu, settings.recording,
 		settings.settings_at_start, settings.data);
+	/* fixes= (port/sys/fixes.h, docs/port/FIXES.md): none unless the player writes it */
+	fprintf(f, "fixes=%s\n", settings.fixes);
 	fclose(f);
 }

@@ -230,6 +230,14 @@
 				i = ((int16 *)MapObjPtr)[i];
 			else
 				i = 0x100;
+#ifndef __TURBOC__
+			/*fix (CR-010): where the 40x40 window crosses x = 1023/0 the cache's order is not
+			  the chain's: the cached object before (x, y) can lie on the far side of the
+			  seam in the same row, after (x, y) in the chain, and the new object went in
+			  after it (the chain out of order). Then walk from the head*/
+			if(U6_FIX(FIX_MAP_SEAM) && i != 0x100 && (GetY(i) > y || (GetY(i) == y && GetX(i) >= x)))
+				i = 0x100;
+#endif
 
 			for(j = ((int16 *)MapObjPtr)[j]; (next = Link[i]) >= 0 && next != j; i = next) {
 				if(GetCoordUse(next) == LOCXYZ) {
@@ -1372,6 +1380,11 @@
 /*DeleteTempFiles: delete every "objblkXY.tmp" file flagged in ObjBlkTmpPending*/
 /*C_1184_26E2*/OBJ_DeleteTmpBlocks() {
 	int16 areaId;
+#ifndef __TURBOC__
+	void FixDropRest(void);
+
+	FixDropRest();/*fix (CR-007): a restored game reads every block again*/
+#endif
 
 	DISK_confirm(DISK_PLAYER);
 	for(areaId = 0; areaId < (8*8 + 5); areaId ++) {
@@ -1383,6 +1396,85 @@
 	}
 }
 
+#ifndef __TURBOC__
+/*fix (CR-007): when the object table fills up while a block loads, the original drops the
+  rest of the block, and the next unload or save writes the block without it: objects lost for
+  good (a crowded area loads first, and the areas after it are saved empty). With the fix the
+  records that do not fit stay aside, cut before a whole object (never between a container and
+  what it holds, whose CONTAINED index is that of its container in the block), and the unload
+  writes them back after the block's loaded objects*/
+#include <stdlib.h>
+#include <string.h>
+static unsigned char *FixRest[8*8 + 5];
+static int16 FixRestN[8*8 + 5];
+
+/*the number of the block's numObj records to load; the rest kept for block blockId*/
+static int16 FixKeepRest(int16 numObj, int16 blockId) {
+	int16 k, i, idx;
+	unsigned char *rec;
+
+	if(!U6_FIX(FIX_FULL_OBJECT_TABLE) || numObj <= FreeObjCount)
+		return numObj;
+	k = FreeObjCount;
+	while(k > 0 && (ScratchBuf->objs[k].status & 0x18) == CONTAINED)
+		k --;
+	free(FixRest[blockId]);
+	FixRestN[blockId] = numObj - k;
+	FixRest[blockId] = malloc((size_t)(numObj - k) * 8);
+	memcpy(FixRest[blockId], (void *)&(ScratchBuf->objs[k]), (size_t)(numObj - k) * 8);
+	for(i = 0; i < numObj - k; i ++) {/*the containers' indexes, from the kept records' start*/
+		rec = FixRest[blockId] + i * 8;
+		if((rec[0] & 0x18) == CONTAINED) {
+			idx = (int16)(rec[1] | rec[2] << 8) - k;
+			rec[1] = (unsigned char)idx;
+			rec[2] = (unsigned char)(idx >> 8);
+		}
+	}
+	fprintf(stderr, "u6: fix full-object-table: %d objects of block %d kept in its file (the table is full)\n",
+		numObj - k, blockId);
+	return k;
+}
+
+/*the kept records of block blockId after the numObj entries of the objblk buffer; the new count*/
+static int16 FixPutRest(int16 numObj, int16 blockId) {
+	int16 i, idx, n;
+	unsigned char *rec;
+
+	if(!FixRest[blockId])
+		return numObj;
+	n = FixRestN[blockId];
+	if(numObj + n > 0xc00) {
+		fprintf(stderr, "u6: fix full-object-table: block %d holds more than %d objects; %d lost\n",
+			blockId, 0xc00, numObj + n - 0xc00);
+		n = 0xc00 - numObj;
+	}
+	for(i = 0; i < n; i ++) {
+		rec = FixRest[blockId] + i * 8;
+		if((rec[0] & 0x18) == CONTAINED) {
+			idx = (int16)(rec[1] | rec[2] << 8) + numObj;
+			rec[1] = (unsigned char)idx;
+			rec[2] = (unsigned char)(idx >> 8);
+		}
+		memcpy((void *)&(ScratchBuf->objs[numObj + i]), rec, 8);
+	}
+	free(FixRest[blockId]);
+	FixRest[blockId] = 0;
+	FixRestN[blockId] = 0;
+	return numObj + n;
+}
+
+/*every block's kept records dropped (the game starts, restores, or ends)*/
+void FixDropRest(void) {
+	int16 i;
+
+	for(i = 0; i < 8*8 + 5; i ++) {
+		free(FixRest[i]);
+		FixRest[i] = 0;
+		FixRestN[i] = 0;
+	}
+}
+#endif
+
 /*write the numObj entries of the objblk buffer to __Tmp_file (whose
   letters were set by the caller): a word count then 8 bytes per object.
   If the disk gets full (DISK_full sets DiskFullChoice): on 'R' (restore) nothing
@@ -1393,6 +1485,9 @@
 	int16 i, fd;
 	char tmpLetters[2],savLetters[2];
 
+#ifndef __TURBOC__
+	numObj = FixPutRest(numObj, areaId);/*fix (CR-007)*/
+#endif
 	ObjBlkTmpPending[areaId] = 1;
 	DISK_confirm(DISK_PLAYER);
 	fd = OSI_create(__Tmp_file);
@@ -1633,6 +1728,9 @@
 	if(numObj)
 		OSI_read(fd, -1, (int32)numObj << 3, ScratchBuf);
 	OSI_close(fd);
+#ifndef __TURBOC__
+	numObj = FixKeepRest(numObj, areaId);/*fix (CR-007)*/
+#endif
 	if(numObj)
 		__ObjectsDeserialize(numObj);
 }
@@ -1730,6 +1828,9 @@
 	if(numObj)
 		OSI_read(fd, -1, (int32)numObj << 3, ScratchBuf);
 	OSI_close(fd);
+#ifndef __TURBOC__
+	numObj = FixKeepRest(numObj, 8*8 + z - 1);/*fix (CR-007)*/
+#endif
 	if(numObj)
 		__ObjectsDeserialize(numObj);
 }
@@ -2002,6 +2103,17 @@
 			GetZ(objNum) == 0 &&
 			objY < 11
 		) {
+#ifndef __TURBOC__
+			/*fix (CR-006): the guards were the wrong way round, so at the edge of the view
+			  a beam went to Obj_11x11[objY][-1] or [objY][11], outside its row or the array*/
+			if(U6_FIX(FIX_LENS_BEAM)) {
+				if(objX < 10)
+					ShowObject(TIL_1BA, objX + 1, objY, 1);
+				if(objX > 0)
+					ShowObject(TIL_1BB, objX - 1, objY, 1);
+				continue;
+			}
+#endif
 			if(objX)
 				ShowObject(TIL_1BA, objX + 1, objY, 1);
 			if(objX < 10)
@@ -2016,6 +2128,15 @@
 			GetZ(objNum) == 0 &&
 			objY < 11
 		) {
+#ifndef __TURBOC__
+			if(U6_FIX(FIX_LENS_BEAM)) {/*fix (CR-006), as above*/
+				if(objX < 10)
+					ShowObject(TIL_1B8, objX + 1, objY, 1);
+				if(objX > 0)
+					ShowObject(TIL_1B9, objX - 1, objY, 1);
+				continue;
+			}
+#endif
 			if(objX)
 				ShowObject(TIL_1B8, objX + 1, objY, 1);
 			if(objX < 10)

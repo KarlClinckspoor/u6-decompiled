@@ -15,6 +15,7 @@ typedef struct Settings {
 	int recording;          /* black box: record every session */
 	int settings_at_start;  /* open the overlay before the game starts */
 	char data[1024];        /* the game folder */
+	char fixes[256];        /* the fixes of the original's faults (port/sys/fixes.h): "" none, all, or names */
 } Settings;
 
 extern Settings settings;

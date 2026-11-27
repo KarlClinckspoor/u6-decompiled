@@ -215,11 +215,17 @@ void dos_farfree(void *p)
 	}
 }
 
+/* --farcore N (tests): at most N, the figure the replay DOS build gets under DOSBox-X, so that a
+ * session recorded in the port replays in DOS (main.c takes farcoreleft() whole with farmalloc,
+ * which fails in DOS when the port's larger figure is recorded) */
+unsigned long dos_farcore_cap;
+
 unsigned long dos_farcoreleft(void)
 {
 	uint32_t room = DOS_HEAP_END - heap_top;
+	unsigned long left = room > HEAP_HDR ? room - HEAP_HDR : 0;
 
-	return room > HEAP_HDR ? room - HEAP_HDR : 0;
+	return dos_farcore_cap && left > dos_farcore_cap ? dos_farcore_cap : left;
 }
 
 uint16_t dos_free_paragraphs(void)

@@ -372,6 +372,13 @@
 		InvenScroll -= 4;
 	/*skip the scrolled-out objects*/
 	while(InvenScroll > slot) {
+#ifndef __TURBOC__
+		/*fix (CR-002): STAT_Ready and STAT_Unready refresh InvenSize from the member while an
+		  open bag is shown, so the scroll can go past the bag's items: leave at the end of the
+		  list (item -1), where the original loops for ever*/
+		if(item < 0 && U6_FIX(FIX_INVENTORY_SCROLL))
+			break;
+#endif
 		if(GetCoordUse(item) == INVEN || GetCoordUse(item) == CONTAINED)
 			slot ++;
 		item = NextInv();
