@@ -183,3 +183,5 @@ int rp_mbuttons(void) { return u6_mouse_regs[2]; }
 uint32_t rp_value(int id, uint32_t v) { (void)id; return v; }
 /* the graphics driver's last entry number (port/game/rpport.c), which port/sys/mouse.c sets */
 unsigned short u6_gr_entry;
+/* port/sys/video.c's hook in timer.c (--video): no video in the tests */
+void video_tick(void) {}

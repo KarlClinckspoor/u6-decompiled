@@ -470,11 +470,12 @@ def port_dgroup():
     return 0
 
 
-def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=None, fixes=None):
+def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=None, fixes=None, video=None):
     """replays REC (a RECORD.OUT of the replay DOS build) in the port (--dos-replay), from the
     character [_chargen] makes (or STAGE, a session's: session_stage), as tools/replay.py's
     run_port does: a fresh home folder with the stage in it, the game's own directory as --data;
-    STATE.OUT and the home's SAVEGAME are copied to OUT, the port's log to OUT/port.log"""
+    STATE.OUT and the home's SAVEGAME are copied to OUT, the port's log to OUT/port.log.
+    VIDEO: an .mp4 to write the replay to (--video, ffmpeg; a test's, never committed)"""
     R = rc()
     exe = exe or port_build(variant)
     stage = stage or chargen()
@@ -490,19 +491,26 @@ def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=Non
     args = ['--data', data, '--home', home, '--hidden', '--no-audio', '--dos-replay', os.path.abspath(rec)]
     if fixes:
         args += ['--fixes', fixes]
+    if video:
+        video = os.path.abspath(video)
+        os.makedirs(os.path.dirname(video), exist_ok=True)
     print('rp: replaying %s in the port (%s%s)' % (rec, os.environ.get('U6_PORT') or variant, ', fixes ' + fixes if fixes else ''))
     t0 = time.time()
     if on_wsl_side(variant):
         line = 'SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout %d %s %s' % (
             timeout, exe, ' '.join(shlex.quote(wsl_path(a)) if os.path.exists(a) else shlex.quote(a) for a in args))
+        if video:
+            line += ' --video ' + shlex.quote(wsl_path(video))
         r = subprocess.run(['wsl', '-e', 'bash', '-lc', line], capture_output=True, text=True, errors='replace')
     else:
         try:
-            r = subprocess.run([exe] + args, capture_output=True, text=True, errors='replace', timeout=timeout,
-                               env=port_env(variant))
+            r = subprocess.run([exe] + args + (['--video', video] if video else []), capture_output=True, text=True,
+                               errors='replace', timeout=timeout, env=port_env(variant))
         except subprocess.TimeoutExpired:
             sys.exit('rp: the port did not finish within %d s' % timeout)
     open(os.path.join(out, 'port.log'), 'w').write(r.stdout + r.stderr)
+    if video:
+        print('rp: video %s (%s)' % (video, '%d KB' % (os.path.getsize(video) // 1024) if os.path.exists(video) else 'NOT written'))
     if os.path.exists(os.path.join(home, 'STATE.OUT')):
         shutil.copy(os.path.join(home, 'STATE.OUT'), os.path.join(out, 'STATE.OUT'))
     names = {n.upper(): n for n in os.listdir(home)}
@@ -733,7 +741,7 @@ def check_dgroup_para():
                  '%04Xh: set it (and run python tools/rp.py port-dgroup)' % (have, para))
 
 
-def port_check(out, rec, variants=('linux-gcc',), stage=None, fixes=None):
+def port_check(out, rec, variants=('linux-gcc',), stage=None, fixes=None, video=None):
     """REC replayed in DOS (DOSBox-X) and in each of the port's builds VARIANTS, each one's dumps
     compared with DOS's across the builds (replay.py compare: the masks of both scopes,
     [replay.segments]) and its saved games with DOS's. One variant's run goes to OUT/port, more
@@ -748,7 +756,9 @@ def port_check(out, rec, variants=('linux-gcc',), stage=None, fixes=None):
     res = {}
     for v, exe in exes:
         d = os.path.join(out, 'port' if len(exes) == 1 else 'port-' + v)
-        if port_replay(rec, d, exe, variant=v, stage=stage, fixes=fixes):
+        mp4 = os.path.join(video, '%s-%s%s.mp4' % (os.path.splitext(os.path.basename(rec))[0], v,
+                                                    '-fixes' if fixes else '')) if video else None
+        if port_replay(rec, d, exe, variant=v, stage=stage, fixes=fixes, video=mp4):
             print('rp: the port failed (%s)' % os.path.join(d, 'port.log'))
         print('\n== DOS against the port (%s)' % v)
         r = exhume('compare', os.path.join(out, 'dos'), d)
@@ -798,6 +808,8 @@ def main():
         if many:
             p.add_argument('--all', action='store_true', help='every variant: %s' % ', '.join(PORT_VARIANTS))
     p = sub.add_parser('port'); p.add_argument('rec'); p.add_argument('out'); variant_args(p, False); setup_arg(p)
+    p.add_argument('--video', help='write the replay as this .mp4 too (ffmpeg; not committed: e.g. build/videos/)')
+    p.add_argument('--fixes', help="the port's fixes on (port/sys/fixes.h)")
     p = sub.add_parser('port-build'); variant_args(p, True)
     p = sub.add_parser('port-dgroup')
     p = sub.add_parser('port-check'); p.add_argument('out'); variant_args(p, True)
@@ -805,6 +817,8 @@ def main():
                    help='a RECORD.OUT of the replay DOS build (default tests/replay/first.rec)')
     setup_arg(p)
     p.add_argument('--fixes', help="the port replays with these fixes on (port/sys/fixes.h): all, or names")
+    p.add_argument('--video', help='a folder for a video of each build\'s replay, REC-VARIANT.mp4 (ffmpeg; '
+                   'not committed: e.g. build/videos)')
     p = sub.add_parser('stage'); p.add_argument('session')
     p = sub.add_parser('port-record'); p.add_argument('out'); p.add_argument('session'); variant_args(p, False)
     p.add_argument('--fixes', help="the port's fixes (port/sys/fixes.h): all, or names")
@@ -839,7 +853,7 @@ def main():
     if a.cmd == 'replay':
         return replay(a.rec, a.out, stage)
     if a.cmd == 'port':
-        return port_replay(a.rec, a.out, variant=a.variant or 'linux-gcc', stage=stage)
+        return port_replay(a.rec, a.out, variant=a.variant or 'linux-gcc', stage=stage, fixes=a.fixes, video=a.video)
     if a.cmd == 'port-dgroup':
         return port_dgroup()
     if a.cmd == 'port-record':
@@ -850,7 +864,7 @@ def main():
             print('rp: %s: %s' % (v, port_build(v)))
         return 0
     if a.cmd == 'port-check':
-        return port_check(a.out, a.rec, variants, stage, a.fixes)
+        return port_check(a.out, a.rec, variants, stage, a.fixes, a.video)
     if a.cmd == 'port-self':
         bad = 0
         for v in variants:

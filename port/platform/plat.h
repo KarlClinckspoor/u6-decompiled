@@ -77,6 +77,8 @@ void plat_video_source(const uint8_t *pixels, const uint8_t *palette6);
 void plat_video_dirty(void);
 /* What the next present would show (the frame with the overlay drawn): screenshots. */
 int plat_video_capture(uint8_t *frame, uint8_t *palette6);
+/* The game's own screen and palette, without the overlay (--video). */
+int plat_video_frame(uint8_t *frame, uint8_t *palette6);
 
 /* ---- Keyboard ----
  * Keys are delivered as the BIOS keyboard buffer held them (int 16h): scan code in the

@@ -123,6 +123,16 @@ keys = "up up up u up enter space space"
 # (291, 348) uses it (north): map.c's PartyChangeLevel takes it down to level 1, the coordinates
 # scaled (surface chunk / 4, the same tile in the chunk) to (75, 83, 1), where an up ladder
 # stands; waits; uses that ladder (Use, Enter on its own tile) back up to (291, 347, 0); waits
+# CR-001 played out from the start: the cube on the carpet empty, the eight potions (one of each
+# colour) in the Avatar's pack. Up three; drop each potion onto the cube (Drop, third slot,
+# north): CanPutInContainer lets any item into the cube on the ground. Then use the cube
+[potions2]
+feed = 40
+setup = ["teleport 923 856 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0", "place 0x3E 923 852 0",
+         "give avatar 0x113 0 0 0", "give avatar 0x113 0 0 1", "give avatar 0x113 0 0 2", "give avatar 0x113 0 0 3",
+         "give avatar 0x113 0 0 4", "give avatar 0x113 0 0 5", "give avatar 0x113 0 0 6", "give avatar 0x113 0 0 7"]
+keys = "up up up d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter u up enter space space"
+
 [ladders]
 feed = 40
 setup = ["teleport 291 348 0"]

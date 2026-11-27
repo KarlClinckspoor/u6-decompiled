@@ -20,6 +20,10 @@ What the replay DOS build's runs read (docs/replay.md):
   replayed in DOS; the others in DOS. `rp.py port-check ... --fixes all` replays them in the
   port with its fixes on (docs/port/FIXES.md): each then differs from DOS where its fault is,
   and every other session stays identical.
+- Videos: `python tools/rp.py port-check OUT --rec tests/replay/NAME.rec --session NAME --video
+  build/videos` (or `rp.py port ... --video FILE`) writes the port's replay of a session as an
+  .mp4. It is DOS's run, since the port's replay is identical to DOS's. The videos stay out of
+  git (`build*/`).
 - All of them were made with the replay build as it is: a change to that build's code size
   changes the far memory GAME records (farcoreleft), so the recordings are made again
   (`python tools/rp.py check OUT --session NAME`, then copy OUT/rec/RECORD.OUT here).

@@ -244,6 +244,15 @@ void plat_video_source(const uint8_t *pixels, const uint8_t *palette6)
 
 void plat_video_dirty(void) { dirty = 1; }
 
+int plat_video_frame(uint8_t *frame, uint8_t *palette6)
+{
+	if (!src_pixels)
+		return -1;
+	memcpy(frame, src_pixels, 320 * 200);
+	memcpy(palette6, src_palette, 768);
+	return 0;
+}
+
 int plat_video_capture(uint8_t *frame, uint8_t *palette6)
 {
 	if (!src_pixels)

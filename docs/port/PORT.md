@@ -135,6 +135,15 @@ round.
     u6 --replay DIR --speed 0 --hidden    # as fast as possible, no window
     u6 --replay DIR --out OUT             # run it in OUT, writing its dumps (STATE.OUT) there
     u6 --record DIR --keys "..."          # a test session, with dumps; F9 ends it
+    u6 --replay DIR --speed 0 --hidden --video bug.mp4   # a recording as a video
+
+A player who finds a bug can send the recording folder (`RECORD.OUT` and `stage/`). Replayed
+with `--video`, it becomes a video at the game's real pace, whatever the replay's speed: at
+`--speed 0` it takes seconds, and it can also be made while watching it in the window at 2, 4
+or 8. The frames are taken when the replay's clock advances, at the same point of the game every
+run, so the same recording always gives the same video. They show the game's screen without the
+port's overlay. ffmpeg must be installed (or named by `U6_FFMPEG`). A recording made with fixes
+or enhancements replays and films with them.
 
 A `--record` session also writes the state dumps (`STATE.OUT`, docs/replay.md) at every key,
 mouse button change and at its end; its replay with `--out` writes the same dumps, and
@@ -171,6 +180,10 @@ mouse button change and at its end; its replay with `--out` writes the same dump
                         MS:rclick:X,Y click (a mouse is there even with --hidden)
     --farcore N         farcoreleft() at most N (tests: the replay DOS build's figure, so that
                         a session recorded in the port replays in DOS)
+    --video FILE        the session as a video (an .mp4 through ffmpeg, or U6_FFMPEG), one
+                        frame per tick of the game's clock (18.2 a second), 640x400, without the
+                        overlay: a replay's plays at the game's own pace however fast it ran, and
+                        is the same at any --speed. It only reads the screen
 
 ## How it is put together
 
@@ -226,7 +239,10 @@ mouse button change and at its end; its replay with `--out` writes the same dump
   `--keys`, replays it with `--out`, and compares the dumps and the saved games; then the same
   keys as a black box session, whose replay must leave the same saved game.
   `python tools/rp.py port-check OUT --all` replays DOS's recordings in the port
-  (docs/replay.md); with `--fixes all`, with the fixes on (docs/port/FIXES.md).
+  (docs/replay.md); with `--fixes all`, with the fixes on (docs/port/FIXES.md); with `--video
+  DIR`, also a video of each build's replay (REC-VARIANT.mp4; `build/videos` is outside git).
+  Since the port replays DOS's recordings identically, the video is DOS's run. `rp.py port REC
+  OUT --session S --video FILE` makes one alone.
   `python tools/rp.py port-record OUT SESSION [--fixes LIST]` records a session in the port
   from its stage: its `port_keys` (the mouse) or its `keys`; without fixes the recording
   replays in DOS (`rp.py check OUT2 --session SESSION --rec OUT/rec/RECORD.OUT`).

@@ -12,6 +12,7 @@
 #include "dosint.h"
 #include "osi.h"
 #include "fixes.h"
+#include "video.h"
 #include "../platform/plat.h"
 #include "../platform/hostfs.h"
 #include "../ui/overlay.h"
@@ -174,6 +175,8 @@ void port_exit(int code)
 {
 	if (screenshot_path)
 		write_screenshot(screenshot_path);
+	video_pump();	/* the frames up to the end */
+	video_close();
 	session_end();
 	plat_shutdown();
 	exit(code);
@@ -286,6 +289,7 @@ static void usage(void)
 		"  --keys SCRIPT       type keys at given times (tests): \"1500:up 2000:a\"; and the\n"
 		"                      mouse, in the game's pixels: MS:mouse:X,Y, MS:click:X,Y, MS:rclick:X,Y\n"
 		"  --farcore N         farcoreleft() at most N (tests: DOS's, so that DOS replays it)\n"
+		"  --video FILE        the session as a video (ffmpeg, or U6_FFMPEG), at the game's pace\n"
 		"  --fixes LIST        fix the original game's faults: all, none, or names (--fixes list);\n"
 		"                      off by default: the port then plays exactly as DOS\n"
 		"  --enhance LIST      changes to the original's design: all, none, or names\n"
@@ -304,7 +308,7 @@ static void usage(void)
 int main(int argc, char **argv)
 {
 	const char *data = 0, *home = 0, *replay = 0, *record = 0, *new_avatar = 0, *ending = 0;
-	const char *dos_replay = 0, *replay_out = 0, *fixes_opt = 0, *enhance_opt = 0;
+	const char *dos_replay = 0, *replay_out = 0, *fixes_opt = 0, *enhance_opt = 0, *video_path = 0;
 	int menu = -1;
 	int recording = -1, speed = -1, audio = 1, settings_now = 0, i;
 	int scale = 0, fullscreen = -1, aspect = -1, integer = -1, first_run;
@@ -342,6 +346,7 @@ int main(int argc, char **argv)
 				plat_test_mouse();	/* a mouse even with --hidden */
 		}
 		else if (!strcmp(a, "--farcore")) dos_farcore_cap = strtoul(ARG, 0, 0);
+		else if (!strcmp(a, "--video")) video_path = ARG;
 		else if (!strcmp(a, "--fixes")) {
 			fixes_opt = ARG;
 			if (!strcmp(fixes_opt, "list")) {
@@ -533,6 +538,8 @@ int main(int argc, char **argv)
 		fprintf(stderr, "cannot use the game folder %s\n", settings.data);
 		return 1;
 	}
+	if (video_path && video_open(video_path) != 0)
+		return 1;
 	dosmem_reset();	/* GAME.EXE starts with DOS's memory free, whatever U.EXE left in it */
 	dos_set_exec_handler(on_exec);
 	dos_exit_hook = port_exit;
@@ -552,6 +559,7 @@ int main(int argc, char **argv)
 extern void overlay_pump_hook(void);
 static void test_options(void)
 {
+	video_pump();
 	run_key_script();
 	if (run_ms && plat_real_ms() >= run_ms)
 		port_exit(0);

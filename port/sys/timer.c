@@ -24,6 +24,7 @@
  * at once.
  */
 #include "osi.h"
+#include "video.h"
 #include "dosint.h"
 #include "../platform/plat.h"
 
@@ -126,6 +127,7 @@ void osi_wait_tick(uint32_t seen)
 	plat_pump();
 	if (replaying) {
 		virt_ticks = seen + 1;
+		video_tick();	/* --video: a replay's frame of this tick, at the same point every run */
 		pace_to(virt_ticks);
 		return;
 	}
