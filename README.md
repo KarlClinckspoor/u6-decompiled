@@ -90,6 +90,16 @@ It also compares the assembly files against the map. It then checks that no two 
 Codegen only depends on the token stream, so passing this check means the compiled output is the same.
 Still, a real rebuild with `doit.bat` plus `mydiff.bat` is the final word.
 
+### Exporting the dialogue
+
+`tools/dialogue_export.py` (Python 3, no dependencies) disassembles all 200 conversation scripts in `CONVERSE.A/B` and writes them as JSON:
+
+    python3 tools/dialogue_export.py -o dialogue.json              # every script: text, IF/ELSE, GOTOs, flags, keyword blocks
+    python3 tools/dialogue_export.py --format text --name british  # only the words, per keyword
+    python3 tools/dialogue_export.py --check                       # disassemble everything, report problems
+
+It reads `gamedata/` by default (`-d` for another folder). The walk is static, so every branch of every IF is exported. Text keeps the engine's escapes (`$P`, `#K`, `*`, `@word`); see `python3 tools/dialogue_export.py -h`.
+
 ---
 
 ## Native port for Windows and Linux (branch `portable`)
