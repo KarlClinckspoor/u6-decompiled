@@ -15,6 +15,12 @@ A list of names turns on only those (`--fixes vortex-cube,keg-fuse`); `-name` tu
 (`--fixes all,-lens-beam`); `none` turns them all off. The finding's number also works as a name
 (`--fixes cr-004`).
 
+In the game, the settings screen (F11) has a **Fixes** tab and an **Enhance** tab: a row for each,
+and one that turns them all on or off. They write `fixes=` and `enhance=`, so a change applies at
+the next start: a session keeps its set from start to end, as its recording does. A row whose
+saved choice differs from the running session's says "On, next start" or "Off, next start".
+`--fixes` and `--enhance` add to what the file chooses, for that session only.
+
 ## What turning them on changes
 
 | Name | Finding | The original | With the fix |

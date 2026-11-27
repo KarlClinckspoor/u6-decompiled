@@ -83,16 +83,21 @@ usual GOG folders.
     start, New game (your
     saved game moves to `backups/` and the game folder's own, as installed, comes back).
   - Replay: the recordings, to watch; while one plays, its speed and "take over".
+  - Fixes and Enhance: each fix and each enhancement on or off, with a row that turns them
+    all on or off, and the selected one's description underneath. The choice is saved as
+    `fixes=` and `enhance=` and applies at the next start, because a session keeps its set
+    (its recording carries it). A row whose saved choice differs from the running session's
+    says "On, next start" or "Off, next start".
 - Saving and loading are the game's own: Ctrl+S saves (it asks first), Ctrl+R goes back to
   the last save, Alt+X or Ctrl+Q quits. Neither quitting nor closing the window saves.
 
 ## Fixes of the original's faults
 
 The port can fix the faults the code review rated critical (docs/CODE_REVIEW.md), all at once:
-`--fixes all`, or `fixes=all` in `u6port.cfg`. They are **off by default**, and off the port
-plays exactly as DOS.
+`--fixes all`, `fixes=all` in `u6port.cfg`, or the settings screen's Fixes tab (F11). They are
+**off by default**, and off the port plays exactly as DOS.
 
-On, they correct ten faults:
+On, they correct nine faults:
 - the vortex cube ending the game for eight potions;
 - the inventory hang;
 - the spell cast at a map target;
@@ -104,7 +109,7 @@ On, they correct ten faults:
 - the object order where the map wraps.
 
 Enhancements, which change what the original does by design, are turned on apart from the fixes:
-`--enhance NAMES` or `all`, or `enhance=` in `u6port.cfg` (`--enhance list`):
+`--enhance NAMES` or `all`, `enhance=` in `u6port.cfg` (`--enhance list`), or the Enhance tab (F11):
 - `moonstone-guard` asks before a moonstone is buried;
 - `grouped-finds` lists identical found items once ("throwing axes (7x)");
 - `look-tile` makes Look list everything on a tile;

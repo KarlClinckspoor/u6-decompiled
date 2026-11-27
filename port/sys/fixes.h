@@ -47,5 +47,10 @@ void fixes_list(FILE *f, int kind);
 int fixes_from_recording(const char *path, uint32_t *mask);
 /* one line on stderr when any is on */
 void fixes_log(void);
+/* the bits of KIND's flags */
+uint32_t fixes_kind_mask(int kind);
+/* flag I's name, finding ("" for an enhancement) and one-line description; its kind, or -1 past
+ * the last (the settings screen's Fixes and Enhance tabs, port/ui/overlay.c) */
+int fixes_info(int i, const char **name, const char **cr, const char **about);
 
 #endif

@@ -6,16 +6,26 @@
  * a tab or a row. While it is open the game's clock is stopped (plat_clock_pause) and the
  * keys pressed go to the screen, not to the game. Every change is written to the settings
  * file at once.
+ *
+ * The Fixes and Enhance tabs choose the fixes of the original's faults and the enhancements
+ * (port/sys/fixes.h, docs/port/FIXES.md) by writing fixes= and enhance= in the settings file.
+ * They are fixed for a session (a recording carries them), so a change applies at the next
+ * start; a row whose choice differs from the running session's says so.
  */
 #include "overlay.h"
 #include "settings.h"
 #include "../platform/plat.h"
+#include "../sys/fixes.h"
 
 #include <stdio.h>
 #include <string.h>
 
-enum { TAB_DISPLAY, TAB_SOUND, TAB_GAME, TAB_REPLAY, NTABS };
-static const char *tab_names[NTABS] = {"Display", "Sound", "Game", "Replay"};
+enum { TAB_DISPLAY, TAB_SOUND, TAB_GAME, TAB_REPLAY, TAB_FIXES, TAB_ENHANCE, NTABS };
+static const char *tab_names[NTABS] = {"Display", "Sound", "Game", "Replay", "Fixes", "Enhance"};
+
+/* a tab's width on the bar: six fit in 320 pixels (the last ends at x 310) */
+static int tab_width(int i) { return (int)strlen(tab_names[i]) * 8 + 4; }
+#define TAB_GAP 2
 
 static const uint8_t *font;
 static int open_now, want_open, tab, row = -1;
@@ -129,8 +139,62 @@ typedef struct Row {
 
 enum {
 	R_FULLSCREEN, R_SCALE, R_ASPECT, R_INTEGER, R_SOUND, R_VOLUME, R_MUSIC, R_MUSICVOL, R_STARTMENU, R_FOLDER, R_RECORDING,
-	R_ATSTART, R_NEWGAME, R_STATUS, R_SPEED, R_TAKEOVER, R_REC0
+	R_ATSTART, R_NEWGAME, R_STATUS, R_SPEED, R_TAKEOVER, R_REC0,
+	R_ALLFIXES = R_REC0 + 8, R_ALLENH, R_FLAG0	/* R_FLAG0 + i: flag i of fixes.h */
 };
+
+/* the flags the settings file chooses (what the next start gets, without --fixes/--enhance) */
+static uint32_t saved_flags(void)
+{
+	uint32_t m = 0;
+	if (fixes_parse(settings.fixes, &m, KIND_FIX) != 0)
+		m &= ~fixes_kind_mask(KIND_FIX);
+	if (fixes_parse(settings.enhance, &m, KIND_ENHANCE) != 0)
+		m &= ~fixes_kind_mask(KIND_ENHANCE);
+	return m;
+}
+
+/* MASK's flags of KIND written as fixes= or enhance= ("all" when all are on) */
+static void save_flags(uint32_t mask, int kind)
+{
+	uint32_t all = fixes_kind_mask(kind), m = mask & all;
+	char *dst = kind == KIND_FIX ? settings.fixes : settings.enhance;
+	if (m == all)
+		snprintf(dst, 256, "all");
+	else
+		enhance_names(m, dst, 256);
+}
+
+/* the rows of the Fixes or Enhance tab: one to turn all on or off, then one a flag */
+static int flag_rows(Row *rows, int n, int kind)
+{
+	uint32_t saved = saved_flags(), all = fixes_kind_mask(kind);
+	const char *name, *cr, *about;
+	int i;
+	snprintf(rows[n].label, 40, "%s", kind == KIND_FIX ? "All fixes" : "All enhancements");
+	snprintf(rows[n].value, 40, "%s", (saved & all) == all ? "All on" : (saved & all) ? "Some on" : "All off");
+	rows[n].help = kind == KIND_FIX
+		? "Off, the port plays exactly as DOS does. A change applies at the next start; a recording keeps its own."
+		: "Changes to what the original does by design. A change applies at the next start; a recording keeps its own.";
+	rows[n].kind = 0;
+	rows[n].id = kind == KIND_FIX ? R_ALLFIXES : R_ALLENH;
+	n++;
+	for (i = 0; fixes_info(i, &name, &cr, &about) >= 0; i++) {
+		static char help[FLAG_COUNT][160];
+		int on = (saved >> i) & 1u, now = (enhance_on >> i) & 1u;
+		if (fixes_info(i, 0, 0, 0) != kind)
+			continue;
+		snprintf(rows[n].label, 40, "%s", name);
+		snprintf(rows[n].value, 40, "%s%s", on ? "On" : "Off", on != now ? ", next start" : "");
+		snprintf(help[i], sizeof help[i], "%c%s%s%s%s.", about[0] >= 'a' && about[0] <= 'z' ? about[0] - 32 : about[0],
+			about + 1, cr[0] ? " (" : "", cr, cr[0] ? ")" : "");
+		rows[n].help = help[i];
+		rows[n].kind = 0;
+		rows[n].id = R_FLAG0 + i;
+		n++;
+	}
+	return n;
+}
 
 static int build_rows(Row *rows)
 {
@@ -182,6 +246,12 @@ static int build_rows(Row *rows)
 		for (i = 0; i < nrec; i++)
 			ROW("Replay", rec_names[i], "Restarts the port and plays this recording from its saved game.", 1, R_REC0 + i);
 		break;
+	case TAB_FIXES:
+		n = flag_rows(rows, n, KIND_FIX);
+		break;
+	case TAB_ENHANCE:
+		n = flag_rows(rows, n, KIND_ENHANCE);
+		break;
 	}
 #undef ROW
 	return n;
@@ -220,7 +290,19 @@ static void change(Row *r, int dir)
 		session_take_over();
 		open_now = 0;
 		return;
+	case R_ALLFIXES:
+	case R_ALLENH: {
+		int kind = r->id == R_ALLFIXES ? KIND_FIX : KIND_ENHANCE;
+		uint32_t all = fixes_kind_mask(kind), m = saved_flags();
+		save_flags((m & all) == all ? 0 : all, kind);	/* all on unless all are on already */
+		break;
+	}
 	default:
+		if (r->id >= R_FLAG0 && r->id < R_FLAG0 + FLAG_COUNT) {
+			int i = r->id - R_FLAG0;
+			save_flags(saved_flags() ^ (1u << i), fixes_info(i, 0, 0, 0));
+			break;
+		}
 		if (r->id >= R_REC0) {
 			session_play_recording(rec_names[r->id - R_REC0]);
 			return;
@@ -250,10 +332,10 @@ static void draw(uint8_t *fb, uint8_t *pal)
 	put_text(fb, 320 - 4 - 9 * 8, 2, "F11 close", c_light, 9);
 	x = 4;
 	for (i = 0; i < NTABS; i++) {
-		int w = (int)strlen(tab_names[i]) * 8 + 8;
+		int w = tab_width(i);
 		fill(fb, x, 16, w, 12, i == tab ? (row < 0 ? c_hilite : c_mid) : c_dark);
-		put_text(fb, x + 4, 18, tab_names[i], i == tab && row < 0 ? c_black : c_white, 12);
-		x += w + 4;
+		put_text(fb, x + 2, 18, tab_names[i], i == tab && row < 0 ? c_black : c_white, 12);
+		x += w + TAB_GAP;
 	}
 	n = build_rows(rows);
 	if (row >= n)
@@ -334,12 +416,12 @@ static void handle_click(int16_t mx, int16_t my)
 	int n = build_rows(rows), i, x = 4;
 	if (my >= 16 && my < 28) {
 		for (i = 0; i < NTABS; i++) {
-			int w = (int)strlen(tab_names[i]) * 8 + 8;
+			int w = tab_width(i);
 			if (mx >= x && mx < x + w) {
 				tab = i;
 				row = -1;
 			}
-			x += w + 4;
+			x += w + TAB_GAP;
 		}
 		return;
 	}

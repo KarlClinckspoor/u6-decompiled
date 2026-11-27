@@ -40,6 +40,18 @@ static uint32_t kind_mask(int kind)
 	return m;
 }
 
+uint32_t fixes_kind_mask(int kind) { return kind_mask(kind); }
+
+int fixes_info(int i, const char **name, const char **cr, const char **about)
+{
+	if (i < 0 || i >= FLAG_COUNT)
+		return -1;
+	if (name) *name = tab[i].name;
+	if (cr) *cr = tab[i].cr;
+	if (about) *about = tab[i].about;
+	return kind_of(i);
+}
+
 static int index_of(const char *name, size_t n, int kind)
 {
 	int i;
