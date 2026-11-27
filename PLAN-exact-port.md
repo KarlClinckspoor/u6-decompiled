@@ -1037,6 +1037,40 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
    speedrun.com refused it (403), and YouTube gave only titles. A guess to test: a dead body's
    quality 0 points at object 0, the vehicle slot. To be taken up later, from the run's own
    notes or a session built with u6save.
+8. **A document: proving a port equal to DOS, and the other Ultima VI engine games (the user,
+   2026-11-27).**
+   - *The lessons*, in one place for readers outside this project:
+     - the approach: the replay build, recordings, the state dumps, the masks, port-check in four
+       builds;
+     - what made the port differ from DOS, and how each kind was found and fixed:
+       - out-of-bounds reads that DOS answers from its memory layout (FountainWishes,
+         lstack[-1], MonsterInvIndex[-1]);
+       - uninitialised locals (STACK_JUNK_FILL);
+       - argument order (Turbo C -p evaluates left to right);
+       - farcoreleft;
+       - the DGROUP paragraph;
+       - recordings to make again when the replay build's size changes;
+     - the test set-ups through a save editor, not cheats;
+     - key feeders and their timing traps;
+     - port recordings replayed in DOS, for the mouse;
+     - fixes behind port-only flags, tested by replaying DOS recordings with them on;
+     - deterministic videos;
+     - the review-then-confirm loop for bugs, and how often a claim changed when played out:
+       CR-006 milder, CR-007 and CR-010 worse, CR-012 unreachable, CR-022 different;
+     - the practical limits: memory, a background run stopped, orphaned loops on Windows.
+
+     It draws on docs/LESSONS_PORT.md, docs/replay.md and docs/port/FIXES.md, but is written
+     as a guide.
+   - *Savage Empire and Martian Dreams* (Worlds of Ultima, on the Ultima VI engine):
+     - which parts carry over: the OSI library, the MCGA driver, the AdLib driver, the object
+       and area code, the conversation interpreter, the replay hooks, u6save's formats;
+     - what each game changes: its own GAME.EXE, data files, scripts and special systems;
+     - whether the same Turbo C 2.0 and Microsoft MASM toolchain, and so a byte-identity gate, is
+       likely; how far the decompiled names and FINDINGS carry over;
+     - an estimated plan: the steps in the order this project took them, and which of this
+       repository's tools would need generalising (rp.py, u6save, gen_dgroup, the sessions);
+     - the same code review run on those games, to see which of the Ultima VI faults (CR-001..022)
+       their shared code still has.
 6. **Keep in mind:**
    - any change to the replay build's code size changes farcoreleft(), so every recording is
      made again (`rp.py check OUT --session NAME`, copy rec/RECORD.OUT to tests/replay/);
