@@ -19,7 +19,7 @@ A list of names turns on only those (`--fixes vortex-cube,keg-fuse`); `-name` tu
 
 | Name | Finding | The original | With the fix |
 |---|---|---|---|
-| `vortex-cube` | CR-001 | Dropping any eight items whose frames are 0 to 7 onto the vortex cube (the eight potions) ends the game like the eight moonstones. An item with a frame of 8 or more writes past an 8-entry array on the stack. | The cube counts only moonstones. |
+| `vortex-cube` | CR-001 | Dropping any eight items whose frames are 0 to 7 onto the vortex cube ends the game like the eight moonstones: eight potions, or a mix such as two moonstones and six potions (a potion's colour and a moonstone's phase are the same frame, below). An item with a frame of 8 or more writes past an 8-entry array on the stack. | The cube counts only moonstones. |
 | `inventory-scroll` | CR-002 | With 13 or more items carried, readying an item from an open bag and then scrolling down hangs the game for good. | Scrolling stops at the end of the bag's items. |
 | `cast-target` | CR-003 | Casting at a creature or item on the map (the mouse, with the spellbook open) takes one away from a byte of memory chosen by the target's object number, not from the spell's count. | The spell's own line of the spellbook is counted down. |
 | `keg-fuse` | CR-004 | When a lit powder keg is gone before its fuse runs out (blown up, vanished, doused, left on another level), whatever object takes its place is blown up 3 minutes later, quest items included. | The fuse only blows up a lit powder keg. A keg left lit on another level stays lit and harmless. |
@@ -28,6 +28,21 @@ A list of names turns on only those (`--fixes vortex-cube,keg-fuse`); `-name` tu
 | `full-object-table` | CR-007 | When an area does not fit in the object table (2,815 objects) as it loads, the rest of it is dropped, and the next save writes the areas without it. A test lost 1,111 objects: 93 of a crowded area and all of Britain's (944) and the area beside it (74). | The objects that do not fit stay in the area's file and are written back with it. They are not in the world while it is that full. |
 | `fountain-wish` | CR-008 | A wish at a fountain is compared with 10 entries of a 5-entry table; an empty wish matches one of the 5 read past it and can grant food. | Only the five wishes listed (Food, Mutton, Wine, Fruit, Meat). |
 | `map-seam` | CR-010 | Where the map wraps around (x 1023 to 0), the object cache's order is not the object list's, and an object moved there is linked after the wrong one. A test with a ship at each edge of the ocean put the list out of order. | An object moved there is linked in the right place. |
+
+**Potions and moonstones in the vortex cube.** The cube's test reads each item's frame, never its
+type. A potion's frame is its colour and a moonstone's is its phase, frame for frame (sessions
+`potions`, `potions2` and `potionsmix`; docs/GAME_MECHANICS.md, the endgame trigger):
+
+| Frame | Potion | Moonstone (virtue, moongate) |
+|---|---|---|
+| 0 | orange, awaken | Honesty |
+| 1 | red, cure | Compassion |
+| 2 | yellow, heal | Valor |
+| 3 | green, poison | Justice |
+| 4 | blue, sleep | Sacrifice |
+| 5 | purple, protection | Honor |
+| 6 | black, invisibility | Spirituality |
+| 7 | white, x-ray vision | Humility |
 
 Not here:
 - **CR-009**: the talk interpreter's read below its stack is harmless in DOS by accident, and the

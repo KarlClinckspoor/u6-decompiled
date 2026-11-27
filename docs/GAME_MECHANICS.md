@@ -476,8 +476,26 @@ There is no "quest record" in the code. Progress is spread over:
 
 `objcmd.c: UseVortexCube`, called when the vortex cube is used and `IsArmageddon` is 0, ends the game when:
 
-1. the cube contains moonstones of all 8 frames. Only moonstones can be put into the cube (`objcmd.c`, Move:
-   "Only moonstones can go into the vortex cube.");
+1. the cube contains items of all 8 frames. The test reads only each item's frame, not its type
+   (docs/CODE_REVIEW.md, CR-001). Move from the inventory refuses anything but moonstones ("Only moonstones
+   can go into the vortex cube."). Dropping an item onto the cube on the ground, or pushing it there, puts
+   any item in (`CanPutInContainer` accepts it). So any eight items covering frames 0..7 end the game.
+   Potions and moonstones each have eight frames, and their frames match one to one:
+
+   | Frame | Potion (`UsePotion`) | Moonstone: virtue, moongate | Gate Travel phase |
+   |---|---|---|---|
+   | 0 | orange, awaken | Honesty | 1 |
+   | 1 | red, cure | Compassion | 2 |
+   | 2 | yellow, heal | Valor | 3 |
+   | 3 | green, poison | Justice | 4 |
+   | 4 | blue, sleep | Sacrifice | 5 |
+   | 5 | purple, protection | Honor | 6 |
+   | 6 | black, invisibility | Spirituality | 7 |
+   | 7 | white, x-ray vision | Humility | 8 |
+
+   The moonstone's frame is also its phase (`MoonstonePos[frame]`, the moongate) and the virtue whose
+   rune frees a shrine with it (`UseRune`). Tested in DOS: eight potions (sessions `potions`, `potions2`)
+   and two moonstones with six potions (`potionsmix`) each made the Codex vanish;
 2. `OBJ_BRITANNIA_LENS_BLUE` lies at (0x399, 0x353, z 0) and `OBJ_GARGOYLE_LENS_VIOLET` at (0x39D, 0x353, z 0);
    `object.c: ShowObjects` draws the light-beam tiles TIL_1B8-1BB beside lenses at exactly those spots;
 3. `OBJ_CODEX` lies at (0x39B, 0x353, z 0) and is within ±5 tiles of `MapX/MapY`. `MapZ` is not tested.
