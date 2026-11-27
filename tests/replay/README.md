@@ -109,3 +109,31 @@ hangs; it did expose a real bug, now fixed: `rp.py record` replaced the first `[
 file's text, so a comment mentioning `[cpu]` received `cycles=max` and the real section lost
 its cycles (it now edits the section, `conf_set`). With KEYFEED, the smoke session with such a
 comment block recorded five times out of five.
+
+## The long run (longrun.rec)
+
+The session `longrun` is not in sessions.toml: tools/rp.py makes it from the map (`longrun_spots`,
+`longrun_session`):
+- **The party:** the Avatar, Dupre, Shamino and Iolo, plus Jaana, Gwenno, Julia and Sentri. All
+  eight have 255 HP, strength and dexterity 30, and level 8.
+- **The spots:** a 5x5 grid over the surface and a 3x3 grid over each of the five levels below.
+  Each point moves to the nearest passable tile within 40; points with none are skipped, which
+  leaves 67 spots.
+- **At each spot:** GAME's own debug teleport (Alt+2 1 4 on the keypad, keyfeed's `altnum+214`;
+  then x, y and z in hex, each ended by Enter), then left, down, right, up, five times.
+
+That is 2,078 keys including F9. `U6_LONGRUN_SPOTS=N` makes a short trial.
+
+**Recording:** 1,841 s in DOSBox-X, a STATE.OUT of 1.1 GB, 2,079 checkpoints. The runs need a
+longer limit than the default:
+
+    python3 tools/rp.py check OUT --session longrun --timeout 2500
+    python3 tools/rp.py port-check OUT --rec tests/replay/longrun.rec --session longrun --all \
+        --timeout 3600 [--dos A_CHECKS_REP1]
+
+**Results (2026-11-27):**
+- The recording and two DOS replays are identical at every checkpoint, and so are their saves.
+- All four port builds equal DOS at every checkpoint, and in the saves.
+- A Linux build replays it in about 7 minutes, a Windows build in under 30 s.
+
+A comparison holds two 1.1 GB dumps at once: about 2.2 GB in Python.

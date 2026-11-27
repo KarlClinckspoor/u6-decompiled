@@ -414,6 +414,9 @@ def replay(rec, out, stage=None):
     for f in ('STATE.OUT', 'TRACE.OUT'):
         if os.path.exists(os.path.join(out, f)):
             os.remove(os.path.join(out, f))
+    # an earlier run's saves too: replaydos copies out the files a run leaves, so a file an
+    # interrupted run left (an area's .TMP, which a finished run deletes) would stay and be compared
+    shutil.rmtree(os.path.join(out, 'SAVEGAME'), ignore_errors=True)
     r = exhume('--stage', stage or chargen(), 'dos', os.path.abspath(rec), out)
     if not os.path.exists(os.path.join(out, 'STATE.OUT')):
         print('rp: the replay wrote no STATE.OUT')
@@ -808,29 +811,34 @@ def check_dgroup_para():
                  '%04Xh: set it (and run python tools/rp.py port-dgroup)' % (have, para))
 
 
-def port_check(out, rec, variants=('linux-gcc',), stage=None, fixes=None, video=None):
+def port_check(out, rec, variants=('linux-gcc',), stage=None, fixes=None, video=None, dos=None, timeout=1800):
     """REC replayed in DOS (DOSBox-X) and in each of the port's builds VARIANTS, each one's dumps
     compared with DOS's across the builds (replay.py compare: the masks of both scopes,
     [replay.segments]) and its saved games with DOS's. One variant's run goes to OUT/port, more
     to OUT/port-VARIANT. STAGE: the saved game REC starts from (session_stage), by default the
     character alone. FIXES: the port replays with those fixes on (port/sys/fixes.h); a session
-    that reaches none of the faults must still be DOS's, one that does differs from that point."""
+    that reaches none of the faults must still be DOS's, one that does differs from that point.
+    DOS: an existing DOS replay of REC (a directory with its STATE.OUT and saves, as `rp.py check`
+    writes) used instead of replaying again; TIMEOUT: seconds for each run, DOS's and the port's."""
     out = os.path.abspath(out)
     check_dgroup_para()
     exes = [(v, port_build(v)) for v in variants]   # all built before anything runs
-    if replay(rec, os.path.join(out, 'dos'), stage):
+    if timeout > 900:                          # replay.py's DOS runs stop at 900 s unless told
+        os.environ['EXHUME_DOS_TIMEOUT'] = str(int(timeout))
+    dosdir = os.path.abspath(dos) if dos else os.path.join(out, 'dos')
+    if not dos and replay(rec, dosdir, stage):
         return 1
     res = {}
     for v, exe in exes:
         d = os.path.join(out, 'port' if len(exes) == 1 else 'port-' + v)
         mp4 = os.path.join(video, '%s-%s%s.mp4' % (os.path.splitext(os.path.basename(rec))[0], v,
                                                     '-fixes' if fixes else '')) if video else None
-        if port_replay(rec, d, exe, variant=v, stage=stage, fixes=fixes, video=mp4):
+        if port_replay(rec, d, exe, timeout=int(timeout), variant=v, stage=stage, fixes=fixes, video=mp4):
             print('rp: the port failed (%s)' % os.path.join(d, 'port.log'))
         print('\n== DOS against the port (%s)' % v)
-        r = exhume('compare', os.path.join(out, 'dos'), d)
+        r = exhume('compare', dosdir, d)
         print('\n== the saved games (%s)' % v)
-        b = port_saves(os.path.join(out, 'dos'), d, stage)
+        b = port_saves(dosdir, d, stage)
         res[v] = (r, b)
     if len(exes) > 1:
         print('\n== summary')
@@ -886,6 +894,9 @@ def main():
     p.add_argument('--fixes', help="the port replays with these fixes on (port/sys/fixes.h): all, or names")
     p.add_argument('--video', help='a folder for a video of each build\'s replay, REC-VARIANT.mp4 (ffmpeg; '
                    'not committed: e.g. build/videos)')
+    p.add_argument('--dos', help="an existing DOS replay of REC to compare with (e.g. a `check`'s rep1), "
+                   'instead of replaying again')
+    p.add_argument('--timeout', type=float, default=1800, help='seconds for each run (DOS and port)')
     p = sub.add_parser('stage'); p.add_argument('session')
     p = sub.add_parser('port-record'); p.add_argument('out'); p.add_argument('session'); variant_args(p, False)
     p.add_argument('--fixes', help="the port's fixes (port/sys/fixes.h): all, or names")
@@ -931,7 +942,7 @@ def main():
             print('rp: %s: %s' % (v, port_build(v)))
         return 0
     if a.cmd == 'port-check':
-        return port_check(a.out, a.rec, variants, stage, a.fixes, a.video)
+        return port_check(a.out, a.rec, variants, stage, a.fixes, a.video, a.dos, a.timeout)
     if a.cmd == 'port-self':
         bad = 0
         for v in variants:
@@ -951,6 +962,8 @@ def main():
         if record(os.path.join(out, 'rec'), k, w, pc, a.timeout, fd, stage):
             return 1
         rec = os.path.join(out, 'rec', 'RECORD.OUT')
+    if a.timeout > 900:                        # replay.py's DOS runs stop at 900 s unless told
+        os.environ['EXHUME_DOS_TIMEOUT'] = str(int(a.timeout))
     bad = 0
     for d in ('rep1', 'rep2'):
         print('\n== replay %s' % d)
