@@ -1032,6 +1032,35 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
    - ~~the moonstone burial guard~~: done (2026-11-27), as an enhancement: `--enhance
      moonstone-guard`, off by default, session `[moonstone]` (docs/port/FIXES.md);
    - then the high findings' fixes as each is confirmed.
+   - **Enhancements asked for (the user, 2026-11-27).** Each is behind `--enhance`, off by
+     default, recorded in format 5 like the guard, with a session that shows it on, and all
+     sessions identical to DOS with it off:
+     1. *Grouped drop messages.* When a creature drops several of the same item (boomerangs,
+        throwing axes), one line per kind, "throwing axes (8x)", instead of a line each.
+     2. *Choosing what to Get.* On a tile holding several objects, Get takes the top one; with
+        the enhancement the arrow keys step through the tile's objects before Enter takes the
+        chosen one.
+     3. *Look summarises a tile.* Look on a tile with several objects lists them all in the
+        tile's order, repeats folded as "2x", "3x" ("a sword, 3x arrows, 2x torches").
+   - **CR-001 with a mix (asked 2026-11-27): confirmed in DOS.** Session `[potionsmix]`: two
+     moonstones (frames 0, 1) and six potions (frames 2..7) in the cube, and the Codex vanished.
+     UseVortexCube looks only at each item's frame. A potion's frame is its colour and a
+     moonstone's its phase, so any mix covering frames 0..7 ends the game:
+
+     | Frame | Potion | Moonstone |
+     |---|---|---|
+     | 0 | orange (awaken) | Honesty |
+     | 1 | red (cure) | Compassion |
+     | 2 | yellow (heal) | Valor |
+     | 3 | green (poison) | Justice |
+     | 4 | blue (sleep) | Sacrifice |
+     | 5 | purple (protection) | Honor |
+     | 6 | black (invisibility) | Spirituality |
+     | 7 | white (x-ray) | Humility |
+
+     The moonstone frame is the one that matches the rune and moongate of the same virtue, and
+     Gate Travel's phase is the frame plus one. The port's `vortex-cube` fix counts only
+     moonstones, so a mix does nothing with it on.
 7. **Pinned (the user, 2026-11-27): a speedrun trick.** A party member dies of poison in a skiff
    and becomes another world object, a dungeon entrance. A Sonnet worker found no written source:
    speedrun.com refused it (403), and YouTube gave only titles. A guess to test: a dead body's

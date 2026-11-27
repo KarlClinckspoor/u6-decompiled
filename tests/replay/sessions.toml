@@ -133,6 +133,16 @@ setup = ["teleport 923 856 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0",
          "give avatar 0x113 0 0 4", "give avatar 0x113 0 0 5", "give avatar 0x113 0 0 6", "give avatar 0x113 0 0 7"]
 keys = "up up up d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter d right right enter up enter u up enter space space"
 
+# CR-001 with a mix: two moonstones (frames 0 and 1, Honesty and Compassion) and six potions
+# (frames 2..7: yellow, green, blue, purple, black, white) in the cube. UseVortexCube checks
+# only that the frames 0..7 are all inside, whatever the items
+[potionsmix]
+feed = 40
+setup = ["teleport 923 856 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0", "place 0x3E 923 852 0",
+         "put 0x49 0 0 0", "put 0x49 0 0 1", "put 0x113 0 0 2", "put 0x113 0 0 3",
+         "put 0x113 0 0 4", "put 0x113 0 0 5", "put 0x113 0 0 6", "put 0x113 0 0 7"]
+keys = "up up up u up enter space space"
+
 [ladders]
 feed = 40
 setup = ["teleport 291 348 0"]
