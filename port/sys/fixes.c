@@ -20,6 +20,9 @@ static const struct {
 	{"fountain-wish", "CR-008", "a fountain grants only the five wishes it lists (an empty wish no longer matches)"},
 	{"map-seam", "CR-010", "objects keep their order where the map wraps around (a ship at each edge)"},
 	{"moonstone-guard", "", "asks before a moonstone is buried (its moongates lead there from then on)"},
+	{"grouped-finds", "", "searching a body or a container lists identical items once: \"throwing axes (8x)\""},
+	{"choose-get", "", "Get on a tile with several objects: the arrow keys choose which, Enter takes it"},
+	{"look-tile", "", "Look on a tile with several objects also lists them all, repeats as (2x), (3x)"},
 };
 
 static int kind_of(int i)

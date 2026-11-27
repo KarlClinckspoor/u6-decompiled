@@ -25,6 +25,9 @@ enum {
 	/* the enhancements: changes to what the original does by design (--enhance, enhance= in
 	 * u6port.cfg), off by default like the fixes, recorded and replayed the same way */
 	ENH_MOONSTONE_GUARD = FIX_COUNT,   /* ask before burying a moonstone */
+	ENH_GROUPED_FINDS,      /* a search lists identical items once: "throwing axes (8x)" */
+	ENH_CHOOSE_GET,         /* Get: the arrow keys choose among a tile's objects */
+	ENH_LOOK_TILE,          /* Look: every object on the tile, repeats grouped */
 	FLAG_COUNT
 };
 enum { KIND_FIX, KIND_ENHANCE, KIND_ANY };

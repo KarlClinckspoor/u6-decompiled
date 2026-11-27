@@ -143,6 +143,34 @@ setup = ["teleport 923 856 0", "place 0x18A 921 851 0", "place 0x18C 925 851 0",
          "put 0x113 0 0 4", "put 0x113 0 0 5", "put 0x113 0 0 6", "put 0x113 0 0 7"]
 keys = "up up up u up enter space space"
 
+# The enhancements grouped-finds and look-tile (docs/port/FIXES.md), and the game's own lists
+# without them: dungeon level 2, the egg at (87, 118) hatches headlesses, trolls and cyclopses
+# (eggs hatch only more than 8 tiles from the party: it starts at (91, 109)). A strong party, the
+# Avatar with Light and Mass Kill (Vas Corp). Light; down five to (91, 114); Mass Kill at (86,
+# 118), the middle of the group (5 left, 4 down; its blast reaches 2-3 tiles, the party stays
+# out of it): the headless, the troll and the two cyclopses die. Left five, down two, to (86,
+# 116) beside the troll's body (7 throwing axes, a shield, a helm, a chest): Look at it (left),
+# which searches it and puts its contents on the tile; Look at the tile again; Get from it (the
+# direction picks the tile at once), down twice, Enter. Without enhancements Get takes the top
+# object and the downs walk; with choose-get the downs step through the tile's objects
+[headless]
+feed = 40
+setup = ["teleport 91 109 2", "npc avatar level 8", "npc avatar magic 255", "npc avatar hp 255", "npc 2 hp 255", "npc 3 hp 255", "npc 4 hp 255",
+         "give avatar 0x39 0 0x74 0 equip", "put 0x3A 0 0x09", "put 0x3A 0 0x74",
+         "give avatar 0x41 9", "give avatar 0x42 9", "give avatar 0x43 9", "give avatar 0x44 9",
+         "give avatar 0x45 9", "give avatar 0x46 9", "give avatar 0x47 9", "give avatar 0x48 9"]
+keys = "c i l enter down down down down down c v c enter left left left left left down down down down enter space space left left left left left down down l left enter space space space l left enter space space space g left down down enter space space space"
+
+# The enhancements look-tile and choose-get on a crowded tile (and the game without them): the
+# closed chest at (298, 367) holds 18 items (a bag among them), the bag beside it at (297, 367)
+# eight stacks of reagents. The Avatar north of the chest: Use it (opens it), Look at it
+# (searching spills its contents onto the tile), Look again, Get from it with four downs and
+# Enter
+[chestbag]
+feed = 40
+setup = ["teleport 298 366 0"]
+keys = "u down space l down enter space space space space l down enter space space space space g down down down down down enter space space"
+
 [ladders]
 feed = 40
 setup = ["teleport 291 348 0"]

@@ -290,6 +290,10 @@ static void usage(void)
 		"                      mouse, in the game's pixels: MS:mouse:X,Y, MS:click:X,Y, MS:rclick:X,Y\n"
 		"  --farcore N         farcoreleft() at most N (tests: DOS's, so that DOS replays it)\n"
 		"  --video FILE        the session as a video (ffmpeg, or U6_FFMPEG), at the game's pace\n"
+		"  --feed SCRIPT       keys typed as KEYFEED.COM types them in DOS, counted in the game's\n"
+		"                      keyboard polls: \"GAP:AX ...\" (tests: tools/rp.py port-record)\n"
+		"  --seed N            the random seed (tests: DOS's, from KEYFEED's fixed clock)\n"
+		"  --cpuspeed N        CpuSpeed, the delay loop's calibration (tests: DOS's under DOSBox-X)\n"
 		"  --fixes LIST        fix the original game's faults: all, none, or names (--fixes list);\n"
 		"                      off by default: the port then plays exactly as DOS\n"
 		"  --enhance LIST      changes to the original's design: all, none, or names\n"
@@ -347,6 +351,21 @@ int main(int argc, char **argv)
 		}
 		else if (!strcmp(a, "--farcore")) dos_farcore_cap = strtoul(ARG, 0, 0);
 		else if (!strcmp(a, "--video")) video_path = ARG;
+		else if (!strcmp(a, "--cpuspeed")) osi_cpu_speed = (uint16_t)strtoul(ARG, 0, 0);
+		else if (!strcmp(a, "--seed")) {
+			extern int osi_fixed_seed;
+			osi_fixed_seed = (int)strtol(ARG, 0, 0);
+		}
+		else if (!strcmp(a, "--feed")) {
+			void kbd_set_feed(const char *script);
+			kbd_set_feed(ARG);
+			plat_test_mouse();	/* DOSBox has a mouse: the same calls as DOS's run */
+			dos_dosbox_drives = 1;	/* and a drive Z: */
+			{
+				extern int u6_mouse_dosbox_start;
+				u6_mouse_dosbox_start = 1;	/* and its mouse's first position */
+			}
+		}
 		else if (!strcmp(a, "--fixes")) {
 			fixes_opt = ARG;
 			if (!strcmp(fixes_opt, "list")) {

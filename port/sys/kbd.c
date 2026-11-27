@@ -16,11 +16,75 @@
  */
 #include "osi.h"
 #include "../platform/plat.h"
+#include <stdlib.h>
+
+/* --feed SCRIPT (tests): tools/keyfeed.py's KEYFEED.COM (mode bios) in the port. SCRIPT is
+ * "GAP:AX GAP:AX ..." (decimal, hex). A poll (int 16h function 1, here a look at the buffer)
+ * says "no key" and counts until it has been asked GAP times since the last key was read, then
+ * offers the key, which the next read takes. A session typed this way is the DOS run's, poll
+ * for poll; with the script used up the keyboard is the host's. */
+static struct { uint16_t gap, ax; } *feed;
+static int feed_n, feed_i, feed_cnt;
+
+void kbd_set_feed(const char *script)
+{
+	const char *p = script;
+	int cap = 0;
+	while (p && *p) {
+		char *e;
+		unsigned long g, ax;
+		while (*p == ' ')
+			p++;
+		if (!*p)
+			break;
+		g = strtoul(p, &e, 10);
+		if (*e != ':')
+			break;
+		ax = strtoul(e + 1, &e, 16);
+		if (feed_n == cap) {
+			cap = cap ? cap * 2 : 64;
+			feed = realloc(feed, (size_t)cap * sizeof *feed);
+		}
+		feed[feed_n].gap = (uint16_t)g;
+		feed[feed_n++].ax = (uint16_t)ax;
+		p = e;
+	}
+}
+
+/* a poll: is a key there? (the feeder's rule while it has keys, else the host's buffer) */
+static int key_poll(void)
+{
+	if (feed_i < feed_n) {
+		if (feed_cnt >= feed[feed_i].gap)
+			return 1;
+		feed_cnt++;
+		return 0;
+	}
+	return plat_key_available();
+}
+
+static uint16_t key_read(void)
+{
+	if (feed_i < feed_n) {
+		feed_cnt = 0;
+		return feed[feed_i++].ax;
+	}
+	return plat_key_get();
+}
 
 static uint16_t kbd_live(int keepLastOnly)
 {
 	uint16_t ax = 0;
 
+	if (feed) {
+		if (keepLastOnly) {
+			while (key_poll())
+				ax = key_read();
+		} else if (key_poll()) {
+			ax = key_read();
+		}
+		return ax;
+	}
 	if (keepLastOnly) {
 		while (plat_key_available())
 			ax = plat_key_get();

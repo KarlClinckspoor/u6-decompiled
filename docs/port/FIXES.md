@@ -61,8 +61,23 @@ the same way.
 | Name | The original | With it |
 |---|---|---|
 | `moonstone-guard` | Using a moonstone on grass or earth buries it at once ("buried."). From then on, its phase's moongates lead there, and its own moongate stands on it, so the player can lose track of where it is. Burying is not permanent: Get takes it back when both moons are down. | The game asks "Bury the moonstone here?" first (Y or N, as "Save game?" does). N leaves it in the pack: "Not buried." |
+| `grouped-finds` | Looking at a body or an open container beside you searches it and lists each object: "a throwing axe, a throwing axe, a throwing axe, …" (throwing weapons come as 6 to 12 separate objects). | Identical items are listed once with their count: "throwing axes (7x), a wooden shield, a leather helm, a chest and 35 gold". The objects still fall onto the tile one by one, as before. |
+| `look-tile` | Look describes only the top object of a tile. | After the description, a line lists everything on the tile, top first, repeats grouped: "Here: 35 gold coins, a chest, a leather helm, a wooden shield, throwing axes (7x) and a dead body." |
+| `choose-get` | Get takes the top object of the tile. | If the tile holds more than one object, Get shows the top one and the arrow keys step through the others (each on a line of its own, since the message window is narrow). Enter or Space takes the one shown, Esc gives up. |
 
-It is a few lines in objcmd.c's UseMoonstone, under the same `U6_FIX` guard
+The last three are in objcmd.c (EnhTileObjs and EnhPrintGrouped; SearchObj, CmdLook, CmdGet).
+A name without the game's plural endings gets English's ("axe" to "axes"). Two sessions test them.
+Each was recorded in DOS without the enhancements, and the port matches it in all four builds.
+Typed through the port's key feeder with the enhancements on (`rp.py port-record OUT NAME
+--enhance grouped-finds,look-tile,choose-get`), the run is DOS's up to the first enhanced
+message:
+- `headless` (dungeon level 2, Mass Kill on a headless, a troll and two cyclopses; the troll's
+  body searched, the tile looked at, then Get with two downs takes the leather helm, where DOS
+  takes the gold);
+- `chestbag` (the chest at (298, 367): Use spills 18 items, Look lists them, Get with four
+  downs takes the bag).
+
+The moonstone guard is a few lines in objcmd.c's UseMoonstone, under the same `U6_FIX` guard
 (`ENH_MOONSTONE_GUARD`). The `moonstone` session tests it:
 - **Off:** DOS buries the stone, `MoonstonePos[3]` becomes (309,379), and the port is identical
   in all four builds.

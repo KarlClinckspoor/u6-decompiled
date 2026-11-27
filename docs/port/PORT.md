@@ -104,8 +104,11 @@ On, they correct ten faults:
 - the object order where the map wraps.
 
 Enhancements, which change what the original does by design, are turned on apart from the fixes:
-`--enhance moonstone-guard`, or `enhance=` in `u6port.cfg`. This one asks before a moonstone is
-buried.
+`--enhance NAMES` or `all`, or `enhance=` in `u6port.cfg` (`--enhance list`):
+- `moonstone-guard` asks before a moonstone is buried;
+- `grouped-finds` lists identical found items once ("throwing axes (7x)");
+- `look-tile` makes Look list everything on a tile;
+- `choose-get` lets the arrow keys choose what Get takes.
 
 A session played with fixes is recorded with them and replays with them. What each one does,
 how they are built (port-only lines in SRC, so GAME.EXE stays identical) and how they are tested:
@@ -180,6 +183,12 @@ mouse button change and at its end; its replay with `--out` writes the same dump
                         MS:rclick:X,Y click (a mouse is there even with --hidden)
     --farcore N         farcoreleft() at most N (tests: the replay DOS build's figure, so that
                         a session recorded in the port replays in DOS)
+    --feed SCRIPT       keys typed as KEYFEED.COM types them in DOS ("GAP:AX ...", counted in
+                        the game's keyboard polls), with DOSBox-X's mouse and drive Z:. With
+                        --seed and --cpuspeed (DOS's), a session recorded in the port is the
+                        DOS recording, checkpoint for checkpoint (tests: rp.py port-record of a
+                        `feed` session); with an enhancement on it differs only where that acts
+    --seed N, --cpuspeed N   the random seed and the delay calibration (tests: DOS's)
     --video FILE        the session as a video (an .mp4 through ffmpeg, or U6_FFMPEG), one
                         frame per tick of the game's clock (18.2 a second), 640x400, without the
                         overlay: a replay's plays at the game's own pace however fast it ran, and

@@ -44,6 +44,7 @@ extern unsigned short u6_gr_entry;   /* port/game/rpport.c: GrDriver's offset wo
  * the live mouse, in the game's pixels, where rp_mouse and rp_mbuttons take them; a replay
  * never calls it */
 int16_t u6_mouse_regs[3];
+int u6_mouse_dosbox_start;  /* --feed (tests): the first read is DOSBox-X's (160, 96), as in DOS */
 void u6_mouse_poll(void)
 {
 	int16_t lx = 0, ly = 0;
@@ -51,6 +52,10 @@ void u6_mouse_poll(void)
 
 	if (!osi_replaying()) {
 		plat_mouse_state(&lx, &ly, &lb);
+		if (u6_mouse_dosbox_start) {
+			u6_mouse_dosbox_start = 0;
+			ly = 96;
+		}
 		if (lx < 0)
 			lx = 0;
 		if (lx > 319)

@@ -78,10 +78,14 @@ uint16_t osi_seed_from_time(uint8_t hour, uint8_t minute, uint8_t second, uint8_
 
 /* The seed is what the game reads from the outside world: main.c records it
  * (RECORDED16(RV_SEED, OSI_timeSeed())), and a replay never calls this. */
+int osi_fixed_seed = -1;     /* --seed N (tests): the seed DOS gets from KEYFEED's fixed clock */
+
 int OSI_timeSeed(void)
 {
 	uint8_t h, m, s, hs;
 
+	if (osi_fixed_seed >= 0)
+		return osi_fixed_seed;
 	dos_time_live(&h, &m, &s, &hs);
 	return (int16_t)osi_seed_from_time(h, m, s, hs);
 }

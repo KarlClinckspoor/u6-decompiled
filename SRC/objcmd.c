@@ -459,6 +459,79 @@ static /*C_27A1_0153*/IsOkToGet(int16 objNum) {
 	return other;
 }
 
+#ifndef __TURBOC__
+/*enhancements (port/sys/fixes.h): grouped-finds, choose-get, look-tile*/
+#include <string.h>
+extern int16 CookedInput;/*console.c: 0 = CON_getch returns raw keys*/
+
+/*the objects at (x, y) that a player sees as items, top first (FindLoc's order, the one a drop
+  or Get takes): not creatures, eggs, charges, effects, invisible or "ignore" tiles; at most max*/
+static int16 EnhTileObjs(int16 x, int16 y, int16 *list, int16 max) {
+	int16 obj, n, typ;
+
+	n = 0;
+	for(obj = FindLoc(x, y, MapZ); obj >= 0 && n < max; obj = NextLoc()) {
+		typ = GetType(obj);
+		if(obj < 0x100 || IsInvisible(obj) || typ == OBJ_EGG || typ == OBJ_CHARGE || typ == OBJ_EFFECT ||
+			IsTileIg(TILE_FRAME(obj)))
+			continue;
+		list[n++] = obj;
+	}
+	return n;
+}
+
+/*the n objects of list as one phrase, in order, identical single items (same type and frame,
+  not a stack) folded into one with their count: "a sword, throwing axes (8x) and 12 arrows"*/
+static void EnhPrintGrouped(int16 *list, int16 n) {
+	int16 rep[64], cnt[64];
+	int16 i, j, groups;
+
+	groups = 0;
+	for(i = 0; i < n; i ++) {
+		for(j = 0; j < groups; j ++) {
+			if(QuanType(GetType(list[i])) == 0 && GetType(rep[j]) == GetType(list[i]) &&
+				GetFrame(rep[j]) == GetFrame(list[i]))
+				break;
+		}
+		if(j < groups) {
+			cnt[j] ++;
+		} else if(groups < 64) {
+			rep[groups] = list[i];
+			cnt[groups ++] = 1;
+		}
+	}
+	for(j = 0; j < groups; j ++) {
+		if(j)
+			CON_printf(j == groups - 1 ? " and " : ", ");
+		if(cnt[j] == 1) {
+			PrintObjCountOrArticle(rep[j]);
+			CON_printf((char *)GetObjectString(rep[j]));
+		} else {
+			/*the plural: the name's own endings ('/' and '\' escapes, which only stackable
+			  items have), else English's: +s, +es after s x z ch sh, y to ies*/
+			char name[80];
+			int16 len;
+
+			strncpy(name, (char *)GetObjectString(rep[j]), sizeof name - 4);
+			name[sizeof name - 4] = 0;
+			len = (int16)strlen(name);
+			if(!strchr(name, '/') && !strchr(name, '\\') && len > 0) {
+				char last = name[len - 1], prev = len > 1 ? name[len - 2] : 0;
+				if(last == 's' || last == 'x' || last == 'z' || (last == 'h' && (prev == 'c' || prev == 's')))
+					strcat(name, "es");
+				else if(last == 'y' && prev && !strchr("aeiou", prev))
+					strcpy(name + len - 1, "ies");
+				else
+					strcat(name, "s");
+			}
+			LastNumberPlural = 1;
+			CON_printf(name);
+			CON_printf(" (%dx)", cnt[j]);
+		}
+	}
+}
+#endif
+
 /*"search" objNum at (x,y) (done after looking at something adjacent):
  reveals a closed secret door, or empties the content of an open
  container on the ground and lists what was found*/
@@ -466,6 +539,9 @@ static /*C_27A1_0153*/IsOkToGet(int16 objNum) {
 	int16 item;
 	int16 actor, actorX, actorY, objTyp, objFrm;
 	int16 found, nextItem;
+#ifndef __TURBOC__
+	int16 finds[64], numFinds = 0;
+#endif
 
 	found = 0;
 	actor = Party[Active];
@@ -515,6 +591,16 @@ static /*C_27A1_0153*/IsOkToGet(int16 objNum) {
 						nextItem >= 0 && (GetType(nextItem) == OBJ_CHARGE || GetType(nextItem) == OBJ_EFFECT);
 						nextItem = NextInv()
 					);
+#ifndef __TURBOC__
+					/*enhancement grouped-finds: the list is printed at the end, grouped*/
+					if(U6_FIX(ENH_GROUPED_FINDS)) {
+						if(numFinds < 64)
+							finds[numFinds ++] = item;
+						found = 1;
+						item = nextItem;
+						continue;
+					}
+#endif
 					if(found && nextItem >= 0)
 						CON_printf(/*1DB6*/", ");
 					else if(found && nextItem == -1)
@@ -533,6 +619,10 @@ static /*C_27A1_0153*/IsOkToGet(int16 objNum) {
 		CON_printf(/*1DBF*/"nothing.\n");
 		return;
 	}
+#ifndef __TURBOC__
+	if(numFinds)
+		EnhPrintGrouped(finds, numFinds);
+#endif
 	CON_printf(/*1DC6*/".\n");
 }
 
@@ -711,6 +801,19 @@ static /*C_27A1_0153*/IsOkToGet(int16 objNum) {
 		} else {
 			CON_printf(/*1DC6*/".\n");
 		}
+#ifndef __TURBOC__
+		/*enhancement look-tile: everything on that tile, top first, repeats grouped*/
+		if(U6_FIX(ENH_LOOK_TILE) && GetCoordUse(Selection.obj) == LOCXYZ) {
+			int16 here[64], numHere;
+
+			numHere = EnhTileObjs(GetX(Selection.obj), GetY(Selection.obj), here, 64);
+			if(numHere > 1) {
+				CON_printf("\nHere: ");
+				EnhPrintGrouped(here, numHere);
+				CON_printf(".\n");
+			}
+		}
+#endif
 	}
 	if(!readSomething)
 		SearchObj(Selection.obj, Selection.x, Selection.y);
@@ -929,9 +1032,48 @@ static /*C_27A1_0153*/IsOkToGet(int16 objNum) {
 		UpdateMoveFrame(actor, dir);
 		VIS_UpdateView();
 	}
+#ifndef __TURBOC__
+	/*enhancement choose-get: on a tile with several items the arrow keys step through them,
+	  each shown on a line of its own (the window is narrow), Enter takes the last one shown,
+	  Esc gives up*/
+	if(U6_FIX(ENH_CHOOSE_GET)) {
+		int16 here[64], numHere, k, key, savedCooked;
+
+		numHere = EnhTileObjs(GetX(Selection.obj), GetY(Selection.obj), here, 64);
+		if(numHere > 1) {
+			for(k = 0; k < numHere && here[k] != Selection.obj; k ++);
+			if(k == numHere)
+				k = 0;
+			savedCooked = CookedInput;
+			CookedInput = 0;/*raw keys, as the "more" prompt reads them*/
+			for(;;) {
+				PrintObjCountOrArticle(here[k]);
+				CON_printf((char *)GetObjectString(here[k]));
+				key = CON_getch();
+				if(key == '\r' || key == ' ')
+					break;
+				if(key == 27) {
+					CookedInput = savedCooked;
+					CON_printf("\n%s\n", SpellMessages[5]);
+					return;
+				}
+				if(key == CMD_DIRECTION)
+					k = (AdvanceDir == 0 || AdvanceDir == 6) ? (k + numHere - 1) % numHere : (k + 1) % numHere;
+				CON_putch('\n');
+			}
+			CookedInput = savedCooked;
+			Selection.obj = here[k];
+			CON_putch('\n');
+			goto chosen;
+		}
+	}
+#endif
 	PrintObjCountOrArticle(Selection.obj);
 	CON_printf((char *)GetObjectString(Selection.obj));
 	CON_putch('\n');
+#ifndef __TURBOC__
+chosen:
+#endif
 	actorX = GetX(actor);
 	actorY = GetY(actor);
 	if(!CLOSE_ENOUGH(1, Selection.x, Selection.y, actorX, actorY)) {

@@ -60,6 +60,7 @@ void dos_divide_error(const char *where) DOS_NORETURN;
 #define DOS_GAME_DRIVE 2               /* C: */
 int dos_current_drive(void);          /* 0 = A: */
 int dos_drive_valid(int drive);
+extern int dos_dosbox_drives;   /* --feed (tests): IOCTL answers for Z: too, as under DOSBox-X */
 void dos_select_drive(int drive);     /* int 21h 0Eh: ignored for an invalid drive */
 /* Wall clock, live (not recorded): DOS int 21h 2Ah/2Ch values. */
 void dos_time_live(uint8_t *hour, uint8_t *minute, uint8_t *second, uint8_t *hundredths);

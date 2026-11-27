@@ -1032,9 +1032,15 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
    - ~~the moonstone burial guard~~: done (2026-11-27), as an enhancement: `--enhance
      moonstone-guard`, off by default, session `[moonstone]` (docs/port/FIXES.md);
    - then the high findings' fixes as each is confirmed.
-   - **Enhancements asked for (the user, 2026-11-27).** Each is behind `--enhance`, off by
-     default, recorded in format 5 like the guard, with a session that shows it on, and all
-     sessions identical to DOS with it off:
+   - **Enhancements asked for (the user, 2026-11-27): done** as `grouped-finds`, `choose-get`
+     and `look-tile` (docs/port/FIXES.md; sessions `headless` and `chestbag`). To test them,
+     the port types a `feed` session as KEYFEED.COM does in DOS:
+     - `--feed`, with DOS's seed, CPU speed, mouse start and drive Z:;
+     - a session so recorded matches the DOS recording at every checkpoint (`headless`: all 55);
+     - with an enhancement on, it differs only from the enhanced message on.
+
+     Each is behind `--enhance`, off by default, recorded in format 5 like the guard, with a
+     session that shows it on, and all sessions identical to DOS with it off:
      1. *Grouped drop messages.* When a creature drops several of the same item (boomerangs,
         throwing axes), one line per kind, "throwing axes (8x)", instead of a line each.
      2. *Choosing what to Get.* On a tile holding several objects, Get takes the top one; with

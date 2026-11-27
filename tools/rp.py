@@ -621,15 +621,20 @@ def port_self(out, variant='linux-gcc', keys=SELF_KEYS):
     return 1 if any(res.values()) else 0
 
 
-def dos_farcore():
-    """farcoreleft() as the replay DOS build gets it under DOSBox-X (RV_FARCORE, VALUE2), from
-    tests/replay/smoke.rec: every DOS recording of this build has the same"""
+def dos_value(n, rec='smoke.rec'):
+    """recorded value N of a DOS recording (replay.py log's VALUEn): 1 the random seed (fixed by
+    KEYFEED's clock in a `feed` session), 2 farcoreleft() as the replay DOS build gets it under
+    DOSBox-X (every DOS recording of this build has the same)"""
     cmd = [sys.executable, os.path.join(EXHUME_TOOLS, 'replay.py'), '--config', CONFIG, 'log',
-           os.path.join(ROOT, 'tests', 'replay', 'smoke.rec')]
-    m = re.search(r'VALUE2:([0-9A-F]+)', subprocess.run(cmd, cwd=ROOT, env=env(), capture_output=True, text=True).stdout)
+           os.path.join(ROOT, 'tests', 'replay', rec)]
+    m = re.search(r'VALUE%d:([0-9A-F]+)' % n, subprocess.run(cmd, cwd=ROOT, env=env(), capture_output=True, text=True).stdout)
     if not m:
-        sys.exit('rp: no RV_FARCORE in tests/replay/smoke.rec')
+        sys.exit('rp: no VALUE%d in tests/replay/%s' % (n, rec))
     return int(m.group(1), 16)
+
+
+def dos_farcore():
+    return dos_value(2)
 
 
 def port_keys_of(keys, gap=800, start=2000):
@@ -663,8 +668,6 @@ def port_record(out, name, variant='linux-gcc', fixes=None, enhance=None):
     s = session(name)
     if 'port_keys' not in s and 'keys' not in s:
         sys.exit('rp: session %s has neither port_keys nor keys' % name)
-    keys = (s['port_keys'] if 'port_keys' in s else port_keys_of(s['keys'])).split()
-    last = max(int(k.split(':', 1)[0]) for k in keys)
     out = os.path.abspath(out)
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(out)
@@ -674,8 +677,20 @@ def port_record(out, name, variant='linux-gcc', fixes=None, enhance=None):
     home = os.path.join(out, 'home')
     shutil.copytree(session_stage(name), home)
     args = ['--data', data, '--home', home, '--hidden', '--no-audio', '--game', '--record', os.path.join(out, 'rec'),
-            '--farcore', str(dos_farcore()), '--keys', ' '.join(keys + ['%d:f9' % (last + 3000)]),
-            '--run-ms', str(last + 60000)] + (['--fixes', fixes] if fixes else []) + (['--enhance', enhance] if enhance else [])
+            '--farcore', str(dos_farcore())]
+    if 'port_keys' not in s and s.get('feed'):
+        # typed as KEYFEED.COM types it in DOS (the port's --feed), with DOS's seed: without
+        # fixes or enhancements the run is the DOS recording's; with them it differs where they act
+        import keyfeed
+        stop = (R.stop_key or 'F9').lower()
+        script = keyfeed.parse_keys(' '.join(s['keys'].split() + [stop]), s['feed'], 'bios')
+        args += ['--feed', ' '.join('%d:%X' % (g, ax) for g, ax in script), '--seed', str(dos_value(1)),
+                 '--cpuspeed', str(dos_value(10)), '--run-ms', '900000']
+    else:
+        keys = (s['port_keys'] if 'port_keys' in s else port_keys_of(s['keys'])).split()
+        last = max(int(k.split(':', 1)[0]) for k in keys)
+        args += ['--keys', ' '.join(keys + ['%d:f9' % (last + 3000)]), '--run-ms', str(last + 60000)]
+    args += (['--fixes', fixes] if fixes else []) + (['--enhance', enhance] if enhance else [])
     t0 = time.time()
     code, text = port_run(exe, args, variant)
     open(os.path.join(out, 'rec.log'), 'w').write(text)

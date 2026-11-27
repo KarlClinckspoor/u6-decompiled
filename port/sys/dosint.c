@@ -15,6 +15,7 @@
 /* ---- log each unknown call once ---- */
 
 static uint32_t logged[64];
+int dos_dosbox_drives;
 static int nlogged;
 
 static void log_once(uint32_t key, const char *fmt, unsigned a, unsigned b)
@@ -115,13 +116,16 @@ static void int21(union REGS *r, struct SREGS *s)
 		break;
 	case 0x44: { /* IOCTL; BL = drive, 0 = default */
 		int drive = r->h.bl ? r->h.bl - 1 : cur_drive;
+		/* --feed (tests): DOSBox-X's Z: (its own fixed drive) answers too, so that DISK_init
+		 * reads what the DOS run read */
+		int valid = dos_drive_valid(drive) || (dos_dosbox_drives && drive == 25);
 		if (r->h.al == 0x08) {        /* removable? AX 0 yes, 1 no */
-			if (!dos_drive_valid(drive))
+			if (!valid)
 				fail(r, 0x0F);
 			else
 				r->x.ax = 1;
 		} else if (r->h.al == 0x0E) { /* logical drive map: AL 0 = one name only */
-			if (!dos_drive_valid(drive))
+			if (!valid)
 				fail(r, 0x0F);
 			else
 				r->h.al = 0;
