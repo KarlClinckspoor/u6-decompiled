@@ -109,7 +109,59 @@ def build(force=False):
     return exhume('build')
 
 
+LONGRUN_COMPANIONS = [(62, 'Jaana'), (66, 'Gwenno'), (67, 'Julia'), (186, 'Sentri')]
+
+
+def longrun_spots():
+    """the long run's places: a 5x5 grid over the surface (1024 tiles a side) and a 3x3 grid over
+    each of the five levels below (256 a side), each moved to the nearest passable tile (by
+    terrain, tools/u6save.py) within 40 tiles; a grid point with none (the open sea) is left out"""
+    import u6save
+    t = u6save.Save(chargen(), u6save.default_base()).terrain()
+    spots = []
+    for z, side, n in ((0, 1024, 5), (1, 256, 3), (2, 256, 3), (3, 256, 3), (4, 256, 3), (5, 256, 3)):
+        for gy in range(n):
+            for gx in range(n):
+                cx, cy = (2 * gx + 1) * side // (2 * n), (2 * gy + 1) * side // (2 * n)
+                best = None
+                for r in range(41):
+                    ring = [(cx + dx, cy + dy) for dx in range(-r, r + 1) for dy in range(-r, r + 1)
+                            if max(abs(dx), abs(dy)) == r and 0 <= cx + dx < side and 0 <= cy + dy < side]
+                    ok = [p for p in ring if t.passable(p[0], p[1], z)]
+                    if ok:
+                        best = ok[0]
+                        break
+                if best:
+                    spots.append((best[0], best[1], z))
+    return spots
+
+
+def longrun_session():
+    """[longrun], made here rather than written in sessions.toml: a full party of eight (the four
+    of the start, then LONGRUN_COMPANIONS), strong; at each of longrun_spots(), GAME's own debug
+    teleport (Alt+2 1 4, gameloop.c: "go to coordinate", x, y and z in hexadecimal), then 20
+    steps in circles (left, down, right, up, five times). The same keys in DOS and in the port,
+    so the long run is proved against DOS like any other session"""
+    setup = ['party 1 2 3 4 ' + ' '.join('%d:%s' % c for c in LONGRUN_COMPANIONS)]
+    for n in [1, 2, 3, 4] + [c[0] for c in LONGRUN_COMPANIONS]:
+        setup += ['npc %d hp 255' % n, 'npc %d str 30' % n, 'npc %d dex 30' % n, 'npc %d level 8' % n]
+        if n > 4:
+            setup += ['npc %d mode 1' % n, 'npc %d commode 3' % n]
+    setup.append('teleport 307 352 0')
+    keys = []
+    spots = longrun_spots()
+    if os.environ.get('U6_LONGRUN_SPOTS'):           # a trial: the first N, and the first of each level
+        n = int(os.environ['U6_LONGRUN_SPOTS'])
+        spots = spots[:n] + [s for i, s in enumerate(spots) if s[2] and (i == 0 or spots[i - 1][2] != s[2])]
+    for x, y, z in spots:
+        keys += ['altnum+214'] + list('%03x' % x) + ['enter'] + list('%03x' % y) + ['enter', '%x' % z, 'enter']
+        keys += ['left', 'down', 'right', 'up'] * 5
+    return {'feed': 40, 'setup': setup, 'keys': ' '.join(keys)}
+
+
 def session(name, private=False):
+    if name == 'longrun':
+        return longrun_session()
     s = tomllib.load(open(SESSIONS, 'rb'))
     if name not in s or (name.startswith('_') and not private):
         sys.exit('rp: no session %s in %s (there are: %s)' % (name, SESSIONS, ' '.join(n for n in s if not n.startswith('_'))))

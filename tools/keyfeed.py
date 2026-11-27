@@ -58,10 +58,14 @@ for _i in range(10):
 
 
 def key_ax(tok):
-    """the BIOS's AX for one key: a NAMED name, one character, or ctrl+X / alt+X for a letter X"""
+    """the BIOS's AX for one key: a NAMED name, one character, ctrl+X / alt+X for a letter X, or
+    altnum+NNN, the character NNN typed with Alt and the keypad's digits (scan code 0: GAME's
+    debug commands, altnum+214 its "go to coordinate")"""
     t = tok.lower()
     if t in NAMED:
         return NAMED[t]
+    if t.startswith('altnum+') and t[7:].isdigit() and 0 < int(t[7:]) < 256:
+        return int(t[7:])
     if t.startswith('ctrl+') and len(t) == 6 and t[5].isalpha():
         return SCAN[t[5]] << 8 | (ord(t[5]) - 0x60)
     if t.startswith('alt+') and len(t) == 5 and t[4] in SCAN:
