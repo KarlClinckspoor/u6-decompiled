@@ -16,6 +16,7 @@ one argument (quote it):
                                 without an index takes VALUE in each element
     npc WHO FIELD VALUE         an NPC's field: str dex int magic hp exp level movepts status
                                 talkflags mode commode flag schedindex, or name (party only)
+    party NPC[:NAME] ...        the party list, in order (NAME for a member new to it)
     teleport X Y Z              the party to X, Y, Z (all on that tile, as the game's PartyExit
                                 puts them before they step out), with their belongings: their
                                 items move to the area file of the new place
@@ -284,6 +285,28 @@ class Save:
                 sys.exit('u6save: %s has %d elements' % (m.group(1), n))
             self.put(GSTA_AT + off + i * size, size, num(value))
 
+    def cmd_party(self, *members):
+        """party NPC[:NAME] ...: the party list (at most 8), in order; a member already in the
+        party keeps its name unless NAME is given, a new one needs NAME (the name the game shows).
+        Before a teleport, so that it brings the new members; their NPC modes are left to `npc`
+        (a party member's mode is 1, and 2 for the Avatar)"""
+        if not 1 <= len(members) <= 8:
+            sys.exit('u6save: party: 1 to 8 members')
+        old = {npc: self.name(slot) for slot, npc in enumerate(self.party())}
+        names = []
+        for m in members:
+            n, _, nm = m.partition(':')
+            n = self.who(n)
+            if not nm and n not in old:
+                sys.exit('u6save: party: NPC %d is new to the party: give its name (%d:NAME)' % (n, n))
+            names.append((n, nm or old[n]))
+        for slot in range(8):
+            n, nm = names[slot] if slot < len(names) else (0, '')
+            self.objlist[PARTY + slot] = n
+            b = nm.encode('latin-1')[:13]
+            self.objlist[NAMES + 14 * slot:NAMES + 14 * slot + 14] = b + bytes(14 - len(b))
+        self.objlist[PARTY_SIZE] = len(names)
+
     def cmd_npc(self, who, field, value):
         n = self.who(who)
         if field == 'name':
@@ -503,7 +526,7 @@ class Save:
             return
         fn = getattr(self, 'cmd_' + w[0], None)
         if not fn:
-            sys.exit('u6save: no command %s (show set npc teleport give put place fill unequip map count)' % w[0])
+            sys.exit('u6save: no command %s (show set npc party teleport give put place fill unequip map count)' % w[0])
         try:
             fn(*w[1:])
         except TypeError:

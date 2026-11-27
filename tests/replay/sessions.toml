@@ -307,6 +307,120 @@ setup = ["teleport 309 379 0", "give avatar 0x49 0 0 3"]
 keys = "u tab right right enter space space"
 port_keys = "2000:u 2800:tab 3600:right 4400:right 5200:enter 6000:n 6800:space 7600:u 8400:tab 9200:enter 10000:y 10800:space"
 
+# Pickpocket wraps karma (docs/CODE_REVIEW.md, CR-016): karma 2; the Avatar casts Pickpocket (Por
+# Ylem) at Iolo (4) and takes the first item of his pack (Enter): SPELL_DoPickpocket's KARMA -= 5
+# on an unsigned byte, without SubKarma's clamp
+[cr016]
+feed = 40
+setup = ["teleport 309 379 0", "npc avatar level 8", "npc avatar magic 255", "set KARMA 2", "give avatar 0x39 0 0x46 0 equip", "put 0x3A 0 0x46",
+         "give avatar 0x41 9", "give avatar 0x42 9", "give avatar 0x43 9", "give avatar 0x44 9",
+         "give avatar 0x45 9", "give avatar 0x46 9", "give avatar 0x47 9", "give avatar 0x48 9"]
+keys = "c p y enter 4 enter space space"
+
+# The "immovable" weight 255 tested after multiplying (docs/CODE_REVIEW.md, CR-014): torches weigh
+# 5 (TILEFLAG), so a stack of 51 weighs 255 and counts as 10000. Get the 51 east of the Avatar,
+# then the 50 west
+[cr014]
+feed = 40
+setup = ["teleport 309 379 0", "place 0x5A 310 379 0 51", "place 0x5A 308 379 0 50"]
+keys = "g right space g left space space"
+
+# CR-014 with gold, whose weight is per 10 coins: 2550 gold (amount 09F6h: quantity F6h,
+# quality 09h) weigh 255 and count as 10000; then Get the 50 torches west
+[cr014g]
+feed = 40
+setup = ["teleport 309 379 0", "give avatar 0x58 0xF6 0x09", "place 0x5A 308 379 0 50"]
+keys = "g left space space"
+
+# A map-click cast after paging the spellbook skips the reagent check (docs/CODE_REVIEW.md, CR-015):
+# recorded in the port (`rp.py port-record OUT cr015`, the mouse), replayed in DOS. The book's
+# spell is Heal (circle 1), it also holds eight spells of circle 2 (a full page: with one,
+# SpellbookPage[7] is 0 and the game says "No Reagents."), and the Avatar carries no reagents. Cast, click the next-circle button (232, 96), then Tiberius on the map (72, 88):
+# SPELL_FindPageLine(Heal) is -1 on the circle-2 page, and SpellPageCounts[-1] is SpellbookPage[7]
+[cr015]
+setup = ["teleport 356 362 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 6 0 equip", "put 0x3A 0 0x06",
+         "put 0x3A 0 0x10", "put 0x3A 0 0x11", "put 0x3A 0 0x12", "put 0x3A 0 0x13", "put 0x3A 0 0x14", "put 0x3A 0 0x15", "put 0x3A 0 0x16", "put 0x3A 0 0x17"]
+port_keys = "3000:c 5000:click:232,96 7000:click:72,88 10000:space 12000:space"
+
+# Dropping part of a stack takes from the wrong stack (docs/CODE_REVIEW.md, CR-022): the Avatar
+# with 5 torches (the third slot). Use one: it is lit and readied, a new object whose quantity is
+# its burn time, ahead of the stack in the chain. Then drop 2 from the stack (Drop's slot cursor
+# starts in the pack), at the Avatar's feet: TakeObj takes them from the first torch in the
+# chain, the lit one
+[cr022]
+feed = 40
+setup = ["teleport 309 379 0", "give avatar 0x5A 5"]
+keys = "u tab right right enter space d right right enter 2 enter down enter space space"
+
+# The AI picks a bow or crossbow without ammunition (docs/CODE_REVIEW.md, CR-013): at the shrine
+# of [shrine], Shamino's sword unreadied and a crossbow readied, with no bolts; Iolo keeps his
+# crossbow and 144 bolts. Passes in combat: __PickWeapon takes the crossbow (damage 12, range
+# enough) and __TryHit returns 0 without bolts
+[cr013]
+feed = 40
+setup = ["teleport 513 361 0", "unequip 3 0x2B", "give 3 0x2A 0 0 0 equip"]
+keys = "space space space space space space space space space space space space space space space space space space space space space space space space"
+
+# CR-013's control: the same, with 20 bolts for Shamino
+[cr013b]
+feed = 40
+setup = ["teleport 513 361 0", "unequip 3 0x2B", "give 3 0x2A 0 0 0 equip", "give 3 0x38 20"]
+keys = "space space space space space space space space space space space space space space space space space space space space space space space space"
+
+# Dismissing a companion in combat leaves Active stale (docs/CODE_REVIEW.md, CR-017): the party
+# Avatar, Dupre, Jaana (NPC 62, who agrees to leave on land), Iolo, all in command mode, so each
+# has a turn in combat (the saved game starts in combat; the turns go Avatar, Dupre, Iolo, Jaana).
+# Pass two turns; on Iolo's (Active 3)
+# talk to member 3, Jaana, and ask her to leave: LeaveParty shifts the list and PartySize becomes
+# 3, but Active stays 3
+[cr017]
+feed = 40
+setup = ["party 1 2 62:Jaana 4", "teleport 309 379 0", "npc 62 mode 1", "npc 62 commode 2", "npc 2 commode 2", "npc 4 commode 2"]
+keys = "space space t 3 space space space space space t:leav enter space space t:bye enter space space space space space space"
+
+# A rune frees a shrine of only one gargoyle egg (docs/CODE_REVIEW.md, CR-012). Every surface
+# shrine has exactly one gargoyle egg within 20 tiles, so the shipped game never shows it; this
+# session adds a second. Honor's shrine at (327, 823), its egg at (330, 824) (the one at (324,
+# 820) hatches creature 161h), and a placed gargoyle egg at (320, 830), after it in the chain.
+# Honor's moonstone (frame 5) on the shrine's tile, the Avatar beside it with the rune of Honor
+# (0F7h). Use the rune, mantra "summ": the force field goes, and DestroyGargoyleEggs walks the
+# eggs within 20 tiles
+[cr012]
+feed = 40
+setup = ["teleport 327 824 0", "place 0x49 327 823 0 0 0 5", "give avatar 0xF7", "place 0x14F 320 830 0 0 2", "put 0x16B 3 3"]
+keys = "u tab right right enter t:summ enter space space space"
+
+# Possessions of a classless creature (docs/CODE_REVIEW.md, CR-021): Animate (Ort Ylem) at a sword
+# on the ground east of the Avatar. EGG_generate makes a creature of the sword's type, which has
+# no monster class (-1), and still gives it possessions from MonsterInvLists[MonsterInvIndex[-1]]
+[cr021]
+feed = 40
+setup = ["teleport 309 379 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 0x30 0 equip", "put 0x3A 0 0x30",
+         "give avatar 0x41 9", "give avatar 0x42 9", "give avatar 0x43 9", "give avatar 0x44 9",
+         "give avatar 0x45 9", "give avatar 0x46 9", "give avatar 0x47 9", "give avatar 0x48 9",
+         "place 0x2B 310 379 0"]
+keys = "c o y enter right enter space space"
+
+# Thieves never steal (docs/CODE_REVIEW.md, CR-011): NPC 6, a few tiles from the party at the
+# start, set to the thief's mode (97h). Passes: he comes to a member, and the code sets his mode
+# to AI_LOITER before testing it for AI_THIEF, so he talks (TalkToParty) instead of stealing
+[cr011]
+feed = 40
+setup = ["npc 6 mode 0x97"]
+keys = "space space space space space space space space space space space space space space space space"
+
+# "look" during a Seance runs the script from a stale offset (docs/CODE_REVIEW.md, CR-018): talk
+# to Dupre first (TalkDescPC: the offset of the description in his script), bye; then Seance
+# (Kal Mani Corp) at Tiberius's body (NPC 26, dead, its body east of the Avatar, quality 26) and
+# say "look": Talk_PC = TalkDescPC, Dupre's offset, in Tiberius's script
+[cr018]
+feed = 40
+setup = ["teleport 309 379 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 0x48 0 equip", "put 0x3A 0 0x48",
+         "give avatar 0x41 9", "give avatar 0x42 9", "give avatar 0x43 9", "give avatar 0x44 9",
+         "give avatar 0x45 9", "give avatar 0x46 9", "give avatar 0x47 9", "give avatar 0x48 9",
+         "npc 26 status 0x10", "npc 26 hp 0", "npc 26 mode 0x90", "place 0x153 310 379 0 0 26"]
+keys = "t 2 space t:bye enter space c k m c enter right enter t:look enter space space space space t:bye enter space space"
+
 [cr005]
 feed = 40
 setup = ["teleport 356 362 0", "set Time_H 12", "give avatar 0x153 1 0xE5", "give avatar 0x153 1 6", "npc 6 status 0x10", "npc 6 hp 0", "npc 26 mode 0x90", "give avatar 0x58 250", "give 2 0x58 250", "give 3 0x58 250", "give 4 0x58 250"]

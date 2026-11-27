@@ -81,6 +81,15 @@ static /*C_2E2D_0088*/mkRandom(int16 val) {
 	unsigned char itemType;
 	unsigned char far *pList;
 
+#ifndef __TURBOC__
+	/*port (CR-021): a creature with no class (-1: Animate on an item, Clone of a type that
+	  is not a monster) reads its lists at MonsterInvIndex[-1] = 0x800 past MonsterInvLists:
+	  in DOS that is DS:0192..0195 (in _DATA, after the monster data), two zero bytes and
+	  IsZFile, 0 but while a file loads: four empty lists, nothing given (all the DOS
+	  dumps, and session [cr021]). On the host it is past u6_monsdata, which gave a charge*/
+	if(objClass < 0)
+		return;
+#endif
 	pList = &(MonsterInvLists[MonsterInvIndex[objClass]]);
 	/*spells*/
 	while(itemType = *pList++) {

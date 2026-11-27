@@ -1099,3 +1099,28 @@ Each one has a session; CODE_REVIEW.md section 5.0 has the table. The new ones:
 - **What a fix can't change:** a healer still takes the gold for a creature's corpse alone,
   because the script takes it before the resurrect opcode runs; the fix only stops the wrong
   body being raised.
+
+## 25. The high findings tested (2026-11-27)
+
+Each high finding has a session (CODE_REVIEW.md section 5.0b has the table): cr011, cr012,
+cr013 and cr013b, cr014 and cr014g, cr015 (port-recorded, replayed in DOS), cr016, cr017, cr018,
+cr021, cr022. CR-019 is shown by cr010's dumps. All are identical in DOS's two replays and in
+the port's four builds.
+
+- **Confirmed as stated:** CR-011, 013, 014, 016, 017, 018 and 019.
+- **CR-015:** confirmed, but only when the page shown is full (8 spells).
+- **Not reachable in the shipped game:** CR-012. Every shrine has one gargoyle egg, and the
+  mechanism shows only with a second egg added.
+- **CR-022 behaves differently:** the lit torch is deleted and the stack loses one. There is no
+  duplication.
+- **CR-021 is a port hazard and is now fixed:**
+  - DOS reads four zero bytes (DS:0192..0195), and the port read past its monster data.
+  - egg.c under `!__TURBOC__`: a classless creature gets nothing, as in DOS.
+  - The four builds now match DOS on cr021; spells2 was checked again.
+- **Tools:**
+  - u6save `party NPC[:NAME] ...` sets the party list;
+  - scratch checks read the dumps: KARMA, positions, the object chain, MapObjPtr against a
+    rebuild.
+
+Next: fixes for the high findings that change the game. They would be off by default, with
+`--fixes`, like the critical ones: CR-011, 013, 014, 015, 016, 017, 018, 019 and 022.

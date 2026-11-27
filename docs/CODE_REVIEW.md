@@ -264,6 +264,26 @@ in the port's four builds. The port fixes the nine that change the game, all off
 | CR-009 | shop | `lstack[-1]` is the caller's saved registers in DOS: harmless | port hazard only, made safe always | none needed |
 | CR-010 | cr010 | a ship at each edge of the ocean (x 1008 and x 4, water reaches x 4..1012), sailed north and back: ship B's stern at (4,500) linked after ship A's at (1010,500), the chain out of order | reachable (the review said "possible"); it also needs the cache rebuilt after the far area loaded, which CR-019 delays | `map-seam` |
 
+### 5.0b The high findings, tested (2026-11-27)
+
+The same way, a session each, recorded in DOS (CR-015's in the port, replayed in DOS),
+replayed twice identically, and identical in the port's four builds. No fixes yet.
+
+| Id | Session | What DOS did | Against the review |
+|---|---|---|---|
+| CR-011 | cr011 | NPC 6 given the thief's mode (97h): within a turn his mode was 90h (loiter) and he started a conversation ("You see a concerned looking mage") | as stated: thieves never steal |
+| CR-012 | cr012 | the rune of Honor at Honor's shrine with a second gargoyle egg added: the force field and the first egg went, the added egg stayed | **not reachable in the shipped game**: every surface shrine has exactly one gargoyle egg within 20 tiles (Honor's second egg hatches creature 161h). The mechanism is as stated |
+| CR-013 | cr013, cr013b | Shamino with a crossbow and no bolts never fired; given 20 bolts (cr013b), the same Shamino fired 8 | as stated |
+| CR-014 | cr014, cr014g | a stack of 51 torches (weight 5 each): "Not possible"; 50: taken. Carrying 2,550 gold (weight per 10 coins): "The total is too heavy" for those 50 | as stated; gold of 2,550 to 2,559 coins is the likeliest way to meet it |
+| CR-015 | cr015 | Heal (book's spell) with no reagents carried, the book paged to a full circle-2 page, Tiberius clicked: "Success" | as stated, but only when the page shown has 8 spells (`SpellbookPage[7]` non-zero); with a short page the game says "No Reagents." |
+| CR-016 | cr016 | karma 2, one Pickpocket: karma 253 | as stated |
+| CR-017 | cr017 | Iolo (Active 3) dismissed Jaana (member 3 of 4): PartySize 3, Active stayed 3 for good; the prompt shows a blank name | as stated: control stays with a member who is gone |
+| CR-018 | cr018 | a talk with Dupre, then a Seance at Tiberius's body and "look": "You see us" | as stated: Tiberius's script run from Dupre's description offset |
+| CR-019 | cr010 | after the far area loaded (checkpoint 4) ship A's three cells were missing from MapObjPtr for six moves, until AreaY changed (checkpoint 10) | as stated |
+| CR-020 | | port only; fixed in the port | |
+| CR-021 | cr021 | Animate at a sword: the creature carries nothing. MonsterInvIndex[-1] makes DOS read DS:0192..0195 (two zero bytes and IsZFile, zero in all 1,086 DOS checkpoints): four empty lists | **harmless in DOS; a port hazard**: the port read past its monster data and gave a spell charge (checkpoints different in all four builds). Fixed in the port (egg.c, a classless creature gets nothing, as DOS) |
+| CR-022 | cr022 | 5 torches, one used (lit, burn time 200), 2 dropped from the stack: 2 torches on the ground, the stack 4 to 3, and the lit torch deleted | **different effect**: no duplication. TakeObj takes one from the lit torch (which deletes it) and one from the stack: the burning torch goes out and becomes a fresh one |
+
 ### 5.1 Critical
 
 #### CR-001: Vortex cube indexes an 8-entry stack array by any item's frame (A+B, new)
