@@ -1022,6 +1022,12 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
 
    The stage starts in combat mode (InCombat is saved), so sessions that need it off press `b`
    first.
+
+   **Sanitizers (2026-11-28):** all 50 sessions replayed in an ASan+UBSan build
+   (`tools/sanbuild.sh`, `U6_PORT_WSL`), still identical to DOS. ASan found nothing. UBSan found
+   31 sites: unaligned access from the DOS layout, flat 2-D indexing, CR-006's beam, and one new
+   harmless read (CR-147). docs/port/PORT.md, "Sanitizers". The long run is still to do under
+   them.
 3. **Phase 3's test gate:**
    - goldens from DOS for every session, committed with the recordings;
    - `make test` (gate, port build, every session against its golden), a pre-push hook;

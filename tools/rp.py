@@ -466,9 +466,12 @@ def port_env(variant):
 
 def port_build(variant='linux-gcc'):
     """builds the port (port/, CMake, Release) as VARIANT (PORT_VARIANTS). Returns the executable's
-    path as the side that runs it sees it."""
+    path as the side that runs it sees it. U6_PORT names an executable to run instead (natively);
+    U6_PORT_WSL one on WSL's side, for a Linux variant run from Windows (a sanitizer build)"""
     if os.environ.get('U6_PORT'):
         return os.environ['U6_PORT']
+    if os.environ.get('U6_PORT_WSL') and on_wsl_side(variant):
+        return os.environ['U6_PORT_WSL']
     if variant not in PORT_VARIANTS:
         sys.exit('rp: no port variant %s (there are: %s)' % (variant, ' '.join(PORT_VARIANTS)))
     cc = variant.split('-')[1]
@@ -549,7 +552,8 @@ def port_replay(rec, out, exe=None, timeout=1800, variant='linux-gcc', stage=Non
     if video:
         video = os.path.abspath(video)
         os.makedirs(os.path.dirname(video), exist_ok=True)
-    print('rp: replaying %s in the port (%s%s)' % (rec, os.environ.get('U6_PORT') or variant, ', fixes ' + fixes if fixes else ''))
+    print('rp: replaying %s in the port (%s%s)' % (rec, os.environ.get('U6_PORT') or (on_wsl_side(variant) and os.environ.get('U6_PORT_WSL')) or variant,
+                                                   ', fixes ' + fixes if fixes else ''))
     t0 = time.time()
     if on_wsl_side(variant):
         line = 'SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout %d %s %s' % (

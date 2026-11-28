@@ -272,3 +272,35 @@ mouse button change and at its end; its replay with `--out` writes the same dump
   `python tools/rp.py port-record OUT SESSION [--fixes LIST]` records a session in the port
   from its stage: its `port_keys` (the mouse) or its `keys`; without fixes the recording
   replays in DOS (`rp.py check OUT2 --session SESSION --rec OUT/rec/RECORD.OUT`).
+
+### Sanitizers
+
+A replay that matches DOS cannot show an out-of-bounds read that returns what DOS's memory
+holds. AddressSanitizer (ASan) and UndefinedBehaviorSanitizer (UBSan) can. `tools/sanbuild.sh`
+builds the port with both (clang, Linux or WSL) and a wrapper that runs it with the
+sanitizers' options. rp.py replays a session with it:
+
+    bash tools/sanbuild.sh                      # in WSL: ~/u6port-asan/u6, u6-san
+    U6_PORT_WSL='~/u6port-asan/u6-san' python tools/rp.py port-check OUT --rec R --session S --variant linux-clang
+
+`U6_PORT_WSL` names an executable on WSL's side for a Linux variant run from Windows (`U6_PORT`,
+on Linux). The reports are in the run's `port.log`. The wrapper turns off address-space
+randomisation: clang 14's ASan crashes at random at start-up on WSL's kernel (6.6), before it
+can report anything.
+
+**The run of 2026-11-28 (50 sessions; the long run not yet).** Every session was still identical
+to DOS, every checkpoint and the saves.
+- **ASan:** nothing.
+- **UBSan:** 31 sites, none an unknown fault:
+  - **unaligned loads and stores (23):** the port keeps the game's globals at their DOS
+    offsets, and reads the game's files byte-packed, so a pointer or an int16 can sit at an
+    odd address (rpport.c, main.c's memory pointer, map.c, object.c, gfx.c, visible.c,
+    talkdr.c). x86 and ARM64 allow them; C calls them undefined;
+  - **a 2-D array indexed as a flat one (5):** visible.c's `AreaTiles[0][AreaOffset]` and
+    the like, AreaOffset up to 40x40. The memory is contiguous, so it works with every
+    compiler, but ISO C allows a compiler to assume an index under 40;
+  - **out of bounds (3):** `Tile_11x11[y][11]` and `Obj_11x11[0][-1]` (object.c), CR-006's
+    lens beam (cr006, cr006b), fixed by `lens-beam`; and MUS_AddAmbientSource (music.c), whose
+    loop reads `MUS_AmbientDist[4]` before its count test ends it. That read cannot change
+    the result (either test ends the loop at 4, and `pos >= 4` returns), so it is harmless
+    in DOS and in the port (docs/CODE_REVIEW.md, CR-147).

@@ -1541,6 +1541,13 @@ egg.c:87-88.
 - **Code.** `bestSide = 0x8000` into an `int16` is implementation-defined.
 - **Effect.** It is -32768 on gcc, clang and MSVC, so there is no divergence today.
 
+**CR-147 (B, found by UBSan, 2026-11-28).** music.c:211, MUS_AddAmbientSource.
+- **Code.** `for(; MUS_AmbientDist[pos] <= distance && pos < MUS_AmbientCount; pos ++);`
+  reads `MUS_AmbientDist[4]`, one past the table, when four sources are listed and all are
+  nearer (session headless).
+- **Effect.** None: either test ends the loop at 4, and `pos >= 4` returns next. The read
+  stays inside DGROUP in DOS and in the port. Harmless.
+
 ## 6. Recommendations
 
 ### 6.1 Port hazards to cover first
