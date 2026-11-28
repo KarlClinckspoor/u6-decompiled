@@ -1011,10 +1011,17 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
    - ~~CR-005, CR-003~~: done, with every other critical one (section 24).
    - The high and medium findings, in order. Each is confirmed or refuted by a session where it
      can be reached, and the result noted in CODE_REVIEW.md's table.
-2. **Phase 3's remaining sessions:**
-   - walking and day/night, a long conversation, camping;
-   - save and reload (ctrl+r);
-   - a quest flag, set by the editor and then played through.
+2. **Phase 3's remaining sessions: recorded (2026-11-28),** each in DOS, replayed twice identically:
+   - `dusk` and `dawn`: walking in circles from 19:15 and 4:58, through the light's ramps (5 to 0,
+     0 to 7) and the hour changes; a step takes about 0.4 minutes;
+   - `camp`: Rest, 8 hours, Dupre on guard, mealtime; the Avatar healed 20 to 77;
+   - `savereload`: Ctrl+S, five steps, Ctrl+R: the party and the clock back at the save;
+   - `longtalk`: Lord British's talk flag 7 set by the editor, which skips his copy-protection
+     quiz ("Find thy Compendium" otherwise), then a dozen subjects: a long conversation and a
+     flag played through.
+
+   The stage starts in combat mode (InCombat is saved), so sessions that need it off press `b`
+   first.
 3. **Phase 3's test gate:**
    - goldens from DOS for every session, committed with the recordings;
    - `make test` (gate, port build, every session against its golden), a pre-push hook;
