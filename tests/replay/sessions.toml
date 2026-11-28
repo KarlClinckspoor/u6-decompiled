@@ -380,6 +380,13 @@ feed = 40
 setup = ["teleport 309 379 0", "give avatar 0x58 0xF6 0x09", "place 0x5A 308 379 0 50"]
 keys = "g left space space"
 
+# cr014g with 10 torches, light enough to carry with the gold's real weight, for the port's fix
+# (weight-255): DOS, counting the gold as 10000, says "too heavy"; with the fix they are taken
+[cr014h]
+feed = 40
+setup = ["teleport 309 379 0", "give avatar 0x58 0xF6 0x09", "place 0x5A 308 379 0 10"]
+keys = "g left space space"
+
 # A map-click cast after paging the spellbook skips the reagent check (docs/CODE_REVIEW.md, CR-015):
 # recorded in the port (`rp.py port-record OUT cr015`, the mouse), replayed in DOS. The book's
 # spell is Heal (circle 1), it also holds eight spells of circle 2 (a full page: with one,
@@ -388,6 +395,15 @@ keys = "g left space space"
 [cr015]
 setup = ["teleport 356 362 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 6 0 equip", "put 0x3A 0 0x06",
          "put 0x3A 0 0x10", "put 0x3A 0 0x11", "put 0x3A 0 0x12", "put 0x3A 0 0x13", "put 0x3A 0 0x14", "put 0x3A 0 0x15", "put 0x3A 0 0x16", "put 0x3A 0 0x17"]
+port_keys = "3000:c 5000:click:232,96 7000:click:72,88 10000:space 12000:space"
+
+# CR-015's control: the same with reagents carried (nine of each), for the port's fix (page-cast),
+# which judges a spell off the page by the reagents carried: the cast succeeds, as in DOS
+[cr015b]
+setup = ["teleport 356 362 0", "npc avatar level 8", "npc avatar magic 255", "give avatar 0x39 0 6 0 equip", "put 0x3A 0 0x06",
+         "put 0x3A 0 0x10", "put 0x3A 0 0x11", "put 0x3A 0 0x12", "put 0x3A 0 0x13", "put 0x3A 0 0x14", "put 0x3A 0 0x15", "put 0x3A 0 0x16", "put 0x3A 0 0x17",
+         "give avatar 0x41 9", "give avatar 0x42 9", "give avatar 0x43 9", "give avatar 0x44 9",
+         "give avatar 0x45 9", "give avatar 0x46 9", "give avatar 0x47 9", "give avatar 0x48 9"]
 port_keys = "3000:c 5000:click:232,96 7000:click:72,88 10000:space 12000:space"
 
 # Dropping part of a stack takes from the wrong stack (docs/CODE_REVIEW.md, CR-022): the Avatar
@@ -407,6 +423,14 @@ keys = "u tab right right enter space d right right enter 2 enter down enter spa
 [cr013]
 feed = 40
 setup = ["teleport 513 361 0", "unequip 3 0x2B", "give 3 0x2A 0 0 0 equip"]
+keys = "space space space space space space space space space space space space space space space space space space space space space space space space"
+
+# cr013 with a boomerang readied too (range 5, no ammunition), for the port's fix (archer-ammo):
+# DOS still picks the crossbow (damage 12 against the boomerang's) and Shamino stands; with the
+# fix he throws the boomerang once the gargoyle is within 5 tiles
+[cr013c]
+feed = 40
+setup = ["teleport 513 361 0", "unequip 3 0x2B", "give 3 0x2A 0 0 0 equip", "give 3 0x31 0 0 0 equip"]
 keys = "space space space space space space space space space space space space space space space space space space space space space space space space"
 
 # CR-013's control: the same, with 20 bolts for Shamino
@@ -455,6 +479,14 @@ keys = "c o y enter right enter space space"
 [cr011]
 feed = 40
 setup = ["npc 6 mode 0x97"]
+keys = "space space space space space space space space space space space space space space space space"
+
+# cr011 with 100 gold on each member, so that the port's fix (thief-steal) has gold to take:
+# DOS, as in cr011, talks; with the fix, the thief takes 10 to 30 coins from the member he reaches
+[cr011b]
+feed = 40
+setup = ["npc 6 mode 0x97", "give avatar 0x58 100", "give Dupre 0x58 100", "give Shamino 0x58 100",
+         "give Iolo 0x58 100"]
 keys = "space space space space space space space space space space space space space space space space"
 
 # "look" during a Seance runs the script from a stale offset (docs/CODE_REVIEW.md, CR-018): talk

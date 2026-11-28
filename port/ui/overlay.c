@@ -27,6 +27,12 @@ static const char *tab_names[NTABS] = {"Display", "Sound", "Game", "Replay", "Fi
 static int tab_width(int i) { return (int)strlen(tab_names[i]) * 8 + 4; }
 #define TAB_GAP 2
 
+/* the rows: at most MAX_ROWS in a tab, VIS_ROWS shown from row `top` (the list scrolls with the
+   selected row; the Fixes tab has more than fit above the help) */
+#define MAX_ROWS 32
+#define VIS_ROWS 10
+static int top;
+
 static const uint8_t *font;
 static int open_now, want_open, tab, row = -1;
 static char rec_names[8][64];
@@ -315,7 +321,7 @@ static void change(Row *r, int dir)
 
 static void draw(uint8_t *fb, uint8_t *pal)
 {
-	Row rows[16];
+	Row rows[MAX_ROWS];
 	int n, i, x;
 	if (!open_now) {
 		if (session_is_replaying()) {	/* a small mark while a recording plays */
@@ -340,12 +346,31 @@ static void draw(uint8_t *fb, uint8_t *pal)
 	n = build_rows(rows);
 	if (row >= n)
 		row = n - 1;
-	for (i = 0; i < n; i++) {
-		int y = 36 + i * 12;
+	{
+		static int shown_tab = -1;	/* another tab: from its first row */
+		if (tab != shown_tab)
+			top = 0;
+		shown_tab = tab;
+	}
+	if (row >= 0 && row < top)
+		top = row;
+	if (row >= top + VIS_ROWS)
+		top = row - VIS_ROWS + 1;
+	if (top > n - VIS_ROWS)
+		top = n - VIS_ROWS;
+	if (top < 0)
+		top = 0;
+	for (i = top; i < n && i < top + VIS_ROWS; i++) {
+		int y = 36 + (i - top) * 12;
 		if (i == row)
 			fill(fb, 2, y - 2, 316, 12, c_mid);
 		put_text(fb, 8, y, rows[i].label, rows[i].kind == 2 ? c_light : c_white, 22);
 		put_text(fb, 8 + 23 * 8, y, rows[i].value, i == row ? c_hilite : c_light, 15);
+	}
+	if (n > VIS_ROWS) {	/* which rows are shown, under the last */
+		char more[24];
+		int len = snprintf(more, sizeof more, "%d-%d of %d", top + 1, top + VIS_ROWS, n);
+		put_text(fb, 312 - len * 8, 36 + VIS_ROWS * 12, more, c_light, 23);
 	}
 	if (row >= 0 && row < n && rows[row].help) {	/* the help, wrapped */
 		const char *h = rows[row].help;
@@ -375,7 +400,7 @@ static void draw(uint8_t *fb, uint8_t *pal)
 
 static void handle_key(int key)
 {
-	Row rows[16];
+	Row rows[MAX_ROWS];
 	int n = build_rows(rows), scan = key >> 8;
 	if (scan != 0x1C)
 		confirm_new = 0;
@@ -412,7 +437,7 @@ static void handle_key(int key)
 
 static void handle_click(int16_t mx, int16_t my)
 {
-	Row rows[16];
+	Row rows[MAX_ROWS];
 	int n = build_rows(rows), i, x = 4;
 	if (my >= 16 && my < 28) {
 		for (i = 0; i < NTABS; i++) {
@@ -425,8 +450,8 @@ static void handle_click(int16_t mx, int16_t my)
 		}
 		return;
 	}
-	for (i = 0; i < n; i++) {
-		int y = 36 + i * 12;
+	for (i = top; i < n && i < top + VIS_ROWS; i++) {
+		int y = 36 + (i - top) * 12;
 		if (my >= y - 2 && my < y + 10) {
 			row = i;
 			if (rows[i].kind != 2)

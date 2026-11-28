@@ -169,6 +169,29 @@ each, at file offset 0x6000 + (z - 1) * 0x600
   middle) and ViewX/ViewY (top-left of the 11x11 view inside the area);
   if the area moved, re-place the NPCs, rebuild AreaTiles from the chunks
   and hatch the eggs; then update the moongates and ask for a view redraw*/
+#ifndef __TURBOC__
+/*fix (CR-019): LoadNewRegions loaded objects since the last build (object.c). The original
+  rebuilt MapObjPtr only when the area's origin moved, so for a few steps after the region
+  window shifted, the objects just across the boundary were not in the cache: FindLoc missed
+  them (no blocking, look, get or use there)*/
+int FixRegionsLoaded;
+
+/*the cache rebuilt as MAP_BuildArea does when the area moves, without the tiles and eggs*/
+static void FixRebuildCache(void) {
+	int16 i, x, y;
+	OBJ_RebuildMapObjPtr();
+	MoveAppliesTerrain = 0;
+	for(i = 0; i < 0x100; i ++) {
+		x = (GetX(i) - AreaX) & MapCoordMask;
+		y = (GetY(i) - AreaY) & MapCoordMask;
+		if(ObjShapeType[i] && GetCoordUse(i) == LOCXYZ && GetZ(i) == MapZ &&
+		   x < 40 && y < 40 && MapObjPtr[y][x] != i)
+			MoveObj(i, GetX(i), GetY(i), MapZ);
+	}
+	MoveAppliesTerrain = 1;
+}
+#endif
+
 /*C_101C_0306*/MAP_BuildArea() {
 	unsigned char *pMap, *pChunk;
 	int16 i, j;
@@ -186,6 +209,12 @@ each, at file offset 0x6000 + (z - 1) * 0x600
 	anX = AreaX;
 	anY = AreaY;
 	/* */
+#ifndef __TURBOC__
+	if(U6_FIX(FIX_CACHE_REBUILD) && FixRegionsLoaded &&
+	   anX == BuiltAreaX && anY == BuiltAreaY && MapZ == BuiltAreaZ)
+		FixRebuildCache();
+	FixRegionsLoaded = 0;
+#endif
 	if(anX != BuiltAreaX || anY != BuiltAreaY || MapZ != BuiltAreaZ) {
 		OBJ_RebuildMapObjPtr();
 		/*NPCs inside the new area but missing from MapObjPtr: put them back*/

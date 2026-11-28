@@ -21,6 +21,17 @@ enum {
 	FIX_FULL_OBJECT_TABLE,  /* CR-007 */
 	FIX_FOUNTAIN_WISH,      /* CR-008 */
 	FIX_MAP_SEAM,           /* CR-010 */
+	/* the high findings */
+	FIX_THIEF_STEAL,        /* CR-011 */
+	FIX_SHRINE_EGGS,        /* CR-012 */
+	FIX_ARCHER_AMMO,        /* CR-013 */
+	FIX_WEIGHT_255,         /* CR-014 */
+	FIX_PAGE_CAST,          /* CR-015 */
+	FIX_PICKPOCKET_KARMA,   /* CR-016 */
+	FIX_DISMISS_ACTIVE,     /* CR-017 */
+	FIX_SEANCE_LOOK,        /* CR-018 */
+	FIX_CACHE_REBUILD,      /* CR-019 */
+	FIX_DROP_STACK,         /* CR-022 */
 	FIX_COUNT,
 	/* the enhancements: changes to what the original does by design (--enhance, enhance= in
 	 * u6port.cfg), off by default like the fixes, recorded and replayed the same way */

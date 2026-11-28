@@ -93,11 +93,11 @@ usual GOG folders.
 
 ## Fixes of the original's faults
 
-The port can fix the faults the code review rated critical (docs/CODE_REVIEW.md), all at once:
+The port can fix the faults the code review rated critical or high (docs/CODE_REVIEW.md), all at once:
 `--fixes all`, `fixes=all` in `u6port.cfg`, or the settings screen's Fixes tab (F11). They are
 **off by default**, and off the port plays exactly as DOS.
 
-On, they correct nine faults:
+On, they correct nineteen faults. The nine critical ones:
 - the vortex cube ending the game for eight potions;
 - the inventory hang;
 - the spell cast at a map target;
@@ -107,6 +107,18 @@ On, they correct nine faults:
 - objects lost when an area is too full;
 - the fountain's empty wish;
 - the object order where the map wraps.
+
+The ten high ones:
+- thieves that never steal;
+- a rune that frees a shrine of only one gargoyle egg;
+- archers without ammunition standing still;
+- stacks weighing exactly 255 counting as immovable;
+- free casts after paging the spellbook;
+- Pickpocket wrapping karma to 251–255;
+- control lost after dismissing a companion in combat;
+- "look" in a Seance running another NPC's script;
+- objects just across a region boundary not seen for a few steps;
+- dropping part of a stack taking from the wrong stack.
 
 Enhancements, which change what the original does by design, are turned on apart from the fixes:
 `--enhance NAMES` or `all`, `enhance=` in `u6port.cfg` (`--enhance list`), or the Enhance tab (F11):

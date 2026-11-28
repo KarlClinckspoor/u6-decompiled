@@ -1613,8 +1613,24 @@ static /*C_2337_214D*/__TryHit(int16 att_objNum, int16 x, int16 y, int16 weap_ob
 	att_x = GetX(ret);
 	att_y = GetY(ret);
 	range = COMBAT_range(opp_x, opp_y, att_x, att_y);
+#ifndef __TURBOC__
+	/*fix (CR-013): a bow or crossbow without its ammunition is not chosen (__TryHit would not
+	  fire it, and the NPC stood still every turn). Looked up before the loop, whose NextInv
+	  cursor a FindInvType would move*/
+	{
+	int arrows = 1, bolts = 1;
+	if(U6_FIX(FIX_ARCHER_AMMO)) {
+		arrows = FindInvType(att_objNum, OBJ_ARROW, -1) >= 0;
+		bolts = FindInvType(att_objNum, OBJ_BOLT, -1) >= 0;
+	}
+#endif
 	for(i = FindInv(att_objNum); i >= 0; i = NextInv()) {
 		itemTyp = GetType(i);
+#ifndef __TURBOC__
+		if(((itemTyp == OBJ_BOW || itemTyp == OBJ_MAGIC_BOW) && !arrows) ||
+		   ((itemTyp == OBJ_CROSSBOW || itemTyp == OBJ_TRIPLE_CROSSBOW) && !bolts))
+			continue;
+#endif
 		if(GetCoordUse(i) == EQUIP) {
 			if(itemTyp == OBJ_SPELLBOOK || itemTyp == OBJ_CHARGE) {
 				if(
@@ -1635,6 +1651,9 @@ static /*C_2337_214D*/__TryHit(int16 att_objNum, int16 x, int16 y, int16 weap_ob
 			}
 		}
 	}
+#ifndef __TURBOC__
+	}
+#endif
 	return ret;
 }
 

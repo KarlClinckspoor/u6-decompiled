@@ -2069,6 +2069,14 @@ static /*C_1E0F_3E27*/__NewPathIndex() {
 				if((other = ApproachNearestMember(objNum)) >= 0) {
 					/*bug: the mode is overwritten before being tested, so
 					thieves only talk*/
+#ifndef __TURBOC__
+					/*fix (CR-011): test the mode before it is overwritten, so thieves steal*/
+					if(U6_FIX(FIX_THIEF_STEAL) && NPCMode[objNum] == AI_THIEF) {
+						NPCMode[objNum] = AI_LOITER;
+						StealGold(objNum, other);
+						break;
+					}
+#endif
 					NPCMode[objNum] = AI_LOITER;/*bug?*/
 					if(NPCMode[objNum] == AI_THIEF)
 						StealGold(objNum, other);/*steal gold*/

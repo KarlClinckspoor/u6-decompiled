@@ -463,6 +463,12 @@ static /*C_27A1_0153*/IsOkToGet(int16 objNum) {
 /*enhancements (port/sys/fixes.h): grouped-finds, choose-get, look-tile*/
 #include <string.h>
 extern int16 CookedInput;/*console.c: 0 = CON_getch returns raw keys*/
+int FixTakeFrom(int16 owner, int16 obj, int16 amount);/*object.c: fix (CR-022)*/
+
+/*fix (CR-022): take the dropped or given part from the stack chosen, not from the first of
+  its type (TakeObj)*/
+#define FIX_TAKE(owner, obj, objTyp, qtyCode) \
+	(U6_FIX(FIX_DROP_STACK) ? FixTakeFrom(owner, obj, qtyCode) : TakeObj(owner, objTyp, qtyCode))
 
 /*the objects at (x, y) that a player sees as items, top first (FindLoc's order, the one a drop
   or Get takes): not creatures, eggs, charges, effects, invisible or "ignore" tiles; at most max*/
@@ -953,7 +959,11 @@ static void EnhPrintGrouped(int16 *list, int16 n) {
 					qtyCode = QualQuan(GetQual(obj), count);
 				else
 					qtyCode = count;
+#ifndef __TURBOC__
+				FIX_TAKE(actor, obj, objTyp, qtyCode);
+#else
 				TakeObj(actor, objTyp, qtyCode);
+#endif
 			} else {
 				/*broken dragon egg / broken mirror remain on the ground*/
 				if(objTyp == OBJ_DRAGON_EGG) {
@@ -981,7 +991,11 @@ static void EnhPrintGrouped(int16 *list, int16 n) {
 					newObj = GiveObj(target, objTyp, qtyCode);
 					if(newObj != -1)
 						SetOkToGet(newObj);
+#ifndef __TURBOC__
+					FIX_TAKE(actor, obj, objTyp, qtyCode);
+#else
 					TakeObj(actor, objTyp, qtyCode);
+#endif
 				} else {
 					InsertObj(obj, target, CONTAINED);
 					SetOkToGet(obj);
@@ -996,7 +1010,11 @@ static void EnhPrintGrouped(int16 *list, int16 n) {
 					SetCoordXYZ(xyz, destX, destY, MapZ);
 					newObj = AddObj(0, xyz, objTyp, 0, qtyCode);
 					SetOkToGet(newObj);
+#ifndef __TURBOC__
+					FIX_TAKE(actor, obj, objTyp, qtyCode);
+#else
 					TakeObj(actor, objTyp, qtyCode);
+#endif
 				} else {
 					MoveObj(obj, destX, destY, MapZ);
 					SetOkToGet(obj);
@@ -1381,7 +1399,11 @@ c_2237:
 					else
 						qtyCode = count;
 					GiveObj(Selection.obj, objTyp, qtyCode);
+#ifndef __TURBOC__
+					FIX_TAKE(GetAssoc(obj), obj, objTyp, qtyCode);
+#else
 					TakeObj(GetAssoc(obj), objTyp, qtyCode);
+#endif
 				} else {
 					InsertObj(obj, Selection.obj, INVEN);
 				}
@@ -2635,6 +2657,26 @@ static /*C_27A1_3E21*/FindTypeAt(int16 x, int16 y, int16 z, int16 objTyp) {
 /*C_27A1_4B0B*/static DestroyGargoyleEggs(int16 x, int16 y) {
 	int16 egg, content;
 
+#ifndef __TURBOC__
+	/*fix (CR-012): find the eggs first, then delete them. NextArea's cursor had already moved
+	  to the first egg's content, which deleting freed, so the search stopped after one egg*/
+	if(U6_FIX(FIX_SHRINE_EGGS)) {
+		int16 eggs[64];
+		int n = 0, i;
+		for(egg = SearchArea(x - 20, y - 20, x + 20, y + 20); egg >= 0 && n < 64; egg = NextArea())
+			if(GetType(egg) == OBJ_EGG) {
+				content = FindInv(egg);
+				if(GetType(content) == OBJ_WINGED_GARGOYLE || GetType(content) == OBJ_GARGOYLE)
+					eggs[n++] = egg;
+			}
+		for(i = 0; i < n; i ++) {
+			for(content = FindInv(eggs[i]); content >= 0; content = FindInv(eggs[i]))
+				DeleteObj(content);
+			DeleteObj(eggs[i]);
+		}
+		return;
+	}
+#endif
 	for(egg = SearchArea(x - 20, y - 20, x + 20, y + 20); egg >= 0; egg = NextArea()) {
 		if(GetType(egg) == OBJ_EGG) {
 			/*an egg's content is the creature it hatches*/

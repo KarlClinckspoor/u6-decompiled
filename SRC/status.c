@@ -203,6 +203,12 @@
 		weight = (TypeWeight[objTyp] * qty) / 10;
 	else
 		weight = TypeWeight[objTyp] * qty;
+#ifndef __TURBOC__
+	/*fix (CR-014): "immovable" is the type's weight of 255, not a total that comes to 255
+	  (51 torches, or 2,550 gold)*/
+	if(U6_FIX(FIX_WEIGHT_255))
+		return TypeWeight[objTyp] == 255 ? 10000 : weight;
+#endif
 	if(weight == 255)
 		weight = 10000;
 	return weight;

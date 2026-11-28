@@ -680,6 +680,20 @@ static /*C_1944_06EF*/TakeReagents(int16 objNum, int16 spellNum, int16 index) {
 		SpellPageCounts[index] --;
 }
 
+#ifndef __TURBOC__
+/*fix (CR-015): whether objNum carries the reagents of spellNum, counted as PrintSpellQuantity
+  counts them, for a spell that is not on the page shown (the book paged away after choosing it,
+  where the original read SpellPageCounts[-1], SpellbookPage[7], nearly always non-zero)*/
+static int FixReagentsCarried(int16 objNum, int16 spellNum) {
+	unsigned char reagentsMask = Reagents_needed[spellNum];
+	int16 reagent;
+	for(reagent = 0; reagent < 8; reagent ++)
+		if(((reagentsMask >> reagent) & 1) && SPELL_CountCarried(objNum, ReagType[reagent], 0) == 0)
+			return 0;
+	return 1;
+}
+#endif
+
 /*redraw the spellbook page: skips the first SpellbookFirst known spells, then
   lists (up to 8) spells of the next circle with their castable counts.
   Fills SpellbookPage[] (spell of each line), SpellPageCounts[] (count | 0x80 for the
@@ -2097,6 +2111,12 @@ extern unsigned char __ShowNPCInven;*/
 					}
 					STAT_RefreshInventory(caster);
 					CON_printf(/*14BA*/"\n%s\n", SpellMessages[0]);
+#ifndef __TURBOC__
+					/*fix (CR-016): lower karma clamped at 0, as everywhere else (it wrapped to 251-255)*/
+					if(U6_FIX(FIX_PICKPOCKET_KARMA))
+						SubKarma(5);
+					else
+#endif
 					KARMA -= 5;
 				}
 				StatusMember = Active;
@@ -2763,7 +2783,14 @@ extern unsigned char __ShowNPCInven;*/
 	} else if(MAGIC[caster] < circle) {
 		MUS_PlaySfx(13, 0);
 		CON_printf(/*16D5*/"\n\nNot enough magic points.\n");
+#ifndef __TURBOC__
+	/*fix (CR-015): a spell off the page shown is judged by the reagents carried*/
+	} else if(U6_FIX(FIX_PAGE_CAST) && SPELL_FindPageLine(spellNum) < 0
+		? !FixReagentsCarried(caster, spellNum)
+		: (SpellPageCounts[SPELL_FindPageLine(spellNum)] & 0x7f) == 0) {
+#else
 	} else if((SpellPageCounts[SPELL_FindPageLine(spellNum)] & 0x7f) == 0) {/*castable count*/
+#endif
 		MUS_PlaySfx(13, 0);
 		CON_printf(/*16F1*/"\n\nNo Reagents.\n");
 	} else {

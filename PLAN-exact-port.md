@@ -1031,7 +1031,12 @@ The user's decision (section 19) carried out. `tools/u6save.py` edits a saved ga
    - ~~the fixes of the critical findings~~: done (section 24, port/sys/fixes.c, `--fixes`);
    - ~~the moonstone burial guard~~: done (2026-11-27), as an enhancement: `--enhance
      moonstone-guard`, off by default, session `[moonstone]` (docs/port/FIXES.md);
-   - then the high findings' fixes as each is confirmed.
+   - ~~the high findings' fixes~~: done (2026-11-28): ten more `--fixes` names, CR-011..019 and
+     CR-022, each shown at its fault (CODE_REVIEW.md 5.0b; sessions cr011b, cr013c, cr014h and
+     cr015b added). The settings screen's Fixes tab scrolls. Swept with all fixes off and on in
+     both Windows builds; on Linux, 27 of 45 sessions off before a stop for low memory: the rest
+     of the Linux sweep, and the long run, are still to do.
+   - The medium findings: later (the user, 2026-11-28).
    - **Enhancements asked for (the user, 2026-11-27): done** as `grouped-finds`, `choose-get`
      and `look-tile` (docs/port/FIXES.md; sessions `headless` and `chestbag`). To test them,
      the port types a `feed` session as KEYFEED.COM does in DOS:

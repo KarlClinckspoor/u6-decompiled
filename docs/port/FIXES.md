@@ -1,7 +1,7 @@
 # Fixes of the original game's faults
 
 The native port can correct the faults of the original program that the code review rated
-critical (docs/CODE_REVIEW.md, section 5.1). Every fix is **off by default**: off, the port plays
+critical or high (docs/CODE_REVIEW.md, sections 5.1 and 5.2). Every fix is **off by default**: off, the port plays
 exactly as DOS does, and that is what the replay tests prove. A player turns them on all at once:
 
     u6 --fixes all                 # this session
@@ -34,6 +34,16 @@ saved choice differs from the running session's says "On, next start" or "Off, n
 | `full-object-table` | CR-007 | When an area does not fit in the object table (2,815 objects) as it loads, the rest of it is dropped, and the next save writes the areas without it. A test lost 1,111 objects: 93 of a crowded area and all of Britain's (944) and the area beside it (74). | The objects that do not fit stay in the area's file and are written back with it. They are not in the world while it is that full. |
 | `fountain-wish` | CR-008 | A wish at a fountain is compared with 10 entries of a 5-entry table; an empty wish matches one of the 5 read past it and can grant food. | Only the five wishes listed (Food, Mutton, Wine, Fruit, Meat). |
 | `map-seam` | CR-010 | Where the map wraps around (x 1023 to 0), the object cache's order is not the object list's, and an object moved there is linked after the wrong one. A test with a ship at each edge of the ocean put the list out of order. | An object moved there is linked in the right place. |
+| `thief-steal` | CR-011 | A thief's mode is set to "loiter" before it is tested, so thieves never steal: they start a conversation. | A thief steals 10 to 30 gold from the member it reaches, as its mode intends. |
+| `shrine-eggs` | CR-012 | A rune frees a shrine of only the first gargoyle egg within 20 tiles: deleting it moves the search's cursor onto freed slots. Every shrine of the shipped game has one egg, so this needs an edited map. | Every gargoyle egg within 20 tiles goes. |
+| `archer-ammo` | CR-013 | A companion or creature out of arrows or bolts still picks its bow or crossbow (the best damage), cannot fire it, and stands still every turn. | A bow or crossbow without its ammunition is passed over; the next best weapon is used. |
+| `weight-255` | CR-014 | A stack whose total weight comes to exactly 255 counts as immovable: 51 torches, or 2,550 to 2,559 gold. On the ground: "Not possible"; carried: every later pickup is "too heavy". | Only a type whose own weight is 255 is immovable. |
+| `page-cast` | CR-015 | Choose a spell, page the book to a full page, then cast at a creature on the map: the reagent check reads past the page's counts, and the spell is cast with no reagents. | A spell not on the page shown is judged by the reagents the caster carries. |
+| `pickpocket-karma` | CR-016 | Pickpocket lowers karma by 5 without the clamp every other loss has: at karma 0 to 4 it wraps to 251 to 255. | Karma stops at 0. |
+| `dismiss-active` | CR-017 | Dismissing a companion in combat leaves the turn's index where it was. It can point past the party: commands say "Not while aboard ship", the prompt shows a blank name, and control may never come back. | The member whose turn it is keeps it. |
+| `seance-look` | CR-018 | "look" during a Seance runs the dead person's script from the previous conversation's description offset, which belongs to another NPC ("You see us"). | "look" gives the dead person's own description. |
+| `cache-rebuild` | CR-019 | After the window of loaded regions shifts, the object cache is rebuilt only when the area's origin moves. For a few steps the objects just across the boundary are not seen: no blocking, look, get or use there. | The cache is rebuilt when new objects come in. |
+| `drop-stack` | CR-022 | Dropping or giving part of a stack takes the items from the first stack of that type, not the one chosen: with a lit torch carried, dropping 2 torches from the stack puts the lit one out (it becomes a fresh torch). | The items come from the stack chosen. |
 
 **Potions and moonstones in the vortex cube.** The cube's test reads each item's frame, never its
 type. A potion's frame is its colour and a moonstone's is its phase, frame for frame (sessions
@@ -55,6 +65,9 @@ Not here:
   port makes it harmless by design, unconditionally (SRC/talkdr.c, gate 3 of 3). Nothing to turn on.
 - **CR-008's crash on the host** (the 5 pointers past the table) is also handled unconditionally
   (SRC/u6port.h's FOUNTAIN_WISH). The fix above only changes what an empty wish does.
+- **CR-020** (`AddObj` returns nothing, and callers use its value) and **CR-021** (a classless
+  creature's possessions read past the table) are host hazards, harmless in DOS. The port handles
+  both unconditionally, as DOS behaves. Nothing to turn on.
 
 ## Enhancements
 
@@ -119,19 +132,35 @@ The sites, as SRC has them (search for `fix (CR-`):
 | CR-007 | object.c: OBJ_LoadArea and OBJ_LoadDungeon keep the rest (FixKeepRest); OBJ_WriteBlockFile writes it back (FixPutRest); OBJ_DeleteTmpBlocks drops it when a game is restored |
 | CR-008 | objcmd.c, UseFountain |
 | CR-010 | object.c, OBJ_FindListPos |
+| CR-011 | npctrack.c, the AI_CONVERSE/AI_THIEF case |
+| CR-012 | objcmd.c, DestroyGargoyleEggs |
+| CR-013 | combat.c, __PickWeapon |
+| CR-014 | status.c, GetWeight |
+| CR-015 | spell.c, FixReagentsCarried and the reagent check of the cast |
+| CR-016 | spell.c, Pickpocket |
+| CR-017 | talkdr.c, LeaveParty |
+| CR-018 | talkdr.c, the start of a conversation (the Seance case) |
+| CR-019 | object.c, LoadNewRegions sets FixRegionsLoaded; map.c, MAP_BuildArea (FixRebuildCache) |
+| CR-022 | object.c, FixTakeFrom; objcmd.c, CmdDrop (three) and CmdMove (FIX_TAKE) |
 
 ## How they are tested
 
-Each critical finding has a test session whose recording was made in DOS (or, for CR-003's mouse
-click, in the port and replayed in DOS). tests/replay/sessions.toml lists them.
+Each critical and high finding has a test session whose recording was made in DOS (or, for
+CR-003's and CR-015's mouse clicks, in the port and replayed in DOS). tests/replay/sessions.toml
+lists them.
 
 - **Off (`rp.py port-check`):**
-  - every session, the bug sessions included, is identical to DOS in all four builds (Linux and
-    Windows, gcc and clang): every checkpoint and the saved games.
+  - every session, the bug sessions included, is identical to DOS: every checkpoint and the
+    saved games. With the nine critical fixes, in all four builds (Linux and Windows, gcc and
+    clang).
+  - With the ten high fixes added (2026-11-28): all 45 sessions in both Windows builds; in both
+    Linux builds, 27 of them (the bug sessions among them) before the run was stopped for low
+    memory. The other 18 and the long run are still to run on Linux.
 - **On (`rp.py port-check --rec R --session S --fixes all`):** the port replays the DOS
   recording with every fix on.
-  - The 15 sessions that reach none of the faults are still identical to DOS, every checkpoint
-    and save: the fixes change nothing else.
+  - The 20 sessions that reach none of the faults are still identical to DOS, every checkpoint
+    and save: the fixes change nothing else (both Windows builds; with the nine critical fixes,
+    15 sessions in all four).
   - Each bug session goes its own way exactly where its fault is:
 
 | Session | Off (as DOS) | On |
@@ -144,6 +173,15 @@ click, in the port and replayed in DOS). tests/replay/sessions.toml lists them.
 | cr006, cr006b | the beam's node is put on the view's free list (`CellObjNext`) | the free list stays whole |
 | cr007 | the saved area files: CC 2771 of 2864, CD 0 of 944, BD 0 of 74 | all 2864, 944 and 74 kept |
 | fountain | the empty wish is compared past the table and can grant food | it is not |
-| cr010 | the object list is out of order at checkpoint 17 | it stays in order |
+| cr010 | the object list is out of order at checkpoint 17; from checkpoint 4 to 9, 3 cells of the object cache miss ship A (CR-019) | it stays in order; the cache equals a fresh rebuild throughout |
+| cr011, cr011b | the thief talks; the party keeps its gold (1,236) | no conversation; with gold on each member, 21 coins taken |
+| cr012 | the added gargoyle egg stays | both gargoyle eggs go |
+| cr013, cr013c | Shamino stands with his empty crossbow; the gargoyle dies at checkpoint 7 | with a boomerang readied too, he throws it; the gargoyle dies at checkpoint 5 |
+| cr014, cr014g, cr014h | 51 torches: "Not possible"; with 2,550 gold, `WeightInven` 10,002 and 10 torches "too heavy" | taken; 257, and the 10 torches taken |
+| cr015 | Heal cast with no reagents after paging | "No Reagents." (with reagents, cr015b, the cast succeeds as in DOS) |
+| cr016 | karma 2 to 253 | karma 0 |
+| cr017 | Active stays 3 past the party | Active 3 to 2 |
+| cr018 | "You see us" (Dupre's script) | "You see a rotund man in monk's robes." |
+| cr022 | the lit torch goes out; the stack 4 to 3 | the stack 4 to 2; the lit torch stays |
 
 The scratch checks that read those values from the dumps are described in the session comments.

@@ -1322,6 +1322,31 @@
 	return obj;
 }
 
+#ifndef __TURBOC__
+/*fix (CR-022): take AMOUNT (as TakeObj's: quantity | quality << 8) from the stack OBJ the
+  player chose, which OWNER holds; TakeObj took from the first stack of that type in the chain
+  (a lit torch, whose quantity is its burn time, before the stack: the torch went out and
+  became a fresh one). Commands ask for at most the stack's count; past it, the rest is taken
+  as TakeObj takes it*/
+int FixTakeFrom(int16 owner, int16 obj, int16 amount) {
+	int16 objType = GetType(obj), quanType = QuanType(objType), count, quality = amount >> 8;
+	if(quanType != 4)
+		amount = (unsigned char)amount;
+	count = OBJ_GetCount(obj);
+	if(amount >= count) {
+		DeleteObj(obj);
+		if(amount > count)
+			TakeObj(owner, objType, (amount - count) | (quanType == 4 ? 0 : quality << 8));
+	} else if(quanType == 4)
+		Amount[obj] -= amount;
+	else if(quanType == 2)
+		SubQuan(obj, amount);
+	if(StatusDisplay == CMD_STAT_EQUIP && Party[StatusMember] == owner)
+		StatusDirty = 1;
+	return 0;
+}
+#endif
+
 /*count the items of objType that objNum possesses (recursively)*/
 /*C_1184_252D*/TestObj(int16 objNum, int16 objType) {
 	int16 obj, total;
@@ -1915,6 +1940,13 @@ void FixDropRest(void) {
 	LoadedZ = z;
 	if(numLoaded)
 		OBJ_RelinkHeldItems();
+#ifndef __TURBOC__
+	/*fix (CR-019): tell MAP_BuildArea that new objects came in (map.c)*/
+	if(numLoaded) {
+		extern int FixRegionsLoaded;
+		FixRegionsLoaded = 1;
+	}
+#endif
 }
 
 /*"commit" obj files (save game): write the loaded blocks, rename every

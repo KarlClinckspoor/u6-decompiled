@@ -303,6 +303,17 @@ returns 0:ok, 1:party is in a vehicle, 2:not in party*/
 		strcpy(Names[i], Names[i + 1]);
 	}
 	PartySize --;
+#ifndef __TURBOC__
+	/*fix (CR-017): the member whose turn it is (Active, in combat) keeps it when an earlier
+	  member leaves; Active stayed, pointed past the party (IN_VEHICLE: "Not while aboard
+	  ship", a blank name) or at the next member*/
+	if(U6_FIX(FIX_DISMISS_ACTIVE)) {
+		if(Active > slot)
+			Active --;
+		if(Active >= PartySize)
+			Active = 0;
+	}
+#endif
 	ClrPlrControl(objNum);
 	NPCMode[objNum] = AI_WANDER;
 	if(GetAlignment(objNum) == GOOD)
@@ -1217,6 +1228,14 @@ input and running the matching keyword answers until OP_LEAVE/OP_SCRIPT_MARK*/
 		TalkDescPC = Talk_PC;
 		parse_statement(TalkNpcs[0]);
 	}
+#ifndef __TURBOC__
+	/*fix (CR-018): in a Seance, "look" gets this script's description too (TalkDescPC kept the
+	  previous conversation's offset, into another NPC's script)*/
+	else if(U6_FIX(FIX_SEANCE_LOOK)) {
+		while(PARSE_U8 != OP_DESC);
+		TalkDescPC = Talk_PC;
+	}
+#endif
 	CON_printf(/*098E + 0Bh*/"\n");
 	while(PARSE_U8 != OP_MAIN);
 
